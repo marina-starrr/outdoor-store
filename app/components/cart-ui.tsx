@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useCart } from "./Cart";
 import Icon from "./Icon";
-import { FREE_SHIPPING_FROM, MAX_QTY, type ResolvedLine } from "./cart-logic";
+import { FREE_SHIPPING_FROM, MAX_QTY, maxQtyFor, type ResolvedLine } from "./cart-logic";
 import { categoryBySlug, formatPrice } from "./catalog-data";
 import { productUrl } from "./product-details";
 
@@ -13,11 +13,14 @@ export function QtyStepper({
   onChange,
   size = "md",
   label,
+  max = MAX_QTY,
 }: {
   value: number;
   onChange: (v: number) => void;
   size?: "sm" | "md";
   label: string;
+  /** Верхня межа (залишок на складі) */
+  max?: number;
 }) {
   const btn = `grid place-items-center rounded-full font-bold text-[#264e65] transition hover:bg-white disabled:opacity-35 disabled:hover:bg-transparent ${size === "sm" ? "h-7 w-7 text-base" : "h-9 w-9 text-lg"}`;
   return (
@@ -32,7 +35,7 @@ export function QtyStepper({
       <span className={`text-center font-extrabold ${size === "sm" ? "w-6 text-sm" : "w-8"}`} aria-live="polite">
         {value}
       </span>
-      <button className={btn} onClick={() => onChange(value + 1)} disabled={value >= MAX_QTY} aria-label="Збільшити кількість">
+      <button className={btn} onClick={() => onChange(value + 1)} disabled={value >= max} aria-label="Збільшити кількість">
         +
       </button>
     </div>
@@ -121,7 +124,13 @@ export function CartItem({
             onChange={(v) => setQty(product.id, v)}
             size={wide ? "md" : "sm"}
             label={product.name}
+            max={Math.max(1, maxQtyFor(product))}
           />
+          {product.stock <= 5 && (
+            <span className="w-full text-[11px] font-bold text-[#c27c00]">
+              {product.stock > 0 ? `Залишилось ${product.stock} шт.` : "Закінчився — приберіть з кошика"}
+            </span>
+          )}
           <div className="text-right">
             {qty > 1 && (
               <p className="text-[11px] text-[#8aa5b5]">

@@ -7,19 +7,36 @@ import { useCart } from "./Cart";
 import Icon from "./Icon";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
-import { products as catalogProducts } from "./catalog-data";
-import { categories, products } from "./data";
+import RecentlyViewed from "./RecentlyViewed";
+import { useCatalog } from "./Catalog";
+import { discountPercent, formatPrice } from "./catalog-data";
+import { categories, products as showcase } from "./data";
 import { productUrl } from "./product-details";
 import { CardActions } from "./catalog-ui";
-
-const productHref = (id: string) => {
-  const product = catalogProducts.find((p) => p.id === id);
-  return product ? productUrl(product) : "/catalog";
-};
 
 export default function Storefront() {
   const [query, setQuery] = useState("");
   const { add: addToCart } = useCart();
+  const { byId } = useCatalog();
+
+  // Вітрина: фото й підписи — свої, а назва, ціна й наявність — з каталогу (бази)
+  const products = useMemo(
+    () =>
+      showcase.flatMap((s) => {
+        const live = byId.get(s.id);
+        if (!live) return [];
+        return [{
+          ...s,
+          name: live.name,
+          price: formatPrice(live.price),
+          oldPrice: live.oldPrice ? formatPrice(live.oldPrice) : undefined,
+          // Знижка рахується з актуальних цін; без знижки «−15%» / «Акція» не показуємо
+          badge: live.oldPrice ? `−${discountPercent(live)}%` : s.badge === "Хіт" ? s.badge : undefined,
+          href: productUrl(live),
+        }];
+      }),
+    [byId],
+  );
 
   const filteredProducts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("uk");
@@ -30,7 +47,7 @@ export default function Storefront() {
             .includes(normalized),
         )
       : products;
-  }, [query]);
+  }, [query, products]);
 
   return (
     <div className="min-h-screen bg-[#f7fafc] text-[#082c45]">
@@ -158,6 +175,9 @@ export default function Storefront() {
                 {query
                   ? `Результати пошуку за запитом «${query}»`
                   : "Перевірене спорядження, яке обирають наші покупці цього сезону."}
+                <Link href="/hits" className="mt-3 flex items-center gap-2 font-extrabold text-[#098fd0] hover:underline">
+                  Усі хіти продажу <Icon name="arrow" className="h-4 w-4" />
+                </Link>
               </p>
             </div>
 
@@ -184,7 +204,7 @@ export default function Storefront() {
                         {product.category}
                       </p>
                       <h3 className="mt-2 text-lg font-extrabold">
-                        <Link href={productHref(product.id)} className="transition hover:text-[#098fd0]">
+                        <Link href={product.href} className="transition hover:text-[#098fd0]">
                           {product.name}
                         </Link>
                       </h3>
@@ -220,6 +240,8 @@ export default function Storefront() {
                 </button>
               </div>
             )}
+
+            <RecentlyViewed />
           </div>
         </section>
 

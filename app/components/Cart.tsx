@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "./Auth";
-import { MAX_QTY, resolveLines, type CartLine, type ResolvedLine } from "./cart-logic";
+import { MAX_QTY, maxQtyFor, resolveLines, type CartLine, type ResolvedLine } from "./cart-logic";
+import { useCatalog } from "./Catalog";
 import { CART_STORAGE_KEY, readCartStorage, writeCartStorage } from "./cart-storage";
 
 type ToastAction = {
@@ -120,35 +121,58 @@ export function CartProvider({ children }: { children: ReactNode }) {
     timer.current = window.setTimeout(() => setToast(null), action ? 4500 : 2400);
   }, []);
 
-  const lines = useMemo(() => resolveLines(rawLines), [rawLines]);
+  const { byId } = useCatalog();
+  /** Скільки можна покласти в кошик (не більше залишку на складі) */
+  const limitFor = useCallback((id: string) => {
+    const p = byId.get(id);
+    return p ? Math.max(1, maxQtyFor(p)) : MAX_QTY;
+  }, [byId]);
+
+  // Кількість не може перевищувати залишок (його міг змінити адміністратор)
+  const lines = useMemo(
+    () => resolveLines(rawLines, byId).map((l) => ({ ...l, qty: Math.min(l.qty, Math.max(1, maxQtyFor(l.product))) })),
+    [rawLines, byId],
+  );
 
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
 
   const add = useCallback(
     (productId: string, quantity = 1) => {
+      const product = byId.get(productId);
+      const name = product?.name ?? "Товар";
+      if (product && !product.inStock) {
+        notify(`${name} — немає в наявності`);
+        return;
+      }
+      const limit = limitFor(productId);
+      const current = rawLines.find((l) => l.id === productId)?.qty ?? 0;
+      if (current >= limit) {
+        notify(`Більше немає на складі: у кошику вже ${limit} шт.`, { label: "Відкрити кошик", onClick: openCart, hideWhenCartOpen: true });
+        return;
+      }
       setRawLines((list) => {
         const existing = list.find((l) => l.id === productId);
         return existing
           ? list.map((l) =>
-              l.id === productId ? { ...l, qty: clampQty(l.qty + quantity) } : l,
+              l.id === productId ? { ...l, qty: Math.min(limit, clampQty(l.qty + quantity)) } : l,
             )
-          : [...list, { id: productId, qty: clampQty(quantity) }];
+          : [...list, { id: productId, qty: Math.min(limit, clampQty(quantity)) }];
       });
-      const name = resolveLines([{ id: productId, qty: 1 }])[0]?.product.name ?? "Товар";
       notify(
         quantity > 1 ? `${name} × ${quantity} — у кошику` : `${name} — у кошику`,
         { label: "Відкрити кошик", onClick: openCart, hideWhenCartOpen: true },
       );
     },
-    [notify, openCart],
+    [notify, openCart, byId, limitFor, rawLines],
   );
 
   const setQty = useCallback((productId: string, quantity: number) => {
+    const limit = limitFor(productId);
     setRawLines((list) =>
-      list.map((l) => (l.id === productId ? { ...l, qty: clampQty(quantity) } : l)),
+      list.map((l) => (l.id === productId ? { ...l, qty: Math.min(limit, clampQty(quantity)) } : l)),
     );
-  }, []);
+  }, [limitFor]);
 
   const remove = useCallback(
     (productId: string) => {

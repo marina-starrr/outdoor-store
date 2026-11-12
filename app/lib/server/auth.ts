@@ -9,7 +9,7 @@ import {
 import { promisify } from "node:util";
 import { NextResponse, type NextRequest } from "next/server";
 import { MAX_QTY, type CartLine } from "../../components/cart-logic";
-import { products } from "../../components/catalog-data";
+import { loadCatalog } from "./catalog";
 import { read, write, type StoredUser } from "./db";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
@@ -112,10 +112,13 @@ export function loginLimiter(req: NextRequest, email: string) {
   };
 }
 
-const knownIds = new Set(products.map((p) => p.id));
+/** id товарів, які зараз показуються на сайті (не приховані) */
+export async function knownProductIds(): Promise<ReadonlySet<string>> {
+  return new Set((await loadCatalog()).filter((p) => !p.hidden).map((p) => p.id));
+}
 
 /** Очищує кошик з клієнта: лише існуючі товари, коректна кількість, без дублікатів */
-export function sanitizeCart(input: unknown): CartLine[] {
+export function sanitizeCart(input: unknown, knownIds: ReadonlySet<string>): CartLine[] {
   if (!Array.isArray(input)) return [];
   const merged = new Map<string, number>();
   for (const l of input) {
@@ -128,9 +131,27 @@ export function sanitizeCart(input: unknown): CartLine[] {
 }
 
 /** Список id товарів: лише існуючі, без дублікатів, не більше 100 */
-export function sanitizeIds(input: unknown): string[] {
+export function sanitizeIds(input: unknown, knownIds: ReadonlySet<string>): string[] {
   if (!Array.isArray(input)) return [];
   return [...new Set(input.filter((id): id is string => typeof id === "string" && knownIds.has(id)))].slice(0, 100);
+}
+
+/**
+ * Адміністратори — email-и зі змінної середовища ADMIN_EMAILS (через кому),
+ * напр. у файлі .env.local: ADMIN_EMAILS=owner@example.com
+ */
+export function isAdmin(u: Pick<StoredUser, "email">) {
+  const list = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return list.includes(u.email.toLowerCase());
+}
+
+/** Поточний адміністратор або відповідь з помилкою (401 / 403) */
+export async function requireAdmin(req: NextRequest): Promise<{ user: StoredUser } | { response: NextResponse }> {
+  if (!isSameOrigin(req)) return { response: error("Forbidden", 403) };
+  const user = await getUser(req);
+  if (!user) return { response: error("Потрібно увійти", 401) };
+  if (!isAdmin(user)) return { response: error("Доступ лише для адміністратора", 403) };
+  return { user };
 }
 
 /** Дані користувача, які безпечно віддавати в браузер */
@@ -143,6 +164,7 @@ export function publicUser(u: StoredUser) {
     phone: u.phone,
     lastDelivery: u.lastDelivery ?? null,
     createdAt: u.createdAt,
+    isAdmin: isAdmin(u),
   };
 }
 

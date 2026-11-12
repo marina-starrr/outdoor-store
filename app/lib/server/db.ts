@@ -1,7 +1,8 @@
 import "server-only";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { CartLine, DeliveryId, PaymentId } from "../../components/cart-logic";
+import type { Product } from "../../components/catalog-data";
 
 /*
  * Просте файлове сховище (.data/db.json) — щоб сайт працював без окремої БД.
@@ -10,10 +11,15 @@ import type { CartLine, DeliveryId, PaymentId } from "../../components/cart-logi
  * Увага: на serverless-хостингах (Vercel тощо) файлова система не зберігається.
  */
 
+export const ORDER_STATUSES = ["new", "confirmed", "shipped", "done", "cancelled"] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
 export type StoredOrder = {
   number: string;
   createdAt: string;
-  status: "new" | "confirmed" | "shipped" | "done";
+  status: OrderStatus;
+  /** Коли адміністратор востаннє змінив статус */
+  updatedAt?: string;
   lines: { id: string; name: string; price: number; qty: number }[];
   subtotal: number;
   promo?: string;
@@ -43,36 +49,76 @@ export type StoredUser = {
   orders: StoredOrder[];
 };
 
+export type StoredMessage = {
+  id: string;
+  createdAt: string;
+  topic: string;
+  name: string;
+  email: string;
+  phone?: string;
+  order?: string;
+  message: string;
+  userId?: string;
+  /** Опрацьоване адміністратором */
+  done?: boolean;
+};
+
 type Session = { userId: string; expiresAt: number };
 
-type Data = {
+export type Data = {
   users: StoredUser[];
   /** ключ — SHA-256 від токена сесії (сам токен зберігається лише в cookie) */
   sessions: Record<string, Session>;
+  /** Каталог; відсутній до першого запуску — тоді береться початковий (seed) */
+  products?: Product[];
+  /** Звернення з форми «Контакти» */
+  messages?: StoredMessage[];
 };
 
-const DIR = join(process.cwd(), ".data");
-const FILE = join(DIR, "db.json");
+/**
+ * Тека з даними. FC_DATA_DIR дозволяє тестам працювати з окремою тимчасовою
+ * базою — щоб жоден тест ніколи не торкався справжніх акаунтів у .data
+ */
+export const dataDir = () => process.env.FC_DATA_DIR || join(process.cwd(), ".data");
+export const dbFile = () => join(dataDir(), "db.json");
 
 let cache: Data | null = null;
+/** Час зміни файлу, з якого прочитано cache */
+let cacheMtime = 0;
 let queue: Promise<unknown> = Promise.resolve();
 
-async function load(): Promise<Data> {
-  if (cache) return cache;
+const mtime = async () => {
   try {
-    cache = JSON.parse(await readFile(FILE, "utf8")) as Data;
+    return (await stat(dbFile())).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
+
+/**
+ * Next може завантажити цей модуль кілька разів (окремо для сторінок і для
+ * API), тож перед використанням кешу перевіряємо, чи файл не змінив інший екземпляр
+ */
+async function load(): Promise<Data> {
+  const m = await mtime();
+  if (cache && m === cacheMtime) return cache;
+  try {
+    cache = JSON.parse(await readFile(dbFile(), "utf8")) as Data;
   } catch {
     cache = { users: [], sessions: {} };
   }
+  cacheMtime = m;
   return cache;
 }
 
 async function persist(data: Data) {
-  await mkdir(DIR, { recursive: true });
+  await mkdir(dataDir(), { recursive: true });
   // Атомарний запис: спершу тимчасовий файл, потім перейменування
-  const tmp = `${FILE}.${process.pid}.tmp`;
+  const file = dbFile();
+  const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await rename(tmp, FILE);
+  await rename(tmp, file);
+  cacheMtime = await mtime();
 }
 
 /** Читання */

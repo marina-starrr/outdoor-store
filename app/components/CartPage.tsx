@@ -6,10 +6,12 @@ import { useState, type ReactNode } from "react";
 import { useAuth } from "./Auth";
 import AuthForms from "./AuthForms";
 import { useCart } from "./Cart";
+import { useCatalog } from "./Catalog";
 import Icon from "./Icon";
 import { Field, formatPhone, inputCls } from "./form-ui";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
+import RecentlyViewed from "./RecentlyViewed";
 import { Breadcrumbs, ProductCard } from "./catalog-ui";
 import { CartItem, EmptyCart, FreeShippingBar, TrashIcon } from "./cart-ui";
 import {
@@ -17,6 +19,7 @@ import {
   cartTotals,
   deliveryOptions,
   deliveryPrice,
+  isDeliveryId,
   paymentOptions,
   promoCodes,
   type DeliveryId,
@@ -76,7 +79,7 @@ function validate(form: Form, delivery: DeliveryId): Errors {
   if (form.lastName.trim().length < 2) errors.lastName = "Вкажіть прізвище";
   if (form.phone.replace(/\D/g, "").length !== 12) errors.phone = "Номер у форматі +380 XX XXX XX XX";
   if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) errors.email = "Перевірте email";
-  if (delivery !== "pickup" && form.city.trim().length < 2) errors.city = "Вкажіть місто";
+  if (form.city.trim().length < 2) errors.city = "Вкажіть місто";
   if ((delivery === "np-branch" || delivery === "ukrposhta") && !form.branch.trim())
     errors.branch = "Вкажіть номер відділення";
   if (delivery === "np-courier" && form.address.trim().length < 5)
@@ -88,6 +91,7 @@ export default function CartPage() {
   const router = useRouter();
   const { lines, count, ready, clear, add } = useCart();
   const { status, user, refresh } = useAuth();
+  const { products: catalog } = useCatalog();
 
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<Form>(emptyForm);
@@ -102,6 +106,8 @@ export default function CartPage() {
   const [submitError, setSubmitError] = useState("");
   const [pending, setPending] = useState(false);
   const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [agreeError, setAgreeError] = useState(false);
 
   // Після входу підставляємо контакти та останню адресу доставки з профілю
   // (лише в порожні поля — те, що користувач уже ввів, не перезаписуємо)
@@ -118,7 +124,8 @@ export default function CartPage() {
       branch: f.branch || d?.branch || "",
       address: f.address || d?.address || "",
     }));
-    if (d) setDelivery(d.method);
+    // Старі замовлення могли мати спосіб, якого вже немає (самовивіз)
+    if (d && isDeliveryId(d.method)) setDelivery(d.method);
   }
 
   const totals = cartTotals(lines, delivery, promo);
@@ -155,6 +162,11 @@ export default function CartPage() {
       document.getElementById(`field-${firstInvalid}`)?.focus();
       return;
     }
+    if (!agreed) {
+      setAgreeError(true);
+      document.getElementById("field-agree")?.focus();
+      return;
+    }
 
     setPending(true);
     setSubmitError("");
@@ -176,6 +188,7 @@ export default function CartPage() {
           promo,
           comment: form.comment,
           noCall: form.noCall,
+          agreed,
         }),
       });
       data = await res.json();
@@ -204,7 +217,7 @@ export default function CartPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const recommendations = cartRecommendations(lines);
+  const recommendations = cartRecommendations(catalog, lines);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f7fafc] text-[#082c45]">
@@ -319,8 +332,7 @@ export default function CartPage() {
                         );
                       })}
                     </div>
-                    {delivery !== "pickup" ? (
-                      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
                         <Field id="city" label="Місто" error={errors.city}>
                           <input id="field-city" autoComplete="address-level2" value={form.city} onChange={(e) => set("city", e.target.value)} className={inputCls(errors.city)} placeholder="Наприклад, Київ" list="cities" />
                           <datalist id="cities">
@@ -338,14 +350,13 @@ export default function CartPage() {
                             <input id="field-branch" value={form.branch} onChange={(e) => set("branch", e.target.value)} className={inputCls(errors.branch)} placeholder={delivery === "ukrposhta" ? "01001" : "12"} />
                           </Field>
                         )}
-                      </div>
-                    ) : (
-                      <p className="mt-5 flex items-start gap-3 rounded-2xl bg-[#f3f9fd] p-4 text-sm text-[#3d5d70]">
-                        <Icon name="shield" className="mt-0.5 h-5 w-5 shrink-0 text-[#067eb7]" />
-                        Замовлення буде готове до видачі протягом 2 годин у магазині за адресою
-                        Київ, вул. Туристична, 12 (щодня 09:00–20:00). Ми надішлемо SMS, коли все буде зібрано.
-                      </p>
-                    )}
+                    </div>
+                    <p className="mt-4 text-xs text-[#8aa5b5]">
+                      Відправляємо щодня. Детальніше про строки й вартість —{" "}
+                      <Link href="/delivery" target="_blank" className="font-bold text-[#098fd0] hover:underline">
+                        Доставка і оплата
+                      </Link>
+                    </p>
                   </Card>
 
                   {/* Оплата */}
@@ -432,6 +443,33 @@ export default function CartPage() {
                         {submitError}
                       </p>
                     )}
+                    {status === "user" && (
+                      <div className="mt-5">
+                        <label className="flex cursor-pointer items-start gap-2.5 text-sm leading-snug">
+                          <input
+                            id="field-agree"
+                            type="checkbox"
+                            checked={agreed}
+                            onChange={(e) => { setAgreed(e.target.checked); setAgreeError(false); }}
+                            aria-invalid={agreeError}
+                            aria-describedby={agreeError ? "agree-error" : undefined}
+                            className={`mt-0.5 h-[18px] w-[18px] shrink-0 accent-[#ffd51f] ${agreeError ? "outline outline-2 outline-offset-1 outline-[#e5484d]" : ""}`}
+                          />
+                          <span className="text-[#3d5d70]">
+                            Погоджуюсь з{" "}
+                            <Link href="/delivery" target="_blank" className="font-bold text-[#098fd0] hover:underline">умовами доставки й оплати</Link>,{" "}
+                            <Link href="/returns" target="_blank" className="font-bold text-[#098fd0] hover:underline">умовами повернення</Link>{" "}
+                            та{" "}
+                            <Link href="/privacy" target="_blank" className="font-bold text-[#098fd0] hover:underline">політикою конфіденційності</Link>
+                          </span>
+                        </label>
+                        {agreeError && (
+                          <p id="agree-error" className="mt-1.5 pl-7 text-xs font-semibold text-[#e5484d]">
+                            Підтвердьте згоду, щоб оформити замовлення
+                          </p>
+                        )}
+                      </div>
+                    )}
                     {status === "user" ? (
                       <button
                         type="submit"
@@ -457,10 +495,6 @@ export default function CartPage() {
                         Увійдіть, щоб оформити
                       </button>
                     )}
-                    <p className="mt-3 text-center text-xs leading-relaxed text-[#8aa5b5]">
-                      Натискаючи кнопку, ви погоджуєтесь з умовами обробки персональних даних та
-                      правилами повернення товару.
-                    </p>
                   </Card>
 
                   <ul className="mt-4 grid gap-3 px-2 text-sm text-[#3d5d70]">
@@ -487,6 +521,8 @@ export default function CartPage() {
               </div>
             </section>
           )}
+
+          {!order && <RecentlyViewed />}
         </div>
       </main>
 

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { NOINDEX } from "../lib/site";
 import AccountPage from "../components/AccountPage";
 
 export const metadata: Metadata = {
-  title: "Мій профіль — Family Camping",
-  robots: { index: false },
+  alternates: { canonical: "/account" },
+  robots: NOINDEX,
+  title: "Мій профіль",
 };
 
 export default function Account() {

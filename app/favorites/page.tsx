@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { NOINDEX } from "../lib/site";
 import FavoritesPage from "../components/FavoritesPage";
 
 export const metadata: Metadata = {
-  title: "Обране — Family Camping",
-  robots: { index: false },
+  alternates: { canonical: "/favorites" },
+  robots: NOINDEX,
+  title: "Обране",
 };
 
 export default function Favorites() {

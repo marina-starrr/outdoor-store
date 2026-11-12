@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- фото товарів з Unsplash з CSS-фільтрами, як на головній */
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Icon from "./Icon";
 import { useLists } from "./Lists";
 import { productUrl } from "./product-details";
@@ -429,27 +429,135 @@ export function SortSelect<T extends string>({
   value,
   options,
   onChange,
+  label = "Сортування",
+  className = "ml-auto",
 }: {
   value: T;
   options: readonly { id: T; label: string }[];
   onChange: (value: T) => void;
+  /** Підпис для екранних читачів; той самий випадний список — і для інших фільтрів */
+  label?: string;
+  className?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const uid = useId();
+  const current = options.find((o) => o.id === value) ?? options[0];
+
+  const openList = () => {
+    setActive(Math.max(0, options.findIndex((o) => o.id === value)));
+    setOpen(true);
+  };
+  const close = (focusButton = true) => {
+    setOpen(false);
+    if (focusButton) buttonRef.current?.focus();
+  };
+  const choose = (i: number) => {
+    onChange(options[i].id);
+    close();
+  };
+
+  // Фокус на список при відкритті; закриття кліком поза компонентом
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.focus();
+    const onDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open]);
+
+  const onListKey = (e: React.KeyboardEvent) => {
+    const last = options.length - 1;
+    const moves: Record<string, () => number> = {
+      ArrowDown: () => Math.min(last, active + 1),
+      ArrowUp: () => Math.max(0, active - 1),
+      Home: () => 0,
+      End: () => last,
+    };
+    if (moves[e.key]) {
+      e.preventDefault();
+      setActive(moves[e.key]());
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      choose(active);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    } else if (e.key === "Tab") {
+      setOpen(false);
+    }
+  };
+
   return (
-    <label className="relative ml-auto">
-      <span className="sr-only">Сортування</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="appearance-none rounded-full bg-white py-2.5 pl-4 pr-10 text-sm font-bold shadow-[0_6px_20px_rgba(79,93,101,.1)] outline-none transition focus:ring-4 focus:ring-sky-100"
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={`${uid}-list`}
+        aria-label={`${label}: ${current.label}`}
+        onClick={() => (open ? close(false) : openList())}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            openList();
+          }
+        }}
+        className={`flex items-center gap-2.5 rounded-full bg-white py-2.5 pl-4 pr-3.5 text-sm font-bold shadow-[0_6px_20px_rgba(79,93,101,.1)] outline-none transition hover:shadow-[0_8px_24px_rgba(79,93,101,.16)] focus-visible:ring-4 focus-visible:ring-sky-100 ${open ? "ring-4 ring-sky-100" : ""}`}
       >
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <Chevron className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-[#067eb7]" />
-    </label>
+        {label === "Сортування" && <SortIcon />}
+        <span className="whitespace-nowrap">{current.label}</span>
+        <Chevron className={`h-4 w-4 text-[#067eb7] transition-transform ${open ? "-rotate-90" : "rotate-90"}`} />
+      </button>
+      {open && (
+        <ul
+          ref={listRef}
+          id={`${uid}-list`}
+          role="listbox"
+          tabIndex={-1}
+          aria-label={label}
+          aria-activedescendant={`${uid}-opt-${active}`}
+          onKeyDown={onListKey}
+          className="absolute right-0 top-[calc(100%+8px)] z-40 min-w-full w-max overflow-hidden rounded-[18px] border border-[#e3edf3] bg-white p-1.5 shadow-[0_20px_50px_rgba(8,44,69,.16)] outline-none"
+        >
+          {options.map((o, i) => {
+            const selected = o.id === value;
+            return (
+              <li
+                key={o.id}
+                id={`${uid}-opt-${i}`}
+                role="option"
+                aria-selected={selected}
+                onPointerEnter={() => setActive(i)}
+                onClick={() => choose(i)}
+                className={`flex cursor-pointer items-center justify-between gap-6 rounded-xl px-3.5 py-2.5 text-sm transition-colors ${
+                  i === active ? "bg-[#eef6fb]" : ""
+                } ${selected ? "font-extrabold text-[#082c45]" : "font-semibold text-[#3d5d70]"}`}
+              >
+                {o.label}
+                <svg viewBox="0 0 24 24" className={`h-4 w-4 text-[#098fd0] ${selected ? "" : "invisible"}`} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m5 12 5 5 9-10" />
+                </svg>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SortIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#067eb7]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6h11M4 12h7M4 18h4M17 8v12m0 0-3-3m3 3 3-3" />
+    </svg>
   );
 }
 

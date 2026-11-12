@@ -32,7 +32,18 @@ export type Product = {
   isNew?: boolean;
   rating: number;
   reviews: number;
+  /** Похідне від stock: stock > 0 (рахується при читанні з бази) */
   inStock: boolean;
+  /** Залишок на складі, шт. */
+  stock: number;
+  /** Прихований адміністратором — не показується в каталозі, але лишається в історії замовлень */
+  hidden?: boolean;
+  /** Власний опис з адмін-панелі (абзаци через порожній рядок); без нього — згенерований */
+  description?: string;
+  /** Власне фото (https-посилання) замість фото з бібліотеки */
+  customImage?: string;
+  /** Остання зміна в адмін-панелі (ISO) — для sitemap */
+  updatedAt?: string;
   /** Порядок у сортуванні «Популярні» — менше значення = вище */
   popularity: number;
   /** Короткі характеристики під назвою, напр. «3 місця · 3,1 кг» */
@@ -129,7 +140,7 @@ export const categoryBySlug = Object.fromEntries(
 
 /* ---------- Товари ---------- */
 
-type TentInput = Omit<Product, "category" | "specs" | "image" | "photo" | "attrs"> & {
+type TentInput = Omit<Product, "category" | "specs" | "image" | "photo" | "attrs" | "stock"> & {
   capacity: number;
   weight: number;
   image: PhotoKey;
@@ -168,6 +179,7 @@ const tents: Product[] = tentInputs.map(({ weight, image, ...t }) => {
   const big = t.capacity >= 6;
   return {
     ...t,
+    stock: seedStock(t.id, t.inStock),
     category: "tents",
     specs: `${t.capacity} ${places(t.capacity)} · ${kg(weight)}`,
     image: img(image),
@@ -189,13 +201,22 @@ const tents: Product[] = tentInputs.map(({ weight, image, ...t }) => {
   };
 });
 
-type Input = Omit<Product, "category" | "image" | "popularity" | "photo" | "attrs"> & {
+type Input = Omit<Product, "category" | "image" | "popularity" | "photo" | "attrs" | "stock"> & {
   image: PhotoKey;
 };
+
+/** Початковий залишок: детермінований, 6–29 шт. для товарів у наявності */
+function seedStock(id: string, inStock: boolean) {
+  if (!inStock) return 0;
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return 6 + (h % 24);
+}
 
 function make(category: CategorySlug, list: Input[]): Product[] {
   return list.map((p, i) => ({
     ...p,
+    stock: seedStock(p.id, p.inStock),
     category,
     popularity: i + 1,
     image: img(p.image),
@@ -311,12 +332,31 @@ const others: Product[] = [
   ]),
 ];
 
-export const products: Product[] = [...tents, ...others];
+/**
+ * Початковий каталог. При першому запуску переноситься в базу даних
+ * (.data/db.json), далі товари, ціни й залишки змінюються в адмін-панелі.
+ * На сайті товари беруться з бази: на сервері — getCatalog(), у браузері — useCatalog().
+ */
+export const seedProducts: Product[] = [...tents, ...others];
 
-export const productsByCategory = (slug: CategorySlug) =>
-  products.filter((p) => p.category === slug);
+export const PHOTO_KEYS = Object.keys(photo) as PhotoKey[];
+export const isPhotoKey = (v: unknown): v is PhotoKey => typeof v === "string" && v in photo;
+export const isCategorySlug = (v: unknown): v is CategorySlug => typeof v === "string" && v in categoryBySlug;
 
-export const brands = Array.from(new Set(products.map((p) => p.brand))).sort();
+/** Похідні поля товару (фото, наявність) — рахуються однаково на сервері й у браузері */
+export function withDerived(p: Product): Product {
+  return {
+    ...p,
+    image: p.customImage || img(p.photo),
+    inStock: p.stock > 0,
+  };
+}
+
+/** Бренди зі списку товарів (для фільтрів) */
+export const brandsOf = (list: Product[]) => Array.from(new Set(list.map((p) => p.brand))).sort();
+
+/** Скільки товарів на складі вважається «закінчується» */
+export const LOW_STOCK = 5;
 
 /* ---------- Фільтри / сортування ---------- */
 
@@ -339,6 +379,7 @@ export const productSortOptions = [
 export type ProductSortId = (typeof productSortOptions)[number]["id"];
 
 export function priceBounds(list: Product[]): [number, number] {
+  if (!list.length) return [0, 0];
   const prices = list.map((p) => p.price);
   return [Math.min(...prices), Math.max(...prices)];
 }

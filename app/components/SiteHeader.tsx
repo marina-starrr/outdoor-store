@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "./NavLink";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "./Auth";
@@ -8,6 +8,7 @@ import { useCart } from "./Cart";
 import { useLists } from "./Lists";
 import Icon, { type IconName } from "./Icon";
 import { navLinks } from "./data";
+import HeaderSearch from "./HeaderSearch";
 
 export function BrandLogo({ size = "sm" }: { size?: "sm" | "lg" }) {
   const box =
@@ -116,24 +117,9 @@ export default function SiteHeader({
             })}
           </nav>
 
-          <label className="relative ml-auto hidden max-w-md flex-1 md:block">
-            <span className="sr-only">Пошук товарів</span>
-            <Icon
-              name="search"
-              className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#067eb7]"
-            />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              onFocus={onSearchFocus}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && query.trim()) onSearchSubmit?.(query.trim());
-              }}
-              className="w-full rounded-full border border-sky-100 bg-[#f1f8fc] py-3 pl-12 pr-5 text-sm outline-none transition focus:border-[#0aa4e8] focus:ring-4 focus:ring-sky-100"
-              placeholder="Що шукаєте?"
-            />
-          </label>
+          <div className="relative ml-auto hidden max-w-md flex-1 md:block">
+            <HeaderSearch query={query} onQueryChange={onQueryChange} onFocus={onSearchFocus} onSubmit={onSearchSubmit} />
+          </div>
 
           <Link
             href="/account"
@@ -199,24 +185,9 @@ export default function SiteHeader({
 
         {menuOpen && (
           <div className="border-t border-sky-100 bg-white px-5 py-5 xl:hidden">
-            <label className="relative mb-5 block md:hidden">
-              <span className="sr-only">Пошук товарів</span>
-              <Icon
-                name="search"
-                className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#098fd0]"
-              />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => onQueryChange(event.target.value)}
-                onFocus={onSearchFocus}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && query.trim()) onSearchSubmit?.(query.trim());
-                }}
-                className="w-full rounded-full bg-[#f1f8fc] py-3 pl-12 pr-5 text-sm outline-none"
-                placeholder="Пошук товарів"
-              />
-            </label>
+            <div className="mb-5 md:hidden">
+              <HeaderSearch variant="mobile" query={query} onQueryChange={onQueryChange} onFocus={onSearchFocus} onSubmit={onSearchSubmit && ((q) => { setMenuOpen(false); onSearchSubmit(q); })} />
+            </div>
             <nav className="grid gap-1 font-bold">
               {navLinks.map((link) => (
                 <Link

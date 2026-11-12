@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useCart } from "./Cart";
 import { useLists } from "./Lists";
-import { FREE_SHIPPING_FROM } from "./cart-logic";
+import RecentlyViewed, { useTrackView } from "./RecentlyViewed";
+import { FREE_SHIPPING_FROM, RETURN_DAYS, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
+import { useCatalog } from "./Catalog";
 import Icon from "./Icon";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
@@ -15,6 +17,7 @@ import {
   categoryBySlug,
   discountPercent,
   formatPrice,
+  LOW_STOCK,
   plural,
   type Product,
 } from "./catalog-data";
@@ -37,6 +40,7 @@ type TabId = (typeof tabIds)[number];
 export default function ProductPage({ product }: { product: Product }) {
   const router = useRouter();
   const { add, notify } = useCart();
+  useTrackView(product.id);
   const category = categoryBySlug[product.category];
   const gallery = productGallery(product);
   const description = productDescription(product);
@@ -136,7 +140,11 @@ export default function ProductPage({ product }: { product: Product }) {
                 className={`mt-3 flex items-center gap-2 text-sm font-bold ${product.inStock ? "text-[#1f9d55]" : "text-[#c2780a]"}`}
               >
                 <span className={`h-2 w-2 rounded-full ${product.inStock ? "bg-[#1f9d55]" : "bg-[#f5ad00]"}`} />
-                {product.inStock ? "Є в наявності · відправимо сьогодні" : "Очікується надходження"}
+                {!product.inStock
+                  ? "Очікується надходження"
+                  : product.stock <= LOW_STOCK
+                    ? `Залишилось лише ${product.stock} шт. · відправимо сьогодні`
+                    : "Є в наявності · відправимо сьогодні"}
               </p>
 
               <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -180,7 +188,7 @@ export default function ProductPage({ product }: { product: Product }) {
               {/* Кнопки покупки */}
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 {product.inStock && (
-                  <QuantityStepper value={quantity} onChange={setQuantity} />
+                  <QuantityStepper value={quantity} onChange={setQuantity} max={maxQtyFor(product)} />
                 )}
                 {product.inStock ? (
                   <button
@@ -268,6 +276,7 @@ export default function ProductPage({ product }: { product: Product }) {
           </div>
 
           <Related product={product} />
+          <RecentlyViewed exclude={product.id} className="mb-20" />
         </div>
       </main>
 
@@ -422,10 +431,12 @@ function QuantityStepper({
   value,
   onChange,
   disabled,
+  max = 20,
 }: {
   value: number;
   onChange: (v: number) => void;
   disabled?: boolean;
+  max?: number;
 }) {
   const btn = "grid h-10 w-10 place-items-center rounded-full text-xl font-bold text-[#264e65] transition hover:bg-white disabled:opacity-35 disabled:hover:bg-transparent";
   return (
@@ -436,7 +447,7 @@ function QuantityStepper({
       <span className="w-8 text-center text-base font-extrabold" aria-live="polite">
         {value}
       </span>
-      <button className={btn} onClick={() => onChange(value + 1)} disabled={disabled || value >= 20} aria-label="Збільшити кількість">
+      <button className={btn} onClick={() => onChange(value + 1)} disabled={disabled || value >= max} aria-label="Збільшити кількість">
         +
       </button>
     </div>
@@ -728,24 +739,28 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function DeliveryTab() {
-  const delivery = [
-    { title: "Нова пошта", text: "У відділення, поштомат або кур'єром. 1–3 дні.", price: `від 70 ₴ · безкоштовно від ${formatPrice(FREE_SHIPPING_FROM)}` },
-    { title: "Укрпошта", text: "У відділення по всій Україні. 3–5 днів.", price: "від 45 ₴" },
-    { title: "Самовивіз", text: "Київ, вул. Туристична, 12. Щодня 09:00–20:00.", price: "безкоштовно" },
-  ];
-  const payment = [
-    { title: "Карткою онлайн", text: "Visa, Mastercard, Apple Pay, Google Pay." },
-    { title: "Накладений платіж", text: "Оплата при отриманні у відділенні." },
-    { title: "Оплата частинами", text: "До 6 платежів без переплат від monobank та ПриватБанку." },
-  ];
+  // Ті самі способи й ціни, що в кошику
+  const delivery = deliveryOptions.map((o) => ({
+    title: o.title,
+    text: `${o.text}.`,
+    aside: o.freeAbove ? `${formatPrice(o.price)} · від ${formatPrice(FREE_SHIPPING_FROM)} безкоштовно` : formatPrice(o.price),
+  }));
+  const payment = paymentOptions.map((o) => ({
+    title: o.title,
+    text: o.minTotal ? `${o.text}, для замовлень від ${formatPrice(o.minTotal)}.` : `${o.text}.`,
+  }));
   return (
     <div className="grid gap-10 lg:grid-cols-2">
-      <InfoList title="Доставка" icon="truck" items={delivery.map((d) => ({ title: d.title, text: d.text, aside: d.price }))} />
+      <InfoList title="Доставка" icon="truck" items={delivery} />
       <InfoList title="Оплата" icon="shield" items={payment} />
       <div className="rounded-[22px] bg-[#fffbe6] p-6 lg:col-span-2">
         <p className="font-extrabold">Обмін і повернення</p>
         <p className="mt-2 text-sm leading-relaxed text-[#3d5d70]">
-          Протягом 14 днів ви можете повернути або обміняти товар, якщо він не був у використанні та збережено товарний вигляд. Вартість зворотної доставки — за тарифами перевізника.
+          Протягом {RETURN_DAYS} днів ви можете повернути або обміняти товар, якщо він не був у використанні та збережено товарний вигляд. Вартість зворотної доставки — за тарифами перевізника.
+        </p>
+        <p className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm font-bold">
+          <Link href="/delivery" className="text-[#098fd0] hover:underline">Усе про доставку й оплату →</Link>
+          <Link href="/returns" className="text-[#098fd0] hover:underline">Як повернути товар →</Link>
         </p>
       </div>
     </div>
@@ -788,7 +803,8 @@ function InfoList({
 
 function Related({ product }: { product: Product }) {
   const { add } = useCart();
-  const items = relatedProducts(product);
+  const { products } = useCatalog();
+  const items = relatedProducts(products, product);
   if (!items.length) return null;
   return (
     <section className="mb-20 mt-6" aria-labelledby="related-title">

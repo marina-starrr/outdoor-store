@@ -17,7 +17,7 @@ import { Field, FormError, PasswordInput, SubmitButton, formatPhone, inputCls, i
 type Order = {
   number: string;
   createdAt: string;
-  status: "new" | "confirmed" | "shipped" | "done";
+  status: "new" | "confirmed" | "shipped" | "done" | "cancelled";
   lines: { id: string; name: string; price: number; qty: number }[];
   total: number;
   shipping: number;
@@ -31,6 +31,7 @@ const statusLabel: Record<Order["status"], [string, string]> = {
   confirmed: ["Підтверджено", "bg-[#fff4c2] text-[#8a6100]"],
   shipped: ["Відправлено", "bg-[#efe9fd] text-[#6941c6]"],
   done: ["Отримано", "bg-[#e7f7ee] text-[#1f9d55]"],
+  cancelled: ["Скасовано", "bg-[#fdecec] text-[#c53035]"],
 };
 
 const months = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
@@ -166,6 +167,18 @@ function Dashboard({ user }: { user: AuthUser }) {
               Вийти
             </button>
           </nav>
+          {user.isAdmin && (
+            <Link
+              href="/admin"
+              className="flex items-center justify-between gap-3 rounded-[22px] bg-[#ffd51f] px-5 py-4 text-[#082c45] transition hover:bg-[#ffe044]"
+            >
+              <span className="flex items-center gap-3 text-sm font-extrabold">
+                <Icon name="shield" className="h-5 w-5" />
+                Адмін-панель
+              </span>
+              <Icon name="arrow" className="h-4 w-4" />
+            </Link>
+          )}
           <Link
             href="/cart"
             className="flex items-center justify-between gap-3 rounded-[22px] bg-[#082c45] px-5 py-4 text-white transition hover:bg-[#0b3a5a]"
@@ -245,7 +258,8 @@ function Orders() {
         <ul className="grid gap-4">
           {orders.map((order) => {
             const [label, cls] = statusLabel[order.status];
-            const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title;
+            // «Самовивіз» — для замовлень, оформлених до того, як його прибрали
+            const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? "Самовивіз";
             const payment = paymentOptions.find((o) => o.id === order.payment)?.title;
             const where = [order.delivery.city, order.delivery.branch && `№ ${order.delivery.branch}`, order.delivery.address].filter(Boolean).join(", ");
             return (

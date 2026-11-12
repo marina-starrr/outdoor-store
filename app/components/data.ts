@@ -20,9 +20,28 @@ export type Product = {
 
 export const navLinks = [
   { label: "Каталог", href: "/catalog" },
-  { label: "Хіти", href: "/#products" },
-  { label: "Про нас", href: "/#about" },
-  { label: "Контакти", href: "#contacts" },
+  { label: "Хіти", href: "/hits" },
+  { label: "Доставка і оплата", href: "/delivery" },
+  { label: "Про нас", href: "/about" },
+  { label: "Контакти", href: "/contacts" },
+];
+
+/** Контакти магазину (онлайн-магазин без фізичної адреси) */
+export const contacts = {
+  phone: "0 800 330 121",
+  phoneHref: "tel:+380800330121",
+  email: "hello@outdoor.ua",
+  emailHref: "mailto:hello@outdoor.ua",
+  schedule: "Замовлення приймаємо й опрацьовуємо цілодобово, 24/7",
+};
+
+/** Інформаційні сторінки — бічна навігація та футер */
+export const infoLinks = [
+  { label: "Про нас", href: "/about" },
+  { label: "Контакти", href: "/contacts" },
+  { label: "Доставка і оплата", href: "/delivery" },
+  { label: "Обмін і повернення", href: "/returns" },
+  { label: "Політика конфіденційності", href: "/privacy" },
 ];
 
 export const categories: Category[] = [

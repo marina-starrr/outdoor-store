@@ -7,6 +7,7 @@ import { useCart } from "./Cart";
 import Icon from "./Icon";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
+import RecentlyViewed from "./RecentlyViewed";
 import {
   ActiveChips,
   Breadcrumbs,
@@ -29,22 +30,21 @@ import {
   type Chip,
 } from "./catalog-ui";
 import {
-  brands,
   categories,
   categoryBySlug,
   discountPercent,
   formatPrice,
   priceBounds,
-  products,
   productsWord,
   roundBounds,
   type CategoryInfo,
   type CategorySlug,
   type Product,
 } from "./catalog-data";
+import { useCatalog } from "./Catalog";
+import { matchesSearch } from "./search";
 
 const PAGE_SIZE = 6;
-const BOUNDS = roundBounds(priceBounds(products));
 
 const sortOptions = [
   { id: "popular", label: "Спочатку популярні" },
@@ -62,13 +62,13 @@ type Filters = {
   inStockOnly: boolean;
 };
 
-const initialFilters: Filters = {
-  price: BOUNDS,
+const initialFiltersFor = (bounds: [number, number]): Filters => ({
+  price: bounds,
   categories: [],
   brands: [],
   saleOnly: false,
   inStockOnly: false,
-};
+});
 
 const toggle = <T,>(list: T[], value: T) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -83,8 +83,8 @@ function matches(p: Product, f: Filters, skip?: "brands") {
   return true;
 }
 
-const matchesQuery = (p: Product, q: string) =>
-  `${p.name} ${p.brand}`.toLocaleLowerCase("uk").includes(q);
+/** Той самий пошук, що й підказки в шапці */
+const matchesQuery = (p: Product, q: string) => matchesSearch(p, q);
 
 type CategoryRow = {
   info: CategoryInfo;
@@ -94,8 +94,11 @@ type CategoryRow = {
 };
 
 export default function CatalogOverview() {
+  const { products, brands } = useCatalog();
+  const BOUNDS = useMemo(() => roundBounds(priceBounds(products)), [products]);
+  const initialFilters = useMemo(() => initialFiltersFor(BOUNDS), [BOUNDS]);
   const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<Filters>(initialFilters);
+  const [filters, setFilters] = useState<Filters>(() => initialFiltersFor(roundBounds(priceBounds(products))));
   const [sort, setSort] = useState<SortId>("popular");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [urlReady, setUrlReady] = useState(false);
@@ -124,7 +127,7 @@ export default function CatalogOverview() {
     setQuery(sp.get("q") ?? "");
     setUrlReady(true);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
+  }, [BOUNDS, brands]);
 
   // Параметри, що передаються далі на сторінку категорії
   const carried = {
@@ -176,7 +179,7 @@ export default function CatalogOverview() {
       count: (a, b) => b.items.length - a.items.length,
     };
     return list.sort(sorters[sort]);
-  }, [filters, q, sort]);
+  }, [filters, q, sort, products]);
 
   // Лічильники для чекбоксів
   const counts = useMemo(() => {
@@ -192,7 +195,7 @@ export default function CatalogOverview() {
         brand[p.brand] = (brand[p.brand] ?? 0) + 1;
     }
     return { category, brand };
-  }, [filters]);
+  }, [filters, products]);
 
   // Товари за пошуковим запитом або «Гарячі пропозиції»
   const featured = useMemo(() => {
@@ -207,7 +210,7 @@ export default function CatalogOverview() {
           .filter((p) => p.oldPrice && p.inStock)
           .sort((a, b) => discountPercent(b) - discountPercent(a))
           .slice(0, 4);
-  }, [filters, q]);
+  }, [filters, q, products]);
 
   const paging = usePaging(
     rows.length,
@@ -389,6 +392,8 @@ export default function CatalogOverview() {
                   </div>
                 </section>
               )}
+
+              {!q && <RecentlyViewed />}
             </div>
           </div>
         </div>

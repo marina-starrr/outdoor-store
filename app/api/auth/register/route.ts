@@ -7,6 +7,7 @@ import {
   isEmail,
   isPhone,
   isSameOrigin,
+  knownProductIds,
   newUserId,
   normalizeEmail,
   publicUser,
@@ -32,7 +33,8 @@ export async function POST(req: NextRequest) {
   if (password.length > 200) return error("Занадто довгий пароль");
 
   const passwordHash = await hashPassword(password);
-  const guestCart = sanitizeCart(body.cart);
+  const known = await knownProductIds();
+  const guestCart = sanitizeCart(body.cart, known);
 
   const user = await write((db) => {
     if (db.users.some((u) => u.email === email)) return null;
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
       passwordHash,
       createdAt: new Date().toISOString(),
       cart: guestCart,
-      favorites: sanitizeIds(body.favorites),
+      favorites: sanitizeIds(body.favorites, known),
       orders: [],
     };
     db.users.push(created);

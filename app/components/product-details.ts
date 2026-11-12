@@ -1,7 +1,6 @@
 import {
   categoryPhotos,
   photoUrl,
-  products,
   type CategorySlug,
   type Product,
 } from "./catalog-data";
@@ -11,17 +10,21 @@ import {
 export const productUrl = (p: Pick<Product, "category" | "id">) =>
   `/catalog/${p.category}/${p.id}`;
 
-export const findProduct = (category: string, id: string) =>
-  products.find((p) => p.category === category && p.id === id);
+/** Товар за адресою; приховані товари на сайті не показуються */
+export const findProduct = (list: Product[], category: string, id: string) =>
+  list.find((p) => p.category === category && p.id === id && !p.hidden);
 
 /* ---------- Галерея ---------- */
 
 export function productGallery(p: Product) {
   const keys = [p.photo, ...categoryPhotos[p.category].filter((k) => k !== p.photo)];
-  return keys.slice(0, 4).map((key) => ({
+  const library = keys.map((key) => ({
     full: photoUrl(key, 1200, 800),
     thumb: photoUrl(key, 240, 160),
   }));
+  // Власне фото з адмін-панелі — першим
+  const own = p.customImage ? [{ full: p.customImage, thumb: p.customImage }] : [];
+  return [...own, ...library].slice(0, 4);
 }
 
 /* ---------- Опис ---------- */
@@ -69,7 +72,15 @@ const descriptions: Record<CategorySlug, (p: Product) => string[]> = {
   ],
 };
 
-export const productDescription = (p: Product) => descriptions[p.category](p);
+export function productDescription(p: Product): string[] {
+  if (p.description?.trim())
+    return p.description.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
+  const generated = descriptions[p.category](p);
+  // Новий товар з адмін-панелі може не мати характеристик, з яких складається шаблон
+  return generated.some((s) => s.includes("undefined"))
+    ? [`${p.name} від ${p.brand} — надійне спорядження для відпочинку на природі.`, ...descriptions.accessories(p).slice(1)]
+    : generated;
+}
 
 /** 4 ключові характеристики для блоку біля ціни */
 export const productHighlights = (p: Product) =>
@@ -173,8 +184,8 @@ export function ratingDistribution(p: Product) {
 
 /* ---------- Схожі товари ---------- */
 
-export function relatedProducts(p: Product, limit = 4) {
-  const same = products.filter((x) => x.category === p.category && x.id !== p.id);
+export function relatedProducts(list: Product[], p: Product, limit = 4) {
+  const same = list.filter((x) => x.category === p.category && x.id !== p.id);
   // Спершу ті, що ближчі за ціною
   return same
     .sort((a, b) => Math.abs(a.price - p.price) - Math.abs(b.price - p.price))

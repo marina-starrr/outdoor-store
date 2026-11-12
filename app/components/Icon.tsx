@@ -19,6 +19,12 @@ export type IconName =
   | "package"
   | "heart"
   | "compare"
+  | "phone"
+  | "mail"
+  | "clock"
+  | "lock"
+  | "card"
+  | "chat"
   | "instagram"
   | "facebook"
   | "youtube";
@@ -115,6 +121,39 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M6 20V10M12 20V4M18 20v-7" />
       <path d="M3 20h18" />
+    </>
+  ),
+  phone: (
+    <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" />
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2" />
+    </>
+  ),
+  card: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 10h18M7 15h4" />
+    </>
+  ),
+  chat: (
+    <>
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />
+      <path d="M8 11h8M8 14.5h5" />
     </>
   ),
   instagram: (

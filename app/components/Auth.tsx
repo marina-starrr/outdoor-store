@@ -20,6 +20,8 @@ export type AuthUser = {
   phone: string;
   createdAt: string;
   lastDelivery: { method: DeliveryId; city?: string; branch?: string; address?: string } | null;
+  /** Має доступ до адмін-панелі */
+  isAdmin?: boolean;
 };
 
 /**

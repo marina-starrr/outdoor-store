@@ -1,6 +1,7 @@
-import Link from "next/link";
+import Link from "./NavLink";
 import Icon, { type IconName } from "./Icon";
 import { BrandLogo } from "./SiteHeader";
+import { contacts } from "./data";
 
 const socials: { icon: IconName; label: string }[] = [
   { icon: "instagram", label: "Instagram" },
@@ -46,38 +47,47 @@ export default function SiteFooter() {
             <Link href="/catalog/backpacks">Рюкзаки</Link>
             <Link href="/catalog/sleeping-bags">Спальники</Link>
             <Link href="/catalog/cookware">Посуд</Link>
+            <Link href="/hits">Хіти продажу</Link>
             <Link href="/catalog">Усі категорії</Link>
           </div>
         </div>
         <div>
           <h3 className="footer-title">Покупцям</h3>
           <div className="footer-links">
-            <Link href="/#about">Про нас</Link>
+            <Link href="/about">Про нас</Link>
+            <Link href="/delivery">Доставка і оплата</Link>
+            <Link href="/returns">Обмін і повернення</Link>
             <Link href="/favorites">Обране</Link>
             <Link href="/compare">Порівняння товарів</Link>
-            <a href="#">Доставка й оплата</a>
-            <a href="#">Обмін і повернення</a>
-            <a href="#contacts">Контакти</a>
+            <Link href="/contacts">Контакти</Link>
           </div>
         </div>
         <div>
           <h3 className="footer-title">Ми на зв’язку</h3>
           <div className="footer-links">
             <a
-              href="tel:+380800330121"
+              href={contacts.phoneHref}
               className="text-lg font-extrabold text-[#063e62]"
             >
-              0 800 330 121
+              {contacts.phone}
             </a>
-            <a href="mailto:hello@outdoor.ua">hello@outdoor.ua</a>
-            <span>Щодня, 09:00–20:00</span>
+            <a href={contacts.emailHref}>{contacts.email}</a>
+            <span>Замовлення приймаємо 24/7</span>
+            <Link href="/contacts">Написати нам</Link>
           </div>
         </div>
       </div>
       <div className="bg-[#0b2c40]">
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-2 px-5 py-6 text-xs text-white/80 sm:flex-row sm:justify-between lg:px-8">
-          <span>© 2026 Спорядження для відпочинку</span>
-          <span>Створено для тих, хто обирає шлях</span>
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-2 px-5 py-6 text-xs text-white/80 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+          <span>© 2026 Спорядження для відпочинку · Онлайн-магазин</span>
+          <span className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link href="/privacy" className="transition hover:text-white hover:underline">
+              Політика конфіденційності
+            </Link>
+            <Link href="/returns" className="transition hover:text-white hover:underline">
+              Умови повернення
+            </Link>
+          </span>
         </div>
       </div>
     </footer>

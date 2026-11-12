@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCart } from "./Cart";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
+import RecentlyViewed from "./RecentlyViewed";
 import {
   ActiveChips,
   Breadcrumbs,
@@ -32,7 +33,6 @@ import {
   formatPrice,
   priceBounds,
   productSortOptions,
-  productsByCategory,
   productsWord,
   roundBounds,
   type CapacityId,
@@ -40,6 +40,8 @@ import {
   type Product,
   type ProductSortId,
 } from "./catalog-data";
+import { useCatalog } from "./Catalog";
+import { matchesSearch } from "./search";
 
 const PAGE_SIZE = 8;
 
@@ -55,8 +57,7 @@ const toggle = <T,>(list: T[], value: T) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
 function matches(p: Product, f: Filters, query: string, skip?: keyof Filters) {
-  if (query && !`${p.name} ${p.brand}`.toLocaleLowerCase("uk").includes(query))
-    return false;
+  if (query && !matchesSearch(p, query)) return false;
   if (skip !== "price" && (p.price < f.price[0] || p.price > f.price[1]))
     return false;
   if (skip !== "brands" && f.brands.length && !f.brands.includes(p.brand))
@@ -84,7 +85,8 @@ const sorters: Record<ProductSortId, (a: Product, b: Product) => number> = {
 
 export default function CategoryListing({ slug }: { slug: CategorySlug }) {
   const category = categoryBySlug[slug];
-  const items = useMemo(() => productsByCategory(slug), [slug]);
+  const { products } = useCatalog();
+  const items = useMemo(() => products.filter((p) => p.category === slug), [products, slug]);
   const bounds = useMemo(() => roundBounds(priceBounds(items)), [items]);
   const categoryBrands = useMemo(
     () => Array.from(new Set(items.map((p) => p.brand))).sort(),
@@ -334,6 +336,8 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
               />
             </section>
           </div>
+
+          <RecentlyViewed />
         </div>
       </main>
 

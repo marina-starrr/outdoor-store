@@ -19,13 +19,14 @@ import {
   readIds,
   writeIds,
 } from "./cart-storage";
-import { categoryBySlug, products, type Product } from "./catalog-data";
+import { categoryBySlug, type Product } from "./catalog-data";
+import { useCatalog } from "./Catalog";
 
 /** Скільки товарів однієї категорії можна порівнювати одночасно */
 export const COMPARE_LIMIT = 4;
 
-const byId = new Map(products.map((p) => [p.id, p]));
-const known = (ids: string[]) => ids.filter((id) => byId.has(id));
+/** Без дублікатів; невідомі id (видалені товари) відфільтровуються при показі */
+const known = (ids: string[]) => [...new Set(ids)];
 
 type ListsContextValue = {
   ready: boolean;
@@ -53,6 +54,7 @@ export function ListsProvider({ children }: { children: ReactNode }) {
   const { status, event } = useAuth();
   const { notify } = useCart();
   const router = useRouter();
+  const { byId } = useCatalog();
   const syncedRef = useRef("");
   const handledEventRef = useRef(0);
 
@@ -151,14 +153,14 @@ export function ListsProvider({ children }: { children: ReactNode }) {
         { label: "Порівняти", onClick: () => router.push(`/compare?category=${product.category}`) },
       );
     },
-    [compareIds, notify, router],
+    [compareIds, notify, router, byId],
   );
 
   const clearFavorites = useCallback(() => setFavoriteIds([]), []);
   const clearCompare = useCallback(
     (category?: string) =>
       setCompareIds((list) => (category ? list.filter((id) => byId.get(id)?.category !== category) : [])),
-    [],
+    [byId],
   );
 
   const value = useMemo<ListsContextValue>(() => {
@@ -175,7 +177,7 @@ export function ListsProvider({ children }: { children: ReactNode }) {
       toggleCompare,
       clearCompare,
     };
-  }, [ready, favoriteIds, compareIds, toggleFavorite, clearFavorites, toggleCompare, clearCompare]);
+  }, [ready, favoriteIds, compareIds, toggleFavorite, clearFavorites, toggleCompare, clearCompare, byId]);
 
   return <ListsContext.Provider value={value}>{children}</ListsContext.Provider>;
 }

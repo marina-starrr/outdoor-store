@@ -1,4 +1,4 @@
-import { products, type Product } from "./catalog-data";
+import type { Product } from "./catalog-data";
 
 export const FREE_SHIPPING_FROM = 3000;
 export const MAX_QTY = 20;
@@ -6,19 +6,27 @@ export const MAX_QTY = 20;
 export type CartLine = { id: string; qty: number };
 export type ResolvedLine = CartLine & { product: Product };
 
-const byId = new Map(products.map((p) => [p.id, p]));
+/** Скільки одиниць товару можна покласти в кошик: не більше ліміту і залишку на складі */
+export const maxQtyFor = (p: Pick<Product, "stock">) => Math.max(0, Math.min(MAX_QTY, p.stock));
 
-/** Додає до рядків кошика дані товару; невідомі id (напр. видалені товари) відкидаються */
-export function resolveLines(lines: CartLine[]): ResolvedLine[] {
+/**
+ * Додає до рядків кошика дані товару; невідомі й приховані товари
+ * (напр. видалені з каталогу) відкидаються
+ */
+export function resolveLines(lines: CartLine[], byId: ReadonlyMap<string, Product>): ResolvedLine[] {
   return lines.flatMap((l) => {
     const product = byId.get(l.id);
-    return product ? [{ ...l, product }] : [];
+    return product && !product.hidden ? [{ ...l, product }] : [];
   });
 }
 
 /* ---------- Доставка ---------- */
 
-export type DeliveryId = "np-branch" | "np-courier" | "ukrposhta" | "pickup";
+/** Магазин працює лише онлайн, тож самовивозу немає — тільки доставка */
+export type DeliveryId = "np-branch" | "np-courier" | "ukrposhta";
+
+export const isDeliveryId = (v: unknown): v is DeliveryId =>
+  deliveryOptions.some((o) => o.id === v);
 
 export const deliveryOptions: {
   id: DeliveryId;
@@ -31,8 +39,12 @@ export const deliveryOptions: {
   { id: "np-branch", title: "Нова пошта — відділення", text: "1–3 дні, відділення або поштомат", price: 70, freeAbove: true },
   { id: "np-courier", title: "Нова пошта — кур'єр", text: "1–3 дні, доставка до дверей", price: 120, freeAbove: false },
   { id: "ukrposhta", title: "Укрпошта", text: "3–5 днів, у відділення", price: 45, freeAbove: true },
-  { id: "pickup", title: "Самовивіз", text: "Київ, вул. Туристична, 12 · сьогодні", price: 0, freeAbove: false },
 ];
+
+/** Скільки днів перевізник зберігає посилку у відділенні */
+export const PARCEL_STORAGE_DAYS = 5;
+/** Строк повернення за Законом України «Про захист прав споживачів» */
+export const RETURN_DAYS = 14;
 
 export const deliveryPrice = (id: DeliveryId, subtotal: number) => {
   const option = deliveryOptions.find((o) => o.id === id)!;
@@ -86,12 +98,12 @@ export function cartTotals(
  * «Вам також знадобиться»: спершу товари з інших категорій (до намету —
  * спальник, до рюкзака — посуд), далі хіти та найвищий рейтинг
  */
-export function cartRecommendations(lines: ResolvedLine[], limit = 4) {
+export function cartRecommendations(products: Product[], lines: ResolvedLine[], limit = 4) {
   const inCart = new Set(lines.map((l) => l.id));
   const categories = new Set(lines.map((l) => l.product.category));
   const complementary = (p: Product) => (categories.has(p.category) ? 0 : 1);
   return products
-    .filter((p) => !inCart.has(p.id) && p.inStock)
+    .filter((p) => !inCart.has(p.id) && p.inStock && !p.hidden)
     .sort(
       (a, b) =>
         complementary(b) - complementary(a) ||

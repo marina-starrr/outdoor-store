@@ -4,6 +4,7 @@ import {
   error,
   hashPassword,
   isSameOrigin,
+  knownProductIds,
   loginLimiter,
   normalizeEmail,
   publicUser,
@@ -38,12 +39,13 @@ export async function POST(req: NextRequest) {
   limiter.reset();
 
   // Кошик гостя додається до кошика акаунта
-  const guestCart = sanitizeCart(body.cart);
-  const guestFavorites = sanitizeIds(body.favorites);
+  const known = await knownProductIds();
+  const guestCart = sanitizeCart(body.cart, known);
+  const guestFavorites = sanitizeIds(body.favorites, known);
   const { cart, favorites } = await write((db) => {
     const u = db.users.find((x) => x.id === user.id)!;
-    u.cart = sanitizeCart([...u.cart, ...guestCart]);
-    u.favorites = sanitizeIds([...(u.favorites ?? []), ...guestFavorites]);
+    u.cart = sanitizeCart([...u.cart, ...guestCart], known);
+    u.favorites = sanitizeIds([...(u.favorites ?? []), ...guestFavorites], known);
     return { cart: u.cart, favorites: u.favorites };
   });
 
