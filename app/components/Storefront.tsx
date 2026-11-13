@@ -88,20 +88,21 @@ export default function Storefront() {
           </div>
 
           <div className="absolute bottom-0 left-0 right-0 border-t border-white/15 bg-[#067eb7]">
-            <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-4 px-5 py-4 text-xs font-bold text-white sm:grid-cols-3 lg:px-8">
-              <div className="flex items-center gap-2.5">
-                <Icon name="truck" className="h-5 w-5 text-[#3ed8ff]" />
-                Швидка доставка
-              </div>
-              <div className="hidden items-center gap-2.5 sm:flex">
-                <Icon name="shield" className="h-5 w-5 text-[#3ed8ff]" />
-                Гарантія якості
-              </div>
-              <div className="hidden items-center gap-2.5 sm:flex">
-                <Icon name="headset" className="h-5 w-5 text-[#3ed8ff]" />
-                Допомога у виборі
-              </div>
-            </div>
+            <ul className="mx-auto grid max-w-[1440px] grid-cols-3 gap-2 px-3 py-3.5 text-[11px] font-bold leading-tight text-white sm:gap-4 sm:px-5 sm:py-4 sm:text-xs lg:px-8">
+              {[
+                { icon: "truck" as const, label: "Швидка доставка" },
+                { icon: "shield" as const, label: "Гарантія якості" },
+                { icon: "headset" as const, label: "Допомога у виборі" },
+              ].map((item) => (
+                <li
+                  key={item.icon}
+                  className="flex flex-col items-center gap-1.5 text-center sm:flex-row sm:gap-2.5 sm:text-left"
+                >
+                  <Icon name={item.icon} className="h-5 w-5 shrink-0 text-[#3ed8ff]" />
+                  {item.label}
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
@@ -133,7 +134,13 @@ export default function Storefront() {
               </p>
             </div>
 
-            <div className="relative z-10 mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {/* На телефоні й планшеті — горизонтальний слайдер, на десктопі — сітка */}
+            <div
+              className="snap-row snap-row--lg relative z-10 mt-12"
+              role="region"
+              aria-label="Категорії — гортайте вбік"
+              tabIndex={0}
+            >
               {categories.map((category, index) => (
                 <a
                   href={category.href}
@@ -182,7 +189,12 @@ export default function Storefront() {
             </div>
 
             {filteredProducts.length > 0 ? (
-              <div className="mt-10 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+              <div
+                className="snap-row snap-row--xl mt-10"
+                role="region"
+                aria-label="Хіти продажу — гортайте вбік"
+                tabIndex={0}
+              >
                 {filteredProducts.map((product) => (
                   <article key={product.id} className="product-card group">
                     <div className="relative aspect-[4/4.4] overflow-hidden rounded-[22px] bg-sky-50">

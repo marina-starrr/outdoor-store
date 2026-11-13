@@ -13,8 +13,8 @@ const socials: { icon: IconName; label: string }[] = [
 export default function SiteFooter() {
   return (
     <footer id="contacts" className="bg-white text-[#063e62]">
-      <div className="mx-auto grid max-w-[1440px] gap-12 px-5 py-16 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:px-8 lg:py-20">
-        <div>
+      <div className="mx-auto grid max-w-[1440px] grid-cols-2 gap-x-6 gap-y-10 px-5 py-14 sm:gap-12 sm:py-16 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:px-8 lg:py-20">
+        <div className="col-span-2 sm:col-span-1">
           <Link href="/" className="group flex items-center gap-3">
             <BrandLogo size="lg" />
             <span className="text-lg font-black leading-[1.05]">
@@ -62,7 +62,7 @@ export default function SiteFooter() {
             <Link href="/contacts">Контакти</Link>
           </div>
         </div>
-        <div>
+        <div className="col-span-2 sm:col-span-1">
           <h3 className="footer-title">Ми на зв’язку</h3>
           <div className="footer-links">
             <a

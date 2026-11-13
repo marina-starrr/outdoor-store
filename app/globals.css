@@ -354,6 +354,40 @@
     box-shadow: 0 0 0 5px rgba(9, 143, 208, 0.25);
   }
 
+  /*
+   * Горизонтальний слайдер карток (головна): гортається пальцем, картки
+   * «прилипають», наступна трохи виглядає з-за краю — видно, що є ще.
+   * Від'ємні поля виводять стрічку до країв екрана.
+   */
+  .snap-row {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1.25rem;
+    margin-inline: -1.25rem;
+    /* Запас зверху й знизу — щоб тіні та підйом карток при наведенні не обрізались */
+    padding: 0.75rem 1.25rem 2.75rem;
+    margin-block: -0.75rem -2.75rem;
+    scrollbar-width: none;
+  }
+
+  .snap-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .snap-row:focus-visible {
+    outline: 2px solid #098fd0;
+    outline-offset: -2px;
+    border-radius: 12px;
+  }
+
+  .snap-row > * {
+    flex: 0 0 min(80%, 320px);
+    scroll-snap-align: start;
+  }
+
   .brand-mark {
     background-color: #067eb7;
     -webkit-mask: url("/family-icon.png") center / contain no-repeat;
@@ -368,6 +402,49 @@
 
   .category-heading {
     grid-template-columns: 1fr auto;
+  }
+}
+
+@media (min-width: 640px) {
+  .snap-row > * {
+    flex-basis: calc((100% - 1rem) / 2.15);
+  }
+}
+
+@media (min-width: 1024px) {
+  .snap-row {
+    gap: 1.25rem;
+    scroll-padding-inline: 2rem;
+    margin-inline: -2rem;
+    padding-inline: 2rem;
+  }
+
+  .snap-row > * {
+    flex-basis: calc((100% - 2.5rem) / 3.2);
+  }
+
+  /* Категорії: на десктопі — звичайна сітка на 4 колонки */
+  .snap-row--lg {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+    /* margin-top не чіпаємо — його задає утиліта mt-* */
+    margin-inline: 0;
+    margin-bottom: 0;
+    padding: 0;
+  }
+}
+
+@media (min-width: 1280px) {
+  /* Хіти продажу: на широкому екрані — сітка на 4 колонки */
+  .snap-row--xl {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.5rem;
+    overflow: visible;
+    margin-inline: 0;
+    margin-bottom: 0;
+    padding: 0;
   }
 }
 

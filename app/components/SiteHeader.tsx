@@ -81,14 +81,14 @@ export default function SiteHeader({
       </div>
 
       <header className="sticky top-0 z-50 border-b border-sky-100 bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-2.5 bg-white px-5 py-4 sm:gap-4 lg:px-8 xl:gap-5">
+        <div className="mx-auto flex max-w-[1440px] items-center gap-2 bg-white px-4 py-4 min-[400px]:gap-2.5 min-[400px]:px-5 sm:gap-4 lg:px-8 xl:gap-5">
           <Link
             href="/"
-            className="group flex shrink-0 items-center gap-2.5"
+            className="group flex shrink-0 items-center gap-2 min-[400px]:gap-2.5"
             aria-label="На головну"
           >
             <BrandLogo />
-            <span className="hidden text-[15px] font-extrabold leading-[1.05] sm:block">
+            <span className="text-[13px] font-extrabold leading-[1.05] min-[400px]:text-[15px]">
               family
               <span className="block text-[#00acff]">camping</span>
             </span>
