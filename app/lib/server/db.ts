@@ -47,6 +47,35 @@ export type StoredUser = {
   /** Останні дані доставки — підставляються при наступному замовленні */
   lastDelivery?: StoredOrder["delivery"];
   orders: StoredOrder[];
+  /** Сповіщення для покупця, найновіші в кінці (див. lib/server/notifications.ts) */
+  notifications?: StoredNotification[];
+  /** id товарів, про появу яких просили повідомити */
+  stockAlerts?: string[];
+  /** Дублювати сповіщення на email (типово — так) */
+  emailNotifications?: boolean;
+};
+
+export type NotificationKind = "reply" | "stock" | "order" | "price";
+
+export type StoredNotification = {
+  id: string;
+  createdAt: string;
+  kind: NotificationKind;
+  title: string;
+  text: string;
+  /** Куди веде сповіщення на сайті */
+  href?: string;
+  read?: boolean;
+};
+
+export type MessageReply = {
+  id: string;
+  createdAt: string;
+  text: string;
+  /** Покупець отримав сповіщення на сайті (має акаунт) */
+  onSite: boolean;
+  /** Лист надіслано на email звернення */
+  emailed: boolean;
 };
 
 export type StoredMessage = {
@@ -61,6 +90,8 @@ export type StoredMessage = {
   userId?: string;
   /** Опрацьоване адміністратором */
   done?: boolean;
+  /** Відповіді адміністратора з адмін-панелі */
+  replies?: MessageReply[];
 };
 
 type Session = { userId: string; expiresAt: number };
@@ -117,8 +148,25 @@ async function persist(data: Data) {
   const file = dbFile();
   const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await rename(tmp, file);
+  await renameWithRetry(tmp, file);
   cacheMtime = await mtime();
+}
+
+/**
+ * Windows не дає замінити файл, поки його хтось читає (паралельний запит,
+ * антивірус, індексатор) — rename падає з EPERM/EBUSY/EACCES. Це тимчасово,
+ * тож повторюємо кілька разів із короткою паузою.
+ */
+async function renameWithRetry(from: string, to: string) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await rename(from, to);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (attempt >= 10 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw e;
+      await new Promise((r) => setTimeout(r, 15 * (attempt + 1)));
+    }
+  }
 }
 
 /** Читання */

@@ -423,6 +423,18 @@
     flex-basis: calc((100% - 2.5rem) / 3.2);
   }
 
+  /*
+   * «Гарячі пропозиції», «Нещодавно переглянуті»: на десктопі — сітка.
+   * У каталозі блок стоїть поруч із фільтрами, тож без виходу за краї.
+   */
+  .snap-row--cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+  }
+
   /* Категорії: на десктопі — звичайна сітка на 4 колонки */
   .snap-row--lg {
     display: grid;
@@ -436,6 +448,10 @@
 }
 
 @media (min-width: 1280px) {
+  .snap-row--cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   /* Хіти продажу: на широкому екрані — сітка на 4 колонки */
   .snap-row--xl {
     display: grid;

@@ -4,8 +4,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useAuth } from "./Auth";
 import { useCart } from "./Cart";
 import { useLists } from "./Lists";
+import { useNotifications } from "./Notifications";
 import RecentlyViewed, { useTrackView } from "./RecentlyViewed";
 import { FREE_SHIPPING_FROM, RETURN_DAYS, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
 import { useCatalog } from "./Catalog";
@@ -26,6 +28,7 @@ import {
   productGallery,
   productHighlights,
   productReviews,
+  productUrl,
   ratingDistribution,
   relatedProducts,
   type Review,
@@ -61,6 +64,28 @@ export default function ProductPage({ product }: { product: Product }) {
   const { isFavorite, toggleFavorite, isCompared, toggleCompare } = useLists();
   const favorite = isFavorite(product.id);
   const compared = isCompared(product.id);
+
+  // «Повідомити про наявність»: підписка зберігається в акаунті, сповіщення — коли адмін поповнить склад
+  const { status } = useAuth();
+  const { isAlerted, setStockAlert } = useNotifications();
+  const alerted = isAlerted(product.id);
+  const [alertPending, setAlertPending] = useState(false);
+  const toggleStockAlert = async () => {
+    if (status !== "user") {
+      notify("Увійдіть, щоб підписатися", {
+        label: "Увійти",
+        onClick: () => router.push(`/account?next=${encodeURIComponent(productUrl(product))}`),
+      });
+      return;
+    }
+    setAlertPending(true);
+    const ok = await setStockAlert(product.id, !alerted);
+    setAlertPending(false);
+    if (!ok) notify("Не вдалося зберегти. Спробуйте ще раз");
+    else if (!alerted)
+      notify("Повідомимо, щойно товар з'явиться", { label: "Мої сповіщення", onClick: () => router.push("/notifications") });
+    else notify("Більше не чекаємо цей товар");
+  };
 
   // Якір у URL (#reviews, #specs, …) відкриває потрібну вкладку
   useEffect(() => {
@@ -200,10 +225,20 @@ export default function ProductPage({ product }: { product: Product }) {
                   </button>
                 ) : (
                   <button
-                    onClick={() => notify("Повідомимо, щойно товар з'явиться")}
-                    className="inline-flex h-14 flex-1 items-center justify-center rounded-full bg-[#082c45] px-8 text-base font-extrabold text-white transition hover:bg-[#0b3a5a] sm:flex-none sm:min-w-[260px]"
+                    onClick={toggleStockAlert}
+                    disabled={alertPending}
+                    aria-pressed={alerted}
+                    title={alerted ? "Натисніть, щоб скасувати" : undefined}
+                    className={`inline-flex h-14 flex-1 items-center justify-center gap-2.5 rounded-full px-8 text-base font-extrabold transition disabled:opacity-60 sm:flex-none sm:min-w-[260px] ${
+                      alerted ? "bg-[#e7f7ee] text-[#1f9d55] hover:bg-[#d8f1e3]" : "bg-[#082c45] text-white hover:bg-[#0b3a5a]"
+                    }`}
                   >
-                    Повідомити про наявність
+                    <Icon name="bell" className="h-5 w-5 shrink-0" />
+                    {/* На телефоні поруч ще дві кнопки — повний текст не вміщується в рядок */}
+                    <span className="whitespace-nowrap">
+                      {alerted ? "Повідомимо" : "Повідомити"}
+                      <span className="hidden min-[440px]:inline"> про наявність</span>
+                    </span>
                   </button>
                 )}
                 <button
@@ -290,15 +325,22 @@ export default function ProductPage({ product }: { product: Product }) {
             <p className="text-lg font-black">{formatPrice(product.price)}</p>
           </div>
           <button
-            onClick={product.inStock ? addToCart : () => notify("Повідомимо, щойно товар з'явиться")}
-            className={`inline-flex h-12 items-center gap-2 rounded-full px-5 text-sm font-extrabold ${product.inStock ? "bg-[#ffd51f]" : "bg-[#082c45] text-white"}`}
+            onClick={product.inStock ? addToCart : toggleStockAlert}
+            disabled={!product.inStock && alertPending}
+            aria-pressed={product.inStock ? undefined : alerted}
+            className={`inline-flex h-12 items-center gap-2 rounded-full px-5 text-sm font-extrabold ${
+              product.inStock ? "bg-[#ffd51f]" : alerted ? "bg-[#e7f7ee] text-[#1f9d55]" : "bg-[#082c45] text-white"
+            }`}
           >
             {product.inStock ? (
               <>
                 В кошик <Icon name="cart" className="h-5 w-5" />
               </>
             ) : (
-              "Повідомити"
+              <>
+                <Icon name="bell" className="h-5 w-5" />
+                {alerted ? "Чекаємо" : "Повідомити"}
+              </>
             )}
           </button>
         </div>

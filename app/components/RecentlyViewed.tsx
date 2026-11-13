@@ -97,7 +97,12 @@ export default function RecentlyViewed({
           Очистити історію
         </button>
       </div>
-      <div className="grid grid-cols-1 gap-5 min-[480px]:grid-cols-2 xl:grid-cols-4">
+      <div
+        className="snap-row snap-row--cards"
+        role="region"
+        aria-label="Нещодавно переглянуті — гортайте вбік"
+        tabIndex={0}
+      >
         {visible.map((p) => (
           <ProductCard key={p.id} product={p} showCategory onAdd={() => add(p.id)} />
         ))}

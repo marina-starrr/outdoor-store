@@ -3,6 +3,8 @@ import { withDerived, type Product } from "../../../../components/catalog-data";
 import { applyProductInput, validateProduct } from "../../../../lib/admin-product";
 import { error, json, requireAdmin } from "../../../../lib/server/auth";
 import { invalidateCatalog, writeCatalog } from "../../../../lib/server/catalog";
+import { sendMails, type Mail } from "../../../../lib/server/mail";
+import { productEvents, snapshot } from "../../../../lib/server/notifications";
 
 /**
  * Зміна товару.
@@ -18,9 +20,11 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/prod
   const quickKeys = ["stock", "price", "hidden"];
   const isQuick = Object.keys(body).length > 0 && Object.keys(body).every((k) => quickKeys.includes(k));
 
-  const result = await writeCatalog((products) => {
+  const mails: Mail[] = [];
+  const result = await writeCatalog((products, db) => {
     const product = products.find((p) => p.id === id);
     if (!product) return { notFound: true as const };
+    const before = snapshot(product);
 
     // Повні дані для перевірки: поточний товар + зміни
     const merged = { ...product, oldPrice: product.oldPrice ?? null, capacity: product.capacity ?? null, ...body, id: undefined };
@@ -45,11 +49,14 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/prod
     } else {
       applyProductInput(product as Partial<Product>, data);
     }
+    // Сповіщення: «з'явився в наявності» підписникам, «знижка» — тим, у кого в обраному
+    productEvents(db, product, before, mails);
     return { product: withDerived(product) };
   });
 
   if ("notFound" in result) return error("Товар не знайдено", 404);
   if ("errors" in result) return json({ error: "Перевірте поля форми", errors: result.errors }, 400);
   invalidateCatalog();
+  await sendMails(mails);
   return json({ product: result.product });
 }

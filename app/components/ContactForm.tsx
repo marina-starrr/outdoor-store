@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "./Auth";
 import Icon from "./Icon";
@@ -84,7 +85,8 @@ export default function ContactForm() {
         </span>
         <p className="mt-5 text-2xl font-extrabold">Дякуємо, {sent}!</p>
         <p className="mt-2 max-w-md text-[#3d5d70]">
-          Звернення отримали. Відповімо на <b className="text-[#082c45]">{form.email}</b> протягом 2 годин — навіть уночі та у вихідні.
+          Звернення отримали. Відповімо на <b className="text-[#082c45]">{form.email}</b>
+          {user ? " і в сповіщення на сайті" : ""} протягом 2 годин — навіть уночі та у вихідні.
         </p>
         <button type="button" onClick={() => setSent(null)} className="mt-6 font-bold text-[#098fd0] hover:underline">
           Надіслати ще одне звернення
@@ -145,6 +147,16 @@ export default function ContactForm() {
 
       {/* Пастка для ботів — приховане від людей поле */}
       <input type="text" name="website" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => set("website", e.target.value)} className="hidden" aria-hidden="true" />
+
+      {!user && (
+        <p className="flex items-start gap-2.5 rounded-2xl bg-[#f3f9fd] px-4 py-3 text-sm text-[#3d5d70]">
+          <Icon name="bell" className="mt-0.5 h-4 w-4 shrink-0 text-[#067eb7]" />
+          <span>
+            <Link href="/account?next=/contacts" className="font-bold text-[#098fd0] hover:underline">Увійдіть</Link>, щоб відповідь
+            також з&apos;явилась у сповіщеннях на сайті.
+          </span>
+        </p>
+      )}
 
       <FormError>{serverError}</FormError>
 

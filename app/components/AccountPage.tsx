@@ -7,6 +7,7 @@ import { useAuth, type AuthUser } from "./Auth";
 import AuthForms from "./AuthForms";
 import { useCart } from "./Cart";
 import Icon, { type IconName } from "./Icon";
+import { useNotifications } from "./Notifications";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
@@ -83,6 +84,7 @@ function GuestView({ onSuccess }: { onSuccess: () => void }) {
   const perks: [IconName, string, string][] = [
     ["cart", "Кошик завжди з вами", "Товари зберігаються в акаунті — відкривайте їх з будь-якого пристрою"],
     ["package", "Історія замовлень", "Статуси, склад і суми всіх ваших покупок в одному місці"],
+    ["bell", "Сповіщення", "Відповіді на звернення, знижки на обране та поява очікуваних товарів"],
     ["truck", "Швидке оформлення", "Контакти та адреса доставки підставляються автоматично"],
   ];
   return (
@@ -122,6 +124,7 @@ function GuestView({ onSuccess }: { onSuccess: () => void }) {
 function Dashboard({ user }: { user: AuthUser }) {
   const { logout } = useAuth();
   const { count } = useCart();
+  const { unread } = useNotifications();
   const [section, setSection] = useState<Section>("orders");
 
   const nav: { id: Section; label: string; icon: IconName }[] = [
@@ -159,6 +162,16 @@ function Dashboard({ user }: { user: AuthUser }) {
                 {item.label}
               </button>
             ))}
+            <Link
+              href="/notifications"
+              className="flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold text-[#264e65] transition hover:bg-[#f3f9fd]"
+            >
+              <Icon name="bell" className="h-5 w-5 text-[#067eb7]" />
+              Сповіщення
+              {unread > 0 && (
+                <span className="ml-auto rounded-full bg-[#ffd51f] px-2 py-0.5 text-xs font-black text-[#082c45]">{unread}</span>
+              )}
+            </Link>
             <button
               onClick={logout}
               className="flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold text-[#8aa5b5] transition hover:bg-[#fdecec] hover:text-[#e5484d]"

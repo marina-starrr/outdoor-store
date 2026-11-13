@@ -72,6 +72,27 @@ test("адміністратор входить і бачить огляд", asy
   await expect(admin.getByText("Закінчуються на складі")).toBeVisible();
 });
 
+test("випадний список категорій ховається під шапку при прокрутці", async () => {
+  await admin.goto("/admin/products");
+  // Чекаємо на товари — інакше сторінка коротка і прокручувати нікуди
+  await expect(admin.getByTestId("admin-products").locator("li").nth(10)).toBeVisible();
+  await admin.getByRole("button", { name: /^Категорія:/ }).click();
+  const list = admin.getByRole("listbox", { name: "Категорія" });
+  await expect(list).toBeVisible();
+  const box = (await list.boundingBox())!;
+  // Прокручуємо так, щоб верх списку опинився під липкою шапкою
+  const header = (await admin.locator("header").first().boundingBox())!;
+  await admin.evaluate((y) => window.scrollBy({ top: y, behavior: "instant" }), box.y - header.height / 2);
+  await expect.poll(async () => (await list.boundingBox())!.y).toBeLessThan(header.height - 5);
+  // У точці перетину зверху — шапка, а не список
+  const topIsHeader = await admin.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest("header"), {
+    x: box.x + box.width / 2,
+    y: header.height - 5,
+  });
+  expect(topIsHeader).toBe(true);
+  await admin.keyboard.press("Escape");
+});
+
 test("створення товару — і він одразу на сайті", async ({ page }) => {
   await admin.goto("/admin/products");
   await admin.getByRole("button", { name: "Додати товар" }).click();
@@ -144,7 +165,8 @@ test("залишок: кошик не дає взяти більше, ніж є;
   await saveInline(stock, "0");
 
   await page.goto(productUrl);
-  await expect(page.getByText("Очікується надходження")).toBeVisible();
+  // Сторінка приходить потоком: поки він не дійшов, у DOM буває ще прихована копія — шукаємо лише в <main>
+  await expect(page.getByRole("main").getByText("Очікується надходження")).toBeVisible();
   await expect(page.getByRole("button", { name: /^Додати в кошик/ })).toHaveCount(0);
 
   await saveInline(stock, "4");

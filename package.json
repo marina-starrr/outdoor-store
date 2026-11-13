@@ -7,10 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node scripts/vitest.mjs run",
+    "test:watch": "node scripts/vitest.mjs",
     "test:e2e": "next build && playwright test",
-    "test:all": "tsc --noEmit && eslint && vitest run && next build && playwright test"
+    "test:all": "tsc --noEmit && eslint && node scripts/vitest.mjs run && next build && playwright test"
   },
   "dependencies": {
     "next": "16.4.3",

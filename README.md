@@ -20,6 +20,28 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Налаштування (`.env.local` або змінні середовища на хостингу)
+
+| Змінна | Навіщо |
+| --- | --- |
+| `ADMIN_EMAILS` | Email-и адміністраторів через кому — їм відкривається `/admin` |
+| `NEXT_PUBLIC_SITE_URL` | Адреса сайту (для SEO і посилань у листах), напр. `https://family-camping.ua` |
+| `RESEND_API_KEY` | Ключ [Resend](https://resend.com) — вмикає листи (сповіщення, відповіді на звернення) |
+| `MAIL_FROM` | Від кого листи, напр. `Family Camping <hello@ваш-домен.ua>` (домен підтверджується в Resend) |
+| `MAIL_TRANSPORT=log` | Для розробки: листи не надсилаються, а пишуться в `.data/outbox.json` |
+
+Без `RESEND_API_KEY` сайт працює повністю, лише без листів: сповіщення покупці бачать на сайті
+(дзвіночок у шапці, сторінка `/notifications`), а для звернень гостей без акаунта адмін-панель
+пропонує відповісти через Gmail.
+
+**Важливо:** дані (акаунти, замовлення, сповіщення) зберігаються у файлі `.data/db.json`.
+На Vercel та інших serverless-хостингах файлова система не зберігається між запусками —
+для продакшену потрібна справжня база даних (див. `app/lib/server/db.ts`).
+
+## Тести
+
+`yarn test` — модульні та API-тести, `yarn test:e2e` — у браузері (Playwright), `yarn test:all` — усе разом.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

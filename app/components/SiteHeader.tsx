@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useAuth } from "./Auth";
 import { useCart } from "./Cart";
 import { useLists } from "./Lists";
+import { useNotifications } from "./Notifications";
 import Icon, { type IconName } from "./Icon";
 import { navLinks } from "./data";
 import HeaderSearch from "./HeaderSearch";
@@ -72,6 +73,7 @@ export default function SiteHeader({
   const { count, openCart } = useCart();
   const { user } = useAuth();
   const { favorites, compare } = useLists();
+  const { unread } = useNotifications();
   const pathname = usePathname();
 
   return (
@@ -125,7 +127,7 @@ export default function SiteHeader({
             href="/account"
             aria-label={user ? `Профіль: ${user.firstName}` : "Увійти в акаунт"}
             title={user ? `${user.firstName} ${user.lastName}`.trim() : "Увійти"}
-            className={`ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full transition md:ml-0 ${
+            className={`relative ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full transition md:ml-0 ${
               user
                 ? "bg-[#ffd51f] text-[15px] font-black text-[#082c45] hover:bg-[#ffe044]"
                 : "bg-[#eef9ff] text-[#067eb7] hover:bg-[#dff4ff]"
@@ -136,7 +138,22 @@ export default function SiteHeader({
             ) : (
               <Icon name="user" className="h-[22px] w-[22px]" />
             )}
+            {/* На телефоні дзвіночка немає (не вміщується) — нові сповіщення позначаємо крапкою на профілі */}
+            {unread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#e5484d] sm:hidden" aria-hidden="true" />
+            )}
           </Link>
+
+          {user && (
+            <HeaderIconLink
+              href="/notifications"
+              icon="bell"
+              count={unread}
+              label={`Сповіщення, нових: ${unread}`}
+              active={pathname === "/notifications"}
+              className="hidden sm:grid"
+            />
+          )}
 
           {compare.length > 0 && (
             <HeaderIconLink
@@ -201,6 +218,7 @@ export default function SiteHeader({
               ))}
               <div className="my-2 h-px bg-sky-100" />
               {[
+                ...(user ? [{ href: "/notifications", label: "Сповіщення", icon: "bell" as const, count: unread }] : []),
                 { href: "/favorites", label: "Обране", icon: "heart" as const, count: favorites.length },
                 { href: "/compare", label: "Порівняння", icon: "compare" as const, count: compare.length },
                 { href: "/account", label: user ? "Мій профіль" : "Увійти", icon: "user" as const, count: 0 },

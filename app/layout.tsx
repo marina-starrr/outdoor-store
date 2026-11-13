@@ -6,6 +6,7 @@ import { CatalogProvider } from "./components/Catalog";
 import { CartProvider } from "./components/Cart";
 import CartDrawer from "./components/CartDrawer";
 import { ListsProvider } from "./components/Lists";
+import { NotificationsProvider } from "./components/Notifications";
 import { getPublicCatalog } from "./lib/server/catalog";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "./lib/site";
 import "./globals.css";
@@ -42,15 +43,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <CatalogProvider products={products}>
           <AuthProvider>
-            <CartProvider>
-              <ListsProvider>
-                {children}
-                {/* Читає адресу сторінки (usePathname) — для маршрутів з параметрами потрібна межа Suspense */}
-                <Suspense fallback={null}>
-                  <CartDrawer />
-                </Suspense>
-              </ListsProvider>
-            </CartProvider>
+            <NotificationsProvider>
+              <CartProvider>
+                <ListsProvider>
+                  {children}
+                  {/* Читає адресу сторінки (usePathname) — для маршрутів з параметрами потрібна межа Suspense */}
+                  <Suspense fallback={null}>
+                    <CartDrawer />
+                  </Suspense>
+                </ListsProvider>
+              </CartProvider>
+            </NotificationsProvider>
           </AuthProvider>
         </CatalogProvider>
       </body>

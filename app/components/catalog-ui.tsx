@@ -524,7 +524,8 @@ export function SortSelect<T extends string>({
           aria-label={label}
           aria-activedescendant={`${uid}-opt-${active}`}
           onKeyDown={onListKey}
-          className="absolute right-0 top-[calc(100%+8px)] z-40 min-w-full w-max overflow-hidden rounded-[18px] border border-[#e3edf3] bg-white p-1.5 shadow-[0_20px_50px_rgba(8,44,69,.16)] outline-none"
+          // z-30: нижче липких шапок (сайт — z-50, адмінка — z-40), щоб при прокрутці список ховався під ними
+          className="absolute right-0 top-[calc(100%+8px)] z-30 min-w-full w-max overflow-hidden rounded-[18px] border border-[#e3edf3] bg-white p-1.5 shadow-[0_20px_50px_rgba(8,44,69,.16)] outline-none"
         >
           {options.map((o, i) => {
             const selected = o.id === value;

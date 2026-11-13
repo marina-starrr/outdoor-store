@@ -10,3 +10,6 @@ export const contactTopics = [
 export type ContactTopic = (typeof contactTopics)[number]["id"];
 
 export const MESSAGE_MAX = 1000;
+
+/** Найдовша відповідь адміністратора на звернення */
+export const REPLY_MAX = 3000;

@@ -1,4 +1,5 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, request as playwrightRequest, type APIRequestContext, type Page } from "@playwright/test";
+import { E2E_HELPER_ADMIN_EMAIL } from "../../playwright.config";
 
 let n = 0;
 export const uniqueEmail = () => `e2e${Date.now()}${process.pid}${++n}@example.com`;
@@ -44,4 +45,17 @@ export async function viewProduct(page: Page, path: string) {
   await expect
     .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("family-camping-recent") ?? "[]")[0]))
     .toBe(id);
+}
+
+/**
+ * Сесія «службового» адміністратора для запитів до адмін-API з тестів
+ * (окремий акаунт, щоб не заважати admin.spec). Перший виклик реєструє його,
+ * наступні — входять.
+ */
+export async function helperAdminApi(baseURL: string): Promise<APIRequestContext> {
+  const api = await playwrightRequest.newContext({ baseURL });
+  const data = { firstName: "Помічник", email: E2E_HELPER_ADMIN_EMAIL, phone: "", password: PASSWORD };
+  if (!(await api.post("/api/auth/register", { data })).ok())
+    expect((await api.post("/api/auth/login", { data: { email: data.email, password: PASSWORD } })).ok()).toBe(true);
+  return api;
 }

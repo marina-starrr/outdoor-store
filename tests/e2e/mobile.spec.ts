@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { expectNoHorizontalScroll } from "./helpers";
+import { expectNoHorizontalScroll, helperAdminApi, register } from "./helpers";
 
-const paths = ["/", "/catalog", "/catalog/tents", "/catalog/tents/np3", "/hits", "/cart", "/account", "/about", "/contacts", "/delivery", "/returns", "/privacy"];
+const paths = ["/", "/catalog", "/catalog/tents", "/catalog/tents/np3", "/hits", "/cart", "/account", "/notifications", "/about", "/contacts", "/delivery", "/returns", "/privacy"];
 
 test.describe("мобільна версія (390px)", () => {
   for (const path of paths) {
@@ -61,6 +61,27 @@ test.describe("мобільна версія (390px)", () => {
     });
   }
 
+  test("«Гарячі пропозиції» та «Нещодавно переглянуті» в каталозі — слайдери", async ({ page }) => {
+    // Історія переглядів — щоб блок «Нещодавно переглянуті» з'явився
+    await page.goto("/");
+    await page.evaluate(() =>
+      localStorage.setItem("family-camping-recent", JSON.stringify(["np3", "bp-trail45", "sb-alpine"])),
+    );
+    await page.goto("/catalog");
+    for (const name of ["Гарячі пропозиції — гортайте вбік", "Нещодавно переглянуті — гортайте вбік"]) {
+      const row = page.getByRole("region", { name });
+      await row.scrollIntoViewIfNeeded();
+      const cards = row.locator(":scope > *");
+      expect(await cards.count(), name).toBeGreaterThan(1);
+      const first = (await cards.nth(0).boundingBox())!;
+      const second = (await cards.nth(1).boundingBox())!;
+      expect(Math.abs(second.y - first.y), name).toBeLessThan(2);
+      const { scrollWidth, clientWidth } = await row.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+      expect(scrollWidth, name).toBeGreaterThan(clientWidth);
+    }
+    await expectNoHorizontalScroll(page);
+  });
+
   test("футер: «Каталог» і «Покупцям» у дві колонки", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator("footer");
@@ -77,6 +98,50 @@ test.describe("мобільна версія (390px)", () => {
     await page.locator("header").getByRole("link", { name: "На головну" }).tap();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(page).toHaveURL("/");
+  });
+
+  test("нові сповіщення: крапка на профілі та пункт у меню", async ({ page, baseURL }) => {
+    const api = await helperAdminApi(baseURL!);
+    const setStock = (stock: number) => api.patch("/api/admin/products/hm-single", { data: { stock } });
+
+    await register(page, "Тарас");
+    await setStock(0);
+    expect((await page.request.post("/api/stock-alerts", { data: { productId: "hm-single" } })).ok()).toBe(true);
+    await setStock(9);
+    await api.dispose();
+
+    await page.goto("/");
+    const profile = page.locator("header").getByRole("link", { name: /^Профіль:/ });
+    // Дзвіночка на телефоні немає — замість нього крапка на профілі
+    await expect(page.getByRole("link", { name: /^Сповіщення, нових:/ })).toBeHidden();
+    await expect(profile.locator("span[aria-hidden]")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    await page.getByRole("button", { name: "Відкрити меню" }).click();
+    const item = page.locator("header").getByRole("link", { name: /^Сповіщення/ });
+    await expect(item).toContainText("1");
+    await item.click();
+    await expect(page).toHaveURL("/notifications");
+    await expect(page.getByTestId("notifications")).toContainText("знову в наявності");
+    await expect(profile.locator("span[aria-hidden]")).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("кнопка «Повідомити» на товарі без наявності — в один рядок, підказка видна повністю", async ({ page, baseURL }) => {
+    const api = await helperAdminApi(baseURL!);
+    await api.patch("/api/admin/products/ch5", { data: { stock: 0 } });
+    await page.goto("/catalog/tents/ch5");
+    const button = page.getByRole("main").getByRole("button", { name: /^Повідомити/ });
+    const box = (await button.boundingBox())!;
+    expect(box.height).toBeLessThanOrEqual(60); // один рядок (h-14)
+    const icon = (await button.locator("svg").boundingBox())!;
+    expect(icon.width).toBeGreaterThanOrEqual(19);
+    await button.click();
+    const toast = page.getByText("Увійдіть, щоб підписатися");
+    await expect(toast).toBeVisible();
+    expect(await toast.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await api.patch("/api/admin/products/ch5", { data: { stock: 8 } });
+    await api.dispose();
   });
 
   test("список сортування вміщується в екран", async ({ page }) => {
