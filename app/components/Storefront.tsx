@@ -173,7 +173,7 @@ export default function Storefront() {
           <div className="mx-auto max-w-[1440px] px-5 lg:px-8">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Вибір мандрівників</p>
+                <p className="eyebrow">Рекомендуємо</p>
                 <h2>
                   Хіти <span>продажу</span>
                 </h2>
@@ -181,7 +181,7 @@ export default function Storefront() {
               <p>
                 {query
                   ? `Результати пошуку за запитом «${query}»`
-                  : "Перевірене спорядження, яке обирають наші покупці цього сезону."}
+                  : "Спорядження, яке ми радимо родинам для відпочинку на природі."}
                 <Link href="/hits" className="mt-3 flex items-center gap-2 font-extrabold text-[#098fd0] hover:underline">
                   Усі хіти продажу <Icon name="arrow" className="h-4 w-4" />
                 </Link>

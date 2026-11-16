@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "admin:verify": "node scripts/verify-email.mjs",
     "test": "node scripts/vitest.mjs run",
     "test:watch": "node scripts/vitest.mjs",
     "test:e2e": "next build && playwright test",

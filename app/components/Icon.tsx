@@ -28,9 +28,11 @@ export type IconName =
   | "bell"
   | "instagram"
   | "facebook"
-  | "youtube";
+  | "youtube"
+  | "star";
 
 const paths: Record<IconName, ReactNode> = {
+  star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" />,
   tent: (
     <>
       <path d="M3 20 12 4l9 16" />

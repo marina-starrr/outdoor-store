@@ -63,7 +63,8 @@ function run(products: Product[], q: string) {
   return products
     .filter((p) => !p.hidden && matchesSearch(p, q))
     .map((p) => ({ p, s: score(p, q) }))
-    .sort((a, b) => b.s - a.s || b.p.reviews - a.p.reviews)
+    // За релевантністю, далі — що краще продається, далі — порядок «Популярні» з адмінки
+    .sort((a, b) => b.s - a.s || (b.p.sold ?? 0) - (a.p.sold ?? 0) || a.p.popularity - b.p.popularity)
     .map((x) => x.p);
 }
 

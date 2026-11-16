@@ -21,6 +21,11 @@ export function readCartStorage(): CartLine[] {
 
 export const FAVORITES_STORAGE_KEY = "family-camping-favorites";
 export const COMPARE_STORAGE_KEY = "family-camping-compare";
+/**
+ * Токени замовлень, оформлених у цьому браузері без акаунта: після входу
+ * чи реєстрації за ними замовлення переносяться в акаунт
+ */
+export const ORDER_CLAIMS_STORAGE_KEY = "family-camping-order-claims";
 
 export function readIds(key: string): string[] {
   try {

@@ -24,8 +24,8 @@ export default function SiteFooter() {
             </span>
           </Link>
           <p className="mt-6 max-w-sm text-sm leading-6 text-[#527083]">
-            Допомагаємо відкривати Україну і світ з 2014 року. Спорядження,
-            якому довіряємо самі.
+            Онлайн-магазин спорядження для сімейного відпочинку на природі
+            з доставкою по всій Україні.
           </p>
           <div className="mt-7 flex gap-3">
             {socials.map(({ icon, label }) => (
@@ -56,6 +56,7 @@ export default function SiteFooter() {
           <div className="footer-links">
             <Link href="/about">Про нас</Link>
             <Link href="/delivery">Доставка і оплата</Link>
+            <Link href="/orders/track">Де моє замовлення?</Link>
             <Link href="/returns">Обмін і повернення</Link>
             <Link href="/favorites">Обране</Link>
             <Link href="/compare">Порівняння товарів</Link>

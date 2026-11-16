@@ -80,7 +80,8 @@ const sorters: Record<ProductSortId, (a: Product, b: Product) => number> = {
   cheap: (a, b) => a.price - b.price,
   expensive: (a, b) => b.price - a.price,
   discount: (a, b) => discountPercent(b) - discountPercent(a),
-  rating: (a, b) => b.rating - a.rating || b.reviews - a.reviews,
+  // Товари без відгуків (рейтинг 0) — у кінці, у порядку «Популярні»
+  rating: (a, b) => b.rating - a.rating || b.reviews - a.reviews || a.popularity - b.popularity,
 };
 
 export default function CategoryListing({ slug }: { slug: CategorySlug }) {

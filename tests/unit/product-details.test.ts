@@ -7,9 +7,7 @@ import {
   productDescription,
   productGallery,
   productHighlights,
-  productReviews,
   productUrl,
-  ratingDistribution,
   relatedProducts,
 } from "../../app/components/product-details";
 
@@ -40,18 +38,10 @@ describe("сторінка товару", () => {
     expect(h.some(([k]) => k === "Бренд" || k === "Гарантія")).toBe(false);
   });
 
-  it("відгуки детерміновані (однакові на сервері і в браузері)", () => {
-    expect(productReviews(tent)).toEqual(productReviews(tent));
-    const r = productReviews(tent);
-    expect(r.length).toBe(Math.min(tent.reviews, 8));
-    for (const x of r) expect([4, 5]).toContain(x.rating);
-  });
-
-  it("розподіл оцінок у сумі дає кількість відгуків", () => {
+  it("у початковому каталозі немає вигаданих рейтингів і відгуків", () => {
     for (const p of products) {
-      const d = ratingDistribution(p);
-      expect(d.reduce((s, n) => s + n, 0), p.id).toBe(p.reviews);
-      expect(d.every((n) => n >= 0), p.id).toBe(true);
+      expect(p.rating, p.id).toBe(0);
+      expect(p.reviews, p.id).toBe(0);
     }
   });
 

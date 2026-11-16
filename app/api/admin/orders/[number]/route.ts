@@ -3,7 +3,8 @@ import { canTransition, orderStatusInfo, type OrderStatusId } from "../../../../
 import { error, json, requireAdmin } from "../../../../lib/server/auth";
 import { invalidateCatalog, writeCatalog } from "../../../../lib/server/catalog";
 import { sendMails, type Mail } from "../../../../lib/server/mail";
-import { orderEvent, productEvents, snapshot } from "../../../../lib/server/notifications";
+import { guestOrderEvent, orderEvent, productEvents, snapshot } from "../../../../lib/server/notifications";
+import { findOrder, withoutClaim } from "../../../../lib/server/orders";
 
 /** Зміна статусу замовлення. Скасування повертає товари на склад */
 export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/orders/[number]">) {
@@ -16,9 +17,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/orde
 
   const mails: Mail[] = [];
   const result = await writeCatalog((products, db) => {
-    const owner = db.users.find((u) => u.orders.some((o) => o.number === number));
-    const order = owner?.orders.find((o) => o.number === number);
-    if (!owner || !order) return { notFound: true as const };
+    const found = findOrder(db, number);
+    if (!found) return { notFound: true as const };
+    const { order, owner } = found;
     if (!canTransition(order.status, status))
       return { invalid: `Не можна змінити статус «${orderStatusInfo[order.status].label}» на «${orderStatusInfo[status].label}»` };
 
@@ -36,8 +37,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/orde
     }
     order.status = status;
     order.updatedAt = new Date().toISOString();
-    orderEvent(owner, order.number, status, mails);
-    return { order };
+    if (owner) orderEvent(owner, order.number, status, mails);
+    else guestOrderEvent(order, status, mails);
+    return { order: withoutClaim(order) };
   });
 
   if ("notFound" in result) return error("Замовлення не знайдено", 404);

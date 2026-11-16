@@ -105,11 +105,10 @@ export default function ReturnsPage() {
 
       <InfoCard>
         <InfoTitle icon="card">Повернення коштів</InfoTitle>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
           {[
-            { t: "Оплата карткою онлайн", d: "Кошти повертаємо на ту саму картку." },
             { t: "Накладений платіж", d: "Переказуємо на картку, реквізити якої ви вкажете у зверненні." },
-            { t: "Оплата частинами", d: "Повертаємо банку — розстрочку закривають автоматично." },
+            { t: "Оплата на рахунок", d: "Повертаємо на рахунок або картку, з якої надійшла оплата." },
           ].map((x) => (
             <div key={x.t} className="rounded-[20px] border border-[#e3edf3] p-5">
               <b className="block">{x.t}</b>

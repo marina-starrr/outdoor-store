@@ -8,12 +8,14 @@ import AuthForms from "./AuthForms";
 import { useCart } from "./Cart";
 import { useCatalog } from "./Catalog";
 import Icon from "./Icon";
-import { Field, formatPhone, inputCls } from "./form-ui";
+import { Field, PasswordInput, formatPhone, inputCls } from "./form-ui";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import RecentlyViewed from "./RecentlyViewed";
 import { Breadcrumbs, ProductCard } from "./catalog-ui";
 import { CartItem, EmptyCart, FreeShippingBar, TrashIcon } from "./cart-ui";
+import { ORDER_CLAIMS_STORAGE_KEY, readIds, writeIds } from "./cart-storage";
+import CityInput from "./CityInput";
 import {
   cartRecommendations,
   cartTotals,
@@ -33,6 +35,8 @@ type Form = {
   phone: string;
   email: string;
   city: string;
+  /** Ref населеного пункту, обраного з підказок (порожній — введено вручну) */
+  cityRef: string;
   branch: string;
   address: string;
   comment: string;
@@ -45,6 +49,7 @@ const emptyForm: Form = {
   phone: "+380 ",
   email: "",
   city: "",
+  cityRef: "",
   branch: "",
   address: "",
   comment: "",
@@ -58,9 +63,14 @@ type PlacedOrder = {
   lines: { id: string; name: string; price: number; qty: number }[];
   total: number;
   firstName: string;
+  lastName: string;
   phone: string;
+  email: string;
   delivery: DeliveryId;
+  payment: PaymentId;
   noCall: boolean;
+  /** Оформлено без акаунта */
+  guest: boolean;
 };
 
 /** Відповідь сервера на оформлення замовлення */
@@ -70,15 +80,20 @@ type OrderResponse = {
     lines: { id: string; name: string; price: number; qty: number }[];
     total: number;
   };
+  /** Лише для гостя: за ним замовлення перейде в акаунт після входу чи реєстрації */
+  claimToken?: string;
   error?: string;
+  /** Поле, до якого стосується помилка (напр. «city») */
+  field?: keyof Form;
 };
 
-function validate(form: Form, delivery: DeliveryId): Errors {
+function validate(form: Form, delivery: DeliveryId, guest: boolean): Errors {
   const errors: Errors = {};
   if (form.firstName.trim().length < 2) errors.firstName = "Вкажіть ім'я";
   if (form.lastName.trim().length < 2) errors.lastName = "Вкажіть прізвище";
   if (form.phone.replace(/\D/g, "").length !== 12) errors.phone = "Номер у форматі +380 XX XXX XX XX";
-  if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) errors.email = "Перевірте email";
+  if (guest && !form.email.trim()) errors.email = "Вкажіть email — надішлемо підтвердження";
+  else if (form.email && !/^\S+@\S+\.\S+$/.test(form.email.trim())) errors.email = "Перевірте email";
   if (form.city.trim().length < 2) errors.city = "Вкажіть місто";
   if ((delivery === "np-branch" || delivery === "ukrposhta") && !form.branch.trim())
     errors.branch = "Вкажіть номер відділення";
@@ -97,7 +112,7 @@ export default function CartPage() {
   const [form, setForm] = useState<Form>(emptyForm);
   const [errors, setErrors] = useState<Errors>({});
   const [delivery, setDelivery] = useState<DeliveryId>("np-branch");
-  const [payment, setPayment] = useState<PaymentId>("card");
+  const [payment, setPayment] = useState<PaymentId>(paymentOptions[0].id);
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState<string>();
   const [promoError, setPromoError] = useState("");
@@ -108,6 +123,9 @@ export default function CartPage() {
   const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
+  /** Пастка для ботів — приховане поле, людина його не бачить */
+  const [website, setWebsite] = useState("");
+  const guest = status === "guest";
 
   // Після входу підставляємо контакти та останню адресу доставки з профілю
   // (лише в порожні поля — те, що користувач уже ввів, не перезаписуємо)
@@ -121,6 +139,7 @@ export default function CartPage() {
       phone: f.phone.replace(/\D/g, "").length > 3 ? f.phone : user.phone || f.phone,
       email: f.email || user.email,
       city: f.city || d?.city || "",
+      cityRef: f.city ? f.cityRef : d?.cityRef || "",
       branch: f.branch || d?.branch || "",
       address: f.address || d?.address || "",
     }));
@@ -129,8 +148,9 @@ export default function CartPage() {
   }
 
   const totals = cartTotals(lines, delivery, promo);
-  const partsAllowed = totals.total >= (paymentOptions.find((p) => p.id === "parts")?.minTotal ?? 0);
-  const effectivePayment = payment === "parts" && !partsAllowed ? "card" : payment;
+  // Спосіб з мінімальною сумою (напр. «частинами») недоступний для меншого замовлення
+  const paymentAllowed = (o: (typeof paymentOptions)[number]) => !o.minTotal || totals.total >= o.minTotal;
+  const effectivePayment = paymentOptions.some((o) => o.id === payment && paymentAllowed(o)) ? payment : paymentOptions[0].id;
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -151,11 +171,8 @@ export default function CartPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (status !== "user") {
-      document.getElementById("checkout-login")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-    const found = validate(form, delivery);
+    if (status === "loading") return;
+    const found = validate(form, delivery, guest);
     setErrors(found);
     const firstInvalid = Object.keys(found)[0];
     if (firstInvalid) {
@@ -181,39 +198,48 @@ export default function CartPage() {
             firstName: form.firstName,
             lastName: form.lastName,
             phone: form.phone,
-            email: form.email,
+            email: form.email.trim(),
           },
-          delivery: { method: delivery, city: form.city, branch: form.branch, address: form.address },
+          delivery: { method: delivery, city: form.city, cityRef: form.cityRef, branch: form.branch, address: form.address },
           payment: effectivePayment,
           promo,
           comment: form.comment,
           noCall: form.noCall,
           agreed,
+          website,
         }),
       });
       data = await res.json();
-      // Сесія закінчилась — оновлюємо стан, щоб показати форму входу
-      if (res.status === 401) await refresh();
     } catch {
       data = { error: "Немає з'єднання з сервером. Спробуйте ще раз." };
     }
     setPending(false);
 
     if (!data.order) {
-      setSubmitError(data.error ?? "Не вдалося оформити замовлення");
+      if (data.field) {
+        // Помилка конкретного поля (напр. місто не знайдено) — показуємо під ним
+        setErrors((e) => ({ ...e, [data.field!]: data.error }));
+        document.getElementById(`field-${data.field}`)?.focus();
+      } else setSubmitError(data.error ?? "Не вдалося оформити замовлення");
       return;
     }
+    // Гість: запам'ятовуємо токен — після входу чи реєстрації замовлення перейде в акаунт
+    if (data.claimToken) writeIds(ORDER_CLAIMS_STORAGE_KEY, [...readIds(ORDER_CLAIMS_STORAGE_KEY), data.claimToken]);
     setOrder({
       number: data.order.number,
       lines: data.order.lines,
       total: data.order.total,
       firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
       phone: form.phone,
+      email: form.email.trim(),
       delivery,
+      payment: effectivePayment,
       noCall: form.noCall,
+      guest: !!data.claimToken,
     });
     clear();
-    refresh(); // оновлює збережену адресу доставки в профілі
+    if (!data.claimToken) refresh(); // оновлює збережену адресу доставки в профілі
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -289,10 +315,13 @@ export default function CartPage() {
 
                   {status === "loading" ? (
                     <div className="h-72 animate-pulse rounded-[24px] bg-white" aria-label="Завантаження" />
-                  ) : status === "guest" ? (
-                    <CheckoutLogin />
                   ) : (
+                  <>
+                  {/* Поза формою оформлення: у AuthForms власні <form>, вкладати форми не можна */}
+                  {guest && <CheckoutLoginHint />}
                   <form id="checkout" onSubmit={submit} noValidate className="grid gap-6">
+                  {/* Пастка для ботів — приховане від людей поле */}
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} className="hidden" aria-hidden="true" />
                   {/* Контакти */}
                   <Card>
                     <CardTitle step={2}>Контактні дані</CardTitle>
@@ -306,8 +335,8 @@ export default function CartPage() {
                       <Field id="phone" label="Телефон" error={errors.phone}>
                         <input id="field-phone" type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} className={inputCls(errors.phone)} />
                       </Field>
-                      <Field id="email" label="Email" optional error={errors.email}>
-                        <input id="field-email" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputCls(errors.email)} placeholder="для електронного чека" />
+                      <Field id="email" label="Email" optional={!guest} error={errors.email}>
+                        <input id="field-email" type="email" autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputCls(errors.email)} placeholder={guest ? "надішлемо підтвердження і статус" : "для електронного чека"} />
                       </Field>
                     </div>
                   </Card>
@@ -323,7 +352,11 @@ export default function CartPage() {
                             key={o.id}
                             name="delivery"
                             checked={delivery === o.id}
-                            onChange={() => setDelivery(o.id)}
+                            onChange={() => {
+                              setDelivery(o.id);
+                              // Населений пункт без Нової пошти (з пошуку для Укрпошти) — обрати заново
+                              if (o.id !== "ukrposhta" && form.cityRef.startsWith("s:")) setForm((f) => ({ ...f, cityRef: "" }));
+                            }}
                             title={o.title}
                             text={o.text}
                             aside={price === 0 ? "Безкоштовно" : formatPrice(price)}
@@ -333,13 +366,17 @@ export default function CartPage() {
                       })}
                     </div>
                     <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                        <Field id="city" label="Місто" error={errors.city}>
-                          <input id="field-city" autoComplete="address-level2" value={form.city} onChange={(e) => set("city", e.target.value)} className={inputCls(errors.city)} placeholder="Наприклад, Київ" list="cities" />
-                          <datalist id="cities">
-                            {["Київ", "Львів", "Одеса", "Дніпро", "Харків", "Вінниця", "Івано-Франківськ", "Ужгород", "Полтава", "Чернігів"].map((c) => (
-                              <option key={c} value={c} />
-                            ))}
-                          </datalist>
+                        <Field id="city" label="Місто або село" error={errors.city}>
+                          <CityInput
+                            value={form.city}
+                            cityRef={form.cityRef}
+                            method={delivery}
+                            error={errors.city}
+                            onChange={(text, ref) => {
+                              setForm((f) => ({ ...f, city: text, cityRef: ref }));
+                              if (errors.city) setErrors((e) => ({ ...e, city: undefined }));
+                            }}
+                          />
                         </Field>
                         {delivery === "np-courier" ? (
                           <Field id="address" label="Адреса" error={errors.address}>
@@ -362,9 +399,9 @@ export default function CartPage() {
                   {/* Оплата */}
                   <Card>
                     <CardTitle step={4}>Оплата</CardTitle>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className={`mt-5 grid gap-3 ${paymentOptions.length > 2 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
                       {paymentOptions.map((o) => {
-                        const disabled = o.id === "parts" && !partsAllowed;
+                        const disabled = !paymentAllowed(o);
                         return (
                           <OptionCard
                             key={o.id}
@@ -387,6 +424,7 @@ export default function CartPage() {
                     </label>
                   </Card>
                   </form>
+                  </>
                   )}
                 </div>
 
@@ -443,7 +481,7 @@ export default function CartPage() {
                         {submitError}
                       </p>
                     )}
-                    {status === "user" && (
+                    {status !== "loading" && (
                       <div className="mt-5">
                         <label className="flex cursor-pointer items-start gap-2.5 text-sm leading-snug">
                           <input
@@ -470,30 +508,17 @@ export default function CartPage() {
                         )}
                       </div>
                     )}
-                    {status === "user" ? (
-                      <button
-                        type="submit"
-                        form="checkout"
-                        disabled={pending}
-                        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#ffd51f] py-4 text-base font-extrabold shadow-[0_10px_26px_rgba(255,213,31,.4)] transition hover:-translate-y-0.5 hover:bg-[#ffe044] disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
-                      >
-                        {pending && <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#082c45] border-t-transparent" aria-hidden="true" />}
-                        Підтвердити замовлення
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={status === "loading"}
-                        onClick={() => {
-                          const el = document.getElementById("checkout-login");
-                          el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                          el?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
-                        }}
-                        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#082c45] py-4 text-base font-extrabold text-white transition hover:bg-[#0b3a5a] disabled:opacity-60"
-                      >
-                        <Icon name="user" className="h-5 w-5" />
-                        Увійдіть, щоб оформити
-                      </button>
+                    <button
+                      type="submit"
+                      form="checkout"
+                      disabled={pending || status === "loading"}
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-[#ffd51f] py-4 text-base font-extrabold shadow-[0_10px_26px_rgba(255,213,31,.4)] transition hover:-translate-y-0.5 hover:bg-[#ffe044] disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
+                    >
+                      {pending && <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#082c45] border-t-transparent" aria-hidden="true" />}
+                      Підтвердити замовлення
+                    </button>
+                    {guest && (
+                      <p className="mt-3 text-center text-xs text-[#527083]">Реєстрація не потрібна — достатньо контактів і адреси доставки</p>
                     )}
                   </Card>
 
@@ -548,8 +573,9 @@ function OrderSuccess({ order }: { order: PlacedOrder }) {
       <p className="mt-3 text-[#3d5d70]">
         Замовлення <b className="text-[#082c45]">№ {order.number}</b> прийнято.{" "}
         {order.noCall
-          ? "Ми надішлемо SMS з номером ТТН, щойно відправимо посилку."
-          : `Менеджер зателефонує на ${order.phone} протягом 15 хвилин для підтвердження.`}
+          ? "Ми повідомимо, щойно відправимо посилку."
+          : `Менеджер зв’яжеться з вами за номером ${order.phone}, щоб підтвердити замовлення.`}
+        {order.payment === "invoice" && " Реквізити для оплати надішлемо після підтвердження."}
       </p>
 
       <ul className="mt-8 divide-y divide-[#e3edf3] rounded-[20px] border border-[#e3edf3] text-left">
@@ -570,6 +596,19 @@ function OrderSuccess({ order }: { order: PlacedOrder }) {
         </li>
       </ul>
 
+      {order.guest && (
+        <>
+          <p className="mt-6 text-sm text-[#3d5d70]">
+            Статус можна перевірити будь-коли на сторінці{" "}
+            <Link href={`/orders/track?number=${encodeURIComponent(order.number)}`} className="font-bold text-[#098fd0] hover:underline">
+              «Де моє замовлення?»
+            </Link>{" "}
+            — за номером замовлення і телефоном.
+          </p>
+          <GuestAccountOffer order={order} />
+        </>
+      )}
+
       <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
         <Link href="/catalog" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#ffd51f] px-7 py-3.5 text-sm font-extrabold transition hover:bg-[#ffe044]">
           Повернутися до каталогу <Icon name="arrow" className="h-4 w-4" />
@@ -582,29 +621,106 @@ function OrderSuccess({ order }: { order: PlacedOrder }) {
   );
 }
 
-/* ---------- Вхід перед оформленням ---------- */
+/* ---------- Акаунт після замовлення (гість) ---------- */
 
-function CheckoutLogin() {
+/**
+ * Одне поле — пароль: решту даних покупець уже ввів. Після реєстрації
+ * Auth переносить замовлення в акаунт за збереженим токеном
+ */
+function GuestAccountOffer({ order }: { order: PlacedOrder }) {
+  const { register, status } = useAuth();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const [exists, setExists] = useState(false);
+
+  if (status === "user")
+    return (
+      <p role="status" className="mt-6 rounded-2xl bg-[#e7f7ee] px-5 py-4 text-sm font-semibold text-[#1f7a45]">
+        Готово! Замовлення збережено у вашому{" "}
+        <Link href="/account" className="font-extrabold underline">профілі</Link>.
+      </p>
+    );
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 8) return setError("Щонайменше 8 символів");
+    setPending(true);
+    const result = await register({
+      firstName: order.firstName,
+      lastName: order.lastName,
+      email: order.email,
+      phone: order.phone,
+      password,
+    });
+    setPending(false);
+    if (result.error) {
+      setError(result.error);
+      setExists(/уже існує/.test(result.error));
+    }
+  };
+
+  return (
+    <form onSubmit={submit} noValidate className="mt-6 rounded-[20px] bg-[#f3f9fd] p-5 text-left">
+      <p className="font-extrabold">Збережіть замовлення в акаунті</p>
+      <p className="mt-1 text-sm text-[#527083]">
+        Придумайте пароль — і статус, історія покупок та швидке оформлення будуть під рукою. Акаунт створимо на {order.email}.
+      </p>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="flex-1">
+          <label htmlFor="field-guest-password" className="sr-only">Пароль</label>
+          <PasswordInput
+            id="field-guest-password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            error={error || undefined}
+            placeholder="Пароль (від 8 символів)"
+          />
+        </div>
+        <button type="submit" disabled={pending} className="shrink-0 rounded-full bg-[#082c45] px-6 py-3.5 text-sm font-extrabold text-white transition hover:bg-[#0b3a5a] disabled:opacity-60">
+          Створити акаунт
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-2 text-sm font-semibold text-[#e5484d]">
+          {error}{" "}
+          {exists && (
+            <Link href="/account" className="font-extrabold text-[#098fd0] hover:underline">
+              Увійти — замовлення перейде в акаунт
+            </Link>
+          )}
+        </p>
+      )}
+    </form>
+  );
+}
+
+/* ---------- Вхід для тих, хто вже має акаунт (необов'язково) ---------- */
+
+function CheckoutLoginHint() {
+  const [open, setOpen] = useState(false);
   return (
     <Card id="checkout-login">
-      <CardTitle step={2}>Увійдіть, щоб оформити замовлення</CardTitle>
-      <div className="mt-5 grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <ul className="grid content-start gap-4 text-sm text-[#3d5d70]">
-          <li className="flex gap-3">
-            <Icon name="cart" className="mt-0.5 h-5 w-5 shrink-0 text-[#067eb7]" />
-            <span><b className="text-[#082c45]">Кошик збережеться</b> — товари, які ви вже обрали, перейдуть в акаунт.</span>
-          </li>
-          <li className="flex gap-3">
-            <Icon name="truck" className="mt-0.5 h-5 w-5 shrink-0 text-[#067eb7]" />
-            <span><b className="text-[#082c45]">Дані підставляться самі</b> — наступного разу не доведеться вводити адресу.</span>
-          </li>
-          <li className="flex gap-3">
-            <Icon name="package" className="mt-0.5 h-5 w-5 shrink-0 text-[#067eb7]" />
-            <span><b className="text-[#082c45]">Статус замовлення</b> — завжди під рукою в особистому кабінеті.</span>
-          </li>
-        </ul>
-        <AuthForms initialMode="register" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-[#3d5d70]">
+          <b className="text-[#082c45]">Вже маєте акаунт?</b> Увійдіть — контакти й адреса підставляться самі.
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="inline-flex items-center gap-2 rounded-full bg-[#eaf3f8] px-5 py-2.5 text-sm font-extrabold text-[#264e65] transition hover:bg-[#d8ecf7]"
+        >
+          <Icon name="user" className="h-4 w-4" />
+          {open ? "Згорнути" : "Увійти"}
+        </button>
       </div>
+      {open && (
+        <div className="mx-auto mt-5 max-w-md">
+          <AuthForms initialMode="login" />
+        </div>
+      )}
     </Card>
   );
 }

@@ -41,3 +41,12 @@ export function sessionCookie(res: Response) {
 let n = 0;
 /** Унікальний email для кожного тестового користувача */
 export const uniqueEmail = () => `test${Date.now()}${++n}@example.com`;
+
+/** Позначити email підтвердженим (як після переходу за посиланням з листа) — для адмінів у тестах */
+export async function markEmailVerified(email: string) {
+  const { write } = await import("../../app/lib/server/db");
+  await write((db) => {
+    const u = db.users.find((x) => x.email === email.toLowerCase());
+    if (u) u.emailVerifiedAt = new Date().toISOString();
+  });
+}

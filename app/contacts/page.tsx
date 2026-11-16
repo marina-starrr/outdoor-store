@@ -11,13 +11,13 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contacts" },
   title: "Контакти",
   description:
-    "Зв'яжіться з Family Camping: безкоштовна лінія 0 800 330 121, email hello@outdoor.ua. Замовлення приймаємо й опрацьовуємо цілодобово.",
+    "Зв'яжіться з Family Camping: безкоштовна лінія 0 800 330 121, email hello@outdoor.ua. Замовлення на сайті приймаємо цілодобово.",
 };
 
 const channels: { icon: IconName; title: string; value: string; href?: string; note: string }[] = [
   { icon: "phone", title: "Телефон", value: contacts.phone, href: contacts.phoneHref, note: "Безкоштовно з усіх номерів України" },
-  { icon: "mail", title: "Email", value: contacts.email, href: contacts.emailHref, note: "Відповідаємо протягом 2 годин" },
-  { icon: "clock", title: "Графік роботи", value: "Цілодобово, 24/7", note: "Замовлення опрацьовуємо без вихідних" },
+  { icon: "mail", title: "Email", value: contacts.email, href: contacts.emailHref, note: "Відповідаємо в робочий час" },
+  { icon: "clock", title: "Замовлення на сайті", value: "Цілодобово, 24/7", note: "Підтверджуємо в робочий час" },
 ];
 
 const socials: { icon: IconName; label: string }[] = [
@@ -32,8 +32,8 @@ export default function ContactsPage() {
       eyebrow="Контакти"
       icon="headset"
       title="Ми на"
-      accent="зв’язку 24/7"
-      lead="Допоможемо обрати спорядження, відстежити замовлення чи оформити повернення. Пишіть або телефонуйте будь-коли — замовлення приймаємо й опрацьовуємо цілодобово."
+      accent="зв’язку"
+      lead="Допоможемо обрати спорядження, відстежити замовлення чи оформити повернення. Замовлення на сайті приймаємо цілодобово."
     >
       <div className="grid gap-4 md:grid-cols-3">
         {channels.map((c) => {
@@ -100,8 +100,8 @@ export default function ContactsPage() {
         <InfoTitle icon="headset">Часті питання</InfoTitle>
         <Faq
           items={[
-            { q: "Як дізнатися, де моє замовлення?", a: <>Номер ТТН надсилаємо в SMS у день відправлення. Усі замовлення та їхні статуси також є в <Link href="/account" className="font-bold text-[#098fd0] hover:underline">особистому кабінеті</Link>.</> },
-            { q: "Чи можна оформити замовлення вночі?", a: "Так. Замовлення приймаємо й опрацьовуємо цілодобово, а відправляємо щодня." },
+            { q: "Як дізнатися, де моє замовлення?", a: <>Статус перевірте на сторінці <Link href="/orders/track" className="font-bold text-[#098fd0] hover:underline">«Де моє замовлення?»</Link> за номером замовлення й телефоном. Якщо у вас є акаунт — усі замовлення є в <Link href="/account" className="font-bold text-[#098fd0] hover:underline">особистому кабінеті</Link>.</> },
+            { q: "Чи можна оформити замовлення вночі?", a: "Так. Сайт приймає замовлення цілодобово — менеджер підтвердить його в робочий час." },
             { q: "Чи можна забрати товар самостійно?", a: "Ні, ми працюємо лише онлайн і не маємо пункту видачі. Найшвидший варіант — Нова пошта: 1–3 дні у відділення, поштомат або кур’єром." },
             { q: "Як повернути товар?", a: <>Протягом {RETURN_DAYS} днів з дня отримання. Покрокова інструкція — на сторінці <Link href="/returns" className="font-bold text-[#098fd0] hover:underline">Обмін і повернення</Link>.</> },
           ]}

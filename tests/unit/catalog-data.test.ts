@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  HIT_SOLD,
+  selectHits,
   brandsOf,
   categories,
   categoryBySlug,
@@ -36,12 +38,17 @@ describe("дані каталогу", () => {
     }
   });
 
-  it("рейтинг у межах 1–5, кількість відгуків невід'ємна", () => {
+  it("рейтинг і відгуки не задаються вручну — лише справжні, з бази", () => {
     for (const p of products) {
-      expect(p.rating, p.id).toBeGreaterThanOrEqual(1);
-      expect(p.rating, p.id).toBeLessThanOrEqual(5);
-      expect(p.reviews, p.id).toBeGreaterThanOrEqual(0);
+      expect(p.rating, p.id).toBe(0);
+      expect(p.reviews, p.id).toBe(0);
     }
+  });
+
+  it("хіти: позначка «Хіт» або від HIT_SOLD продажів; порядок — за продажами", () => {
+    const list = products.map((p, i) => ({ ...p, hit: i === 0, sold: i === 1 ? HIT_SOLD : i === 2 ? HIT_SOLD - 1 : 0 }));
+    const hits = selectHits(list);
+    expect(hits.map((p) => p.id)).toEqual([list[1].id, list[0].id]);
   });
 
   it("у наметів вказана місткість", () => {

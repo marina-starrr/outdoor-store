@@ -25,7 +25,7 @@ const validOrder = (lines: { id: string; qty: number }[]) => ({
   lines,
   contact: { firstName: "Тарас", lastName: "Шевченко", phone: "+380 50 111 22 33", email: "" },
   delivery: { method: "np-branch", city: "Львів", branch: "12" },
-  payment: "card",
+  payment: "cod",
   agreed: true,
 });
 
@@ -171,9 +171,10 @@ describe("оформлення замовлення", () => {
     cookie = sessionCookie(r.res);
   });
 
-  it("гість не може оформити замовлення", async () => {
-    const r = await call(orders.POST, { body: validOrder([{ id: tent.id, qty: 1 }]) });
-    expect(r.status).toBe(401);
+  it("з акаунтом email необов'язковий, токен гостя не видається", async () => {
+    const r = await call(orders.POST, { cookie, body: validOrder([{ id: cheap.id, qty: 1 }]) });
+    expect(r.status).toBe(200);
+    expect(r.data.claimToken).toBeUndefined();
   });
 
   it("без згоди з умовами замовлення не приймається", async () => {
@@ -207,9 +208,18 @@ describe("оформлення замовлення", () => {
     });
   }
 
-  it("оплата частинами — лише від 3000 ₴", async () => {
-    const r = await call(orders.POST, { cookie, body: { ...validOrder([{ id: cheap.id, qty: 1 }]), payment: "parts" } });
-    if (cheap.price + 70 < 3000) expect(r.status).toBe(400);
+  it("онлайн-оплата і «частинами» вимкнені, доки не підключено еквайринг", async () => {
+    for (const payment of ["card", "parts"]) {
+      const r = await call(orders.POST, { cookie, body: { ...validOrder([{ id: cheap.id, qty: 1 }]), payment } });
+      expect(r.status, payment).toBe(400);
+      expect(r.data.error).toBe("Оберіть спосіб оплати");
+    }
+  });
+
+  it("оплата на рахунок приймається", async () => {
+    const r = await call(orders.POST, { cookie, body: { ...validOrder([{ id: cheap.id, qty: 1 }]), payment: "invoice" } });
+    expect(r.status).toBe(200);
+    expect(r.data.order.payment).toBe("invoice");
   });
 
   it("ціни рахує сервер — підробити суму з браузера неможливо", async () => {
@@ -226,11 +236,12 @@ describe("оформлення замовлення", () => {
   it("після замовлення кошик порожній, адреса запам'ятована, замовлення в історії", async () => {
     const who = await call(me.GET, { method: "GET", cookie });
     expect(who.data.cart).toEqual([]);
-    expect(who.data.user.lastDelivery).toMatchObject({ method: "np-branch", city: "Львів", branch: "12" });
+    // Місто розпізнане за довідником: повний підпис і Ref Нової пошти
+    expect(who.data.user.lastDelivery).toMatchObject({ method: "np-branch", city: "м. Львів, Львівська обл.", cityRef: "ref-lviv", branch: "12" });
     expect(who.data.user.phone).toBe("+380 50 111 22 33");
 
     const history = await call(orders.GET, { method: "GET", cookie });
-    expect(history.data.orders).toHaveLength(1);
+    expect(history.data.orders).toHaveLength(3);
   });
 
   it("дані справді записані у файл тимчасової бази", () => {

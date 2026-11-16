@@ -691,13 +691,16 @@ export function ProductCard({
               {category.name}
             </p>
           )}
-          <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-[#527083]">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-[#f5ad00]" fill="currentColor" aria-hidden="true">
-              <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" />
-            </svg>
-            {product.rating.toFixed(1)}
-            <span className="font-medium text-[#8aa5b5]">({product.reviews})</span>
-          </span>
+          {/* Рейтинг — лише коли є справжні схвалені відгуки */}
+          {product.reviews > 0 && (
+            <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-[#527083]" aria-label={`Рейтинг ${product.rating.toFixed(1)} з 5, відгуків: ${product.reviews}`}>
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-[#f5ad00]" fill="currentColor" aria-hidden="true">
+                <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" />
+              </svg>
+              {product.rating.toFixed(1)}
+              <span className="font-medium text-[#8aa5b5]">({product.reviews})</span>
+            </span>
+          )}
         </div>
         <h3 className="mt-1.5 line-clamp-2 text-[15px] font-extrabold leading-snug">
           <Link

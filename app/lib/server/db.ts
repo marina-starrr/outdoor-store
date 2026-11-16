@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { CartLine, DeliveryId, PaymentId } from "../../components/cart-logic";
@@ -26,12 +27,21 @@ export type StoredOrder = {
   promoDiscount: number;
   shipping: number;
   total: number;
-  delivery: { method: DeliveryId; city?: string; branch?: string; address?: string };
+  /** city — підпис «м. Полтава, Полтавська обл.», cityRef — Ref Нової пошти (s:… — населений пункт без НП) */
+  delivery: { method: DeliveryId; city?: string; cityRef?: string; branch?: string; address?: string };
   payment: PaymentId;
   contact: { firstName: string; lastName: string; phone: string; email?: string };
   comment?: string;
   noCall: boolean;
 };
+
+/**
+ * Замовлення гостя (без акаунта). claimHash — SHA-256 від секретного токена,
+ * який отримав лише браузер покупця: за ним замовлення переноситься в акаунт
+ * після реєстрації чи входу. За email не прив'язуємо — email не підтверджується,
+ * тож інакше чужі замовлення міг би «забрати» будь-хто.
+ */
+export type StoredGuestOrder = StoredOrder & { claimHash: string };
 
 export type StoredUser = {
   id: string;
@@ -41,6 +51,10 @@ export type StoredUser = {
   phone: string;
   passwordHash: string;
   createdAt: string;
+  /** Коли власник підтвердив email за посиланням з листа (без цього — немає прав адміністратора) */
+  emailVerifiedAt?: string;
+  /** Активне посилання підтвердження: SHA-256 від токена і строк дії */
+  emailVerify?: { hash: string; expiresAt: number };
   cart: CartLine[];
   /** id обраних товарів (поле з'явилось пізніше — у старих записах може бути відсутнім) */
   favorites?: string[];
@@ -94,6 +108,21 @@ export type StoredMessage = {
   replies?: MessageReply[];
 };
 
+/** Відгук покупця. На сайті показуються лише схвалені адміністратором */
+export type StoredReview = {
+  id: string;
+  productId: string;
+  userId: string;
+  /** Підпис на сайті: «Олена К.» */
+  author: string;
+  rating: number;
+  text: string;
+  createdAt: string;
+  status: "pending" | "approved" | "rejected";
+  /** Автор справді купував цей товар (замовлення відправлене або виконане) */
+  verified: boolean;
+};
+
 type Session = { userId: string; expiresAt: number };
 
 export type Data = {
@@ -104,6 +133,10 @@ export type Data = {
   products?: Product[];
   /** Звернення з форми «Контакти» */
   messages?: StoredMessage[];
+  /** Замовлення гостей, ще не перенесені в акаунт */
+  guestOrders?: StoredGuestOrder[];
+  /** Відгуки покупців (з модерацією) */
+  reviews?: StoredReview[];
 };
 
 /**
@@ -113,43 +146,61 @@ export type Data = {
 export const dataDir = () => process.env.FC_DATA_DIR || join(process.cwd(), ".data");
 export const dbFile = () => join(dataDir(), "db.json");
 
-let cache: Data | null = null;
-/** Час зміни файлу, з якого прочитано cache */
-let cacheMtime = 0;
-let queue: Promise<unknown> = Promise.resolve();
-
-const mtime = async () => {
-  try {
-    return (await stat(dbFile())).mtimeMs;
-  } catch {
-    return 0;
-  }
+/*
+ * Next завантажує цей модуль кілька разів в одному процесі (окремо для різних
+ * маршрутів). Щоб записи з різних екземплярів не перезаписували одне одного,
+ * а читання не бачило застарілих даних, черга записів і кеш спільні для
+ * процесу — зберігаються в globalThis (окремо для кожного файлу бази).
+ */
+type Store = {
+  cache: Data | null;
+  /** Ідентифікатор версії файлу, з якої прочитано cache (inode + розмір + час зміни) */
+  key: string;
+  queue: Promise<unknown>;
 };
 
-/**
- * Next може завантажити цей модуль кілька разів (окремо для сторінок і для
- * API), тож перед використанням кешу перевіряємо, чи файл не змінив інший екземпляр
- */
-async function load(): Promise<Data> {
-  const m = await mtime();
-  if (cache && m === cacheMtime) return cache;
-  try {
-    cache = JSON.parse(await readFile(dbFile(), "utf8")) as Data;
-  } catch {
-    cache = { users: [], sessions: {} };
-  }
-  cacheMtime = m;
-  return cache;
+const stores = ((globalThis as { __fcDbStores?: Map<string, Store> }).__fcDbStores ??= new Map());
+
+function store(): Store {
+  const file = dbFile();
+  let s = stores.get(file);
+  if (!s) stores.set(file, (s = { cache: null, key: "", queue: Promise.resolve() }));
+  return s;
 }
 
-async function persist(data: Data) {
+const versionKey = (st: { ino: number; size: number; mtimeMs: number }) => `${st.ino}:${st.size}:${st.mtimeMs}`;
+
+async function fileKey() {
+  try {
+    return versionKey(await stat(dbFile()));
+  } catch {
+    return "";
+  }
+}
+
+/** Дані з кешу, якщо файл не змінював ніхто інший (напр. інший процес чи yarn admin:verify) */
+async function load(s: Store): Promise<Data> {
+  const key = await fileKey();
+  if (s.cache && key === s.key) return s.cache;
+  try {
+    s.cache = JSON.parse(await readFile(dbFile(), "utf8")) as Data;
+  } catch {
+    s.cache = { users: [], sessions: {} };
+  }
+  s.key = key;
+  return s.cache;
+}
+
+async function persist(s: Store, data: Data) {
   await mkdir(dataDir(), { recursive: true });
-  // Атомарний запис: спершу тимчасовий файл, потім перейменування
+  // Атомарний запис: спершу тимчасовий файл (унікальне ім'я), потім перейменування
   const file = dbFile();
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+  // Версію беремо з нашого ж файлу ДО перейменування — після нього файл міг уже замінити хтось інший
+  const key = versionKey(await stat(tmp));
   await renameWithRetry(tmp, file);
-  cacheMtime = await mtime();
+  s.key = key;
 }
 
 /**
@@ -171,18 +222,20 @@ async function renameWithRetry(from: string, to: string) {
 
 /** Читання */
 export async function read<T>(fn: (data: Data) => T): Promise<T> {
-  await queue;
-  return fn(await load());
+  const s = store();
+  await s.queue;
+  return fn(await load(s));
 }
 
-/** Зміна даних — виконується послідовно, щоб паралельні запити не перезаписали одне одного */
+/** Зміна даних — виконується послідовно (одна черга на процес), щоб паралельні запити не перезаписали одне одного */
 export function write<T>(fn: (data: Data) => T): Promise<T> {
-  const run = queue.then(async () => {
-    const data = await load();
+  const s = store();
+  const run = s.queue.then(async () => {
+    const data = await load(s);
     const result = fn(data);
-    await persist(data);
+    await persist(s, data);
     return result;
   });
-  queue = run.catch(() => undefined);
+  s.queue = run.catch(() => undefined);
   return run;
 }

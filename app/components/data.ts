@@ -32,7 +32,7 @@ export const contacts = {
   phoneHref: "tel:+380800330121",
   email: "hello@outdoor.ua",
   emailHref: "mailto:hello@outdoor.ua",
-  schedule: "Замовлення приймаємо й опрацьовуємо цілодобово, 24/7",
+  schedule: "Замовлення на сайті приймаємо цілодобово",
 };
 
 /** Інформаційні сторінки — бічна навігація та футер */

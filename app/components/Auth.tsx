@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { CartLine, DeliveryId } from "./cart-logic";
-import { FAVORITES_STORAGE_KEY, readCartStorage, readIds } from "./cart-storage";
+import { FAVORITES_STORAGE_KEY, ORDER_CLAIMS_STORAGE_KEY, readCartStorage, readIds, writeIds } from "./cart-storage";
 
 export type AuthUser = {
   id: string;
@@ -19,9 +19,13 @@ export type AuthUser = {
   lastName: string;
   phone: string;
   createdAt: string;
-  lastDelivery: { method: DeliveryId; city?: string; branch?: string; address?: string } | null;
+  lastDelivery: { method: DeliveryId; city?: string; cityRef?: string; branch?: string; address?: string } | null;
+  /** Власник підтвердив email за посиланням з листа */
+  emailVerified?: boolean;
   /** Має доступ до адмін-панелі */
   isAdmin?: boolean;
+  /** Адреса адміністратора, але email ще не підтверджено */
+  adminPending?: boolean;
 };
 
 /**
@@ -51,6 +55,8 @@ type AuthContextValue = {
   updateProfile: (data: Record<string, string>) => Promise<Result>;
   /** Перечитати користувача з сервера (напр. після замовлення) */
   refresh: () => Promise<void>;
+  /** Змінюється, коли в акаунт перенесено гостьові замовлення — список треба перечитати */
+  ordersVersion: number;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -77,6 +83,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthContextValue["status"]>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [event, setEvent] = useState<AuthEvent>({ seq: 0, type: "none" });
+  const [ordersVersion, setOrdersVersion] = useState(0);
+
+  // Замовлення, оформлені в цьому браузері як гість, переносимо в акаунт
+  const claimGuestOrders = useCallback(async () => {
+    const tokens = readIds(ORDER_CLAIMS_STORAGE_KEY);
+    if (!tokens.length) return;
+    const data = await api<{ claimed: number }>("/api/orders/claim", {
+      method: "POST",
+      body: JSON.stringify({ tokens }),
+    });
+    if (data.error) return; // спробуємо наступного разу
+    // Решта токенів недійсні (замовлення вже в іншому акаунті) — теж прибираємо
+    writeIds(ORDER_CLAIMS_STORAGE_KEY, []);
+    if (data.claimed > 0) setOrdersVersion((v) => v + 1);
+  }, []);
 
   const emit = useCallback(
     (e: Omit<Extract<AuthEvent, { type: "restore" | "login" }>, "seq"> | { type: "logout" }) =>
@@ -88,9 +109,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (data: SessionPayload, type: "restore" | "login") => {
       setUser(data.user);
       setStatus(data.user ? "user" : "guest");
-      if (data.user) emit({ type, cart: data.cart ?? [], favorites: data.favorites ?? [] });
+      if (data.user) {
+        emit({ type, cart: data.cart ?? [], favorites: data.favorites ?? [] });
+        void claimGuestOrders();
+      }
     },
-    [emit],
+    [emit, claimGuestOrders],
   );
 
   // Відновлюємо сесію при завантаженні сторінки
@@ -168,8 +192,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, user, event, login, register, logout, updateProfile, refresh }),
-    [status, user, event, login, register, logout, updateProfile, refresh],
+    () => ({ status, user, event, login, register, logout, updateProfile, refresh, ordersVersion }),
+    [status, user, event, login, register, logout, updateProfile, refresh, ordersVersion],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

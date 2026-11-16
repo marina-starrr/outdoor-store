@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- фото товарів з Unsplash, як і в каталозі */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "./Auth";
 import { useCart } from "./Cart";
 import { useLists } from "./Lists";
@@ -27,11 +27,8 @@ import {
   productDescription,
   productGallery,
   productHighlights,
-  productReviews,
   productUrl,
-  ratingDistribution,
   relatedProducts,
-  type Review,
 } from "./product-details";
 
 
@@ -52,10 +49,10 @@ export default function ProductPage({ product }: { product: Product }) {
   const [query, setQuery] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [tab, setTab] = useState<TabId>("description");
-  const [reviews, setReviews] = useState<Review[]>(() => productReviews(product));
   const tabsRef = useRef<HTMLDivElement>(null);
 
-  const reviewCount = product.reviews + (reviews.length - productReviews(product).length);
+  // Кількість схвалених відгуків — з каталогу (рахується на сервері)
+  const reviewCount = product.reviews;
   const total = product.price * quantity;
   const leftForFree = Math.max(0, FREE_SHIPPING_FROM - total);
 
@@ -109,7 +106,7 @@ export default function ProductPage({ product }: { product: Product }) {
   const tabs: { id: TabId; label: string }[] = [
     { id: "description", label: "Опис" },
     { id: "specs", label: "Характеристики" },
-    { id: "reviews", label: `Відгуки (${reviewCount})` },
+    { id: "reviews", label: reviewCount ? `Відгуки (${reviewCount})` : "Відгуки" },
     { id: "delivery", label: "Доставка та оплата" },
   ];
 
@@ -152,11 +149,17 @@ export default function ProductPage({ product }: { product: Product }) {
                   onClick={() => openTab("reviews")}
                   className="flex items-center gap-2 text-[#527083] hover:text-[#098fd0]"
                 >
-                  <Stars value={product.rating} />
-                  <span className="font-bold text-[#082c45]">{product.rating.toFixed(1)}</span>
-                  <span>
-                    ({reviewCount} {reviewsWord(reviewCount)})
-                  </span>
+                  {reviewCount > 0 ? (
+                    <>
+                      <Stars value={product.rating} />
+                      <span className="font-bold text-[#082c45]">{product.rating.toFixed(1)}</span>
+                      <span>
+                        ({reviewCount} {reviewsWord(reviewCount)})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="font-bold underline decoration-dotted underline-offset-4">Відгуків ще немає — напишіть перший</span>
+                  )}
                 </button>
                 <span className="text-[#8aa5b5]">Код: {product.id.toUpperCase()}</span>
               </div>
@@ -295,17 +298,7 @@ export default function ProductPage({ product }: { product: Product }) {
             <div className="py-8" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "description" && <DescriptionTab product={product} paragraphs={description} />}
               {tab === "specs" && <SpecsTab attrs={product.attrs} />}
-              {tab === "reviews" && (
-                <ReviewsTab
-                  product={product}
-                  reviews={reviews}
-                  total={reviewCount}
-                  onAdd={(r) => {
-                    setReviews((list) => [r, ...list]);
-                    notify("Дякуємо за відгук!");
-                  }}
-                />
-              )}
+              {tab === "reviews" && <ReviewsTab product={product} />}
               {tab === "delivery" && <DeliveryTab />}
             </div>
           </div>
@@ -621,91 +614,149 @@ function SpecsTab({ attrs }: { attrs: [string, string][] }) {
   );
 }
 
-function ReviewsTab({
-  product,
-  reviews,
-  total,
-  onAdd,
-}: {
-  product: Product;
-  reviews: Review[];
-  total: number;
-  onAdd: (r: Review) => void;
-}) {
-  const [shown, setShown] = useState(3);
+type PublicReview = { id: string; author: string; rating: number; text: string; createdAt: string; verified: boolean };
+type ReviewsData = {
+  reviews: PublicReview[];
+  mine: { rating: number; text: string; status: "pending" | "approved" | "rejected" } | null;
+  verifiedBuyer: boolean;
+  loggedIn: boolean;
+};
+
+const reviewDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" });
+
+/** Справжні відгуки: лише схвалені адміністратором, писати можуть покупці з акаунтом */
+function ReviewsTab({ product }: { product: Product }) {
+  const { status } = useAuth();
+  const [data, setData] = useState<ReviewsData | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [shown, setShown] = useState(5);
   const [formOpen, setFormOpen] = useState(false);
-  const dist = ratingDistribution(product);
+
+  // Перечитуємо після входу/виходу — змінюється «мій відгук» і право писати
+  useEffect(() => {
+    if (status === "loading") return;
+    let cancelled = false;
+    fetch(`/api/products/${encodeURIComponent(product.id)}/reviews`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: ReviewsData) => !cancelled && setData(d))
+      .catch(() => !cancelled && setFailed(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [product.id, status]);
+
+  const reviews = data?.reviews ?? [];
+  const count = reviews.length;
+  const avg = count ? reviews.reduce((s, r) => s + r.rating, 0) / count : 0;
+  const dist = [5, 4, 3, 2, 1].map((n) => reviews.filter((r) => r.rating === n).length);
   const max = Math.max(...dist, 1);
+  const next = `/account?next=${encodeURIComponent(`${productUrl(product)}#reviews`)}`;
 
   return (
     <div className="grid gap-10 lg:grid-cols-[300px_minmax(0,1fr)]">
       <div className="h-fit rounded-[22px] bg-[#f3f9fd] p-6">
-        <div className="flex items-end gap-3">
-          <span className="text-5xl font-black tracking-[-0.04em]">{product.rating.toFixed(1)}</span>
-          <div className="pb-1.5">
-            <Stars value={product.rating} />
-            <p className="mt-1 text-xs text-[#527083]">
-              {total} {reviewsWord(total)}
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 space-y-2">
-          {dist.map((n, i) => (
-            <div key={i} className="flex items-center gap-3 text-xs">
-              <span className="w-3 font-bold">{5 - i}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white">
-                <div className="h-full rounded-full bg-[#ffd51f]" style={{ width: `${(n / max) * 100}%` }} />
+        {count > 0 ? (
+          <>
+            <div className="flex items-end gap-3">
+              <span className="text-5xl font-black tracking-[-0.04em]">{avg.toFixed(1)}</span>
+              <div className="pb-1.5">
+                <Stars value={avg} />
+                <p className="mt-1 text-xs text-[#527083]">
+                  {count} {reviewsWord(count)}
+                </p>
               </div>
-              <span className="w-7 text-right text-[#527083]">{n}</span>
             </div>
-          ))}
-        </div>
-        <button
-          onClick={() => setFormOpen((o) => !o)}
-          className="mt-6 w-full rounded-full bg-[#ffd51f] py-3 text-sm font-extrabold transition hover:bg-[#ffe044]"
-        >
-          {formOpen ? "Скасувати" : "Написати відгук"}
-        </button>
+            <div className="mt-5 space-y-2">
+              {dist.map((n, i) => (
+                <div key={i} className="flex items-center gap-3 text-xs">
+                  <span className="w-3 font-bold">{5 - i}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-white">
+                    <div className="h-full rounded-full bg-[#ffd51f]" style={{ width: `${(n / max) * 100}%` }} />
+                  </div>
+                  <span className="w-7 text-right text-[#527083]">{n}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-lg font-extrabold">Відгуків ще немає</p>
+            <p className="mt-1 text-sm text-[#527083]">Купували цей товар? Розкажіть іншим родинам, як він себе показав.</p>
+          </>
+        )}
+        {data?.loggedIn ? (
+          <button
+            onClick={() => setFormOpen((o) => !o)}
+            className="mt-6 w-full rounded-full bg-[#ffd51f] py-3 text-sm font-extrabold transition hover:bg-[#ffe044]"
+          >
+            {formOpen ? "Скасувати" : data.mine ? "Змінити мій відгук" : "Написати відгук"}
+          </button>
+        ) : (
+          data && (
+            <Link href={next} className="mt-6 block w-full rounded-full bg-[#ffd51f] py-3 text-center text-sm font-extrabold transition hover:bg-[#ffe044]">
+              Увійдіть, щоб написати відгук
+            </Link>
+          )
+        )}
       </div>
 
       <div>
-        {formOpen && (
+        {data?.mine && !formOpen && (
+          <p role="status" className={`mb-6 rounded-2xl px-4 py-3 text-sm font-semibold ${data.mine.status === "rejected" ? "bg-[#fdecec] text-[#c53035]" : data.mine.status === "approved" ? "bg-[#e7f7ee] text-[#1f7a45]" : "bg-[#fff4c2] text-[#8a6100]"}`}>
+            {data.mine.status === "pending"
+              ? "Дякуємо! Ваш відгук з’явиться на сайті після перевірки модератором."
+              : data.mine.status === "approved"
+                ? "Ваш відгук опубліковано."
+                : "Ваш відгук не пройшов модерацію. Ви можете змінити його й надіслати знову."}
+          </p>
+        )}
+        {formOpen && data && (
           <ReviewForm
             productId={product.id}
-            onSubmit={(r) => {
-              onAdd(r);
+            initial={data.mine}
+            verifiedBuyer={data.verifiedBuyer}
+            onSaved={(mine) => {
+              setData((d) => d && { ...d, mine });
               setFormOpen(false);
-              setShown((s) => s + 1);
             }}
           />
         )}
-        <ul className="divide-y divide-[#e3edf3]">
-          {reviews.slice(0, shown).map((r) => (
-            <li key={r.id} className="py-5 first:pt-0">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-[#e1f0f9] text-sm font-extrabold text-[#067eb7]">
-                  {r.author[0]}
-                </span>
-                <span className="font-bold">{r.author}</span>
-                <span className="text-xs text-[#8aa5b5]">
-                  {r.city} · {r.date}
-                </span>
-                {r.verified && (
-                  <span className="rounded-full bg-[#e7f7ee] px-2 py-0.5 text-[11px] font-bold text-[#1f9d55]">
-                    Підтверджена покупка
+        {failed ? (
+          <p className="text-sm text-[#c53035]">Не вдалося завантажити відгуки. Оновіть сторінку.</p>
+        ) : !data ? (
+          <div className="grid gap-3">
+            {[0, 1].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-[#f3f9fd]" />)}
+          </div>
+        ) : count === 0 ? (
+          !formOpen && !data.mine && <p className="text-[15px] text-[#527083]">Станьте першим, хто поділиться враженнями про {product.name}.</p>
+        ) : (
+          <ul className="divide-y divide-[#e3edf3]" data-testid="reviews">
+            {reviews.slice(0, shown).map((r) => (
+              <li key={r.id} className="py-5 first:pt-0">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-[#e1f0f9] text-sm font-extrabold text-[#067eb7]">
+                    {r.author[0]}
                   </span>
-                )}
-              </div>
-              <div className="mt-2">
-                <Stars value={r.rating} size="h-3.5 w-3.5" />
-              </div>
-              <p className="mt-2 text-[15px] leading-relaxed text-[#264e65]">{r.text}</p>
-            </li>
-          ))}
-        </ul>
-        {shown < reviews.length && (
+                  <span className="font-bold">{r.author}</span>
+                  <span className="text-xs text-[#8aa5b5]">{reviewDate(r.createdAt)}</span>
+                  {r.verified && (
+                    <span className="rounded-full bg-[#e7f7ee] px-2 py-0.5 text-[11px] font-bold text-[#1f9d55]">
+                      Підтверджена покупка
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2">
+                  <Stars value={r.rating} size="h-3.5 w-3.5" />
+                </div>
+                <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-[#264e65]">{r.text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {shown < count && (
           <button
-            onClick={() => setShown((s) => s + 3)}
+            onClick={() => setShown((s) => s + 5)}
             className="mt-2 rounded-full bg-[#eaf3f8] px-6 py-3 text-sm font-extrabold text-[#264e65] transition hover:bg-[#d8ecf7]"
           >
             Показати ще відгуки
@@ -716,30 +767,50 @@ function ReviewsTab({
   );
 }
 
-function ReviewForm({ productId, onSubmit }: { productId: string; onSubmit: (r: Review) => void }) {
-  const [rating, setRating] = useState(5);
-  const [name, setName] = useState("");
-  const [text, setText] = useState("");
+function ReviewForm({
+  productId,
+  initial,
+  verifiedBuyer,
+  onSaved,
+}: {
+  productId: string;
+  initial: ReviewsData["mine"];
+  verifiedBuyer: boolean;
+  onSaved: (mine: NonNullable<ReviewsData["mine"]>) => void;
+}) {
+  const [rating, setRating] = useState(initial?.rating ?? 5);
+  const [text, setText] = useState(initial?.text ?? "");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim().length < 2) return setError("Вкажіть ваше ім'я");
     if (text.trim().length < 10) return setError("Відгук має містити щонайменше 10 символів");
-    onSubmit({
-      id: `${productId}-new-${text.length}-${name}`,
-      author: name.trim(),
-      city: "",
-      date: "щойно",
-      rating,
-      text: text.trim(),
-      verified: false,
-    });
+    setPending(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(productId)}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, text: text.trim() }),
+      });
+      const data = await res.json();
+      if (data.mine) onSaved(data.mine);
+      else setError(data.error ?? "Не вдалося надіслати відгук");
+    } catch {
+      setError("Немає з'єднання з сервером. Спробуйте ще раз.");
+    }
+    setPending(false);
   };
 
   return (
     <form onSubmit={submit} className="mb-8 rounded-[22px] border border-[#e3edf3] p-5" noValidate>
       <p className="font-extrabold">Ваш відгук</p>
+      <p className="mt-1 text-xs text-[#527083]">
+        {verifiedBuyer
+          ? "Ви купували цей товар — відгук отримає позначку «Підтверджена покупка»."
+          : "Відгук з’явиться на сайті після перевірки модератором."}
+      </p>
       <div className="mt-3 flex items-center gap-1" role="radiogroup" aria-label="Оцінка">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -757,26 +828,22 @@ function ReviewForm({ productId, onSubmit }: { productId: string; onSubmit: (r: 
           </button>
         ))}
       </div>
-      <FormField label="Ім'я">
-        <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-xl border border-[#d5e5ef] px-4 py-2.5 text-sm outline-none focus:border-[#0aa4e8] focus:ring-4 focus:ring-sky-100" />
-      </FormField>
-      <FormField label="Відгук">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} className="w-full resize-y rounded-xl border border-[#d5e5ef] px-4 py-2.5 text-sm outline-none focus:border-[#0aa4e8] focus:ring-4 focus:ring-sky-100" placeholder="Що сподобалось, а що можна покращити?" />
-      </FormField>
-      {error && <p className="mt-3 text-sm font-semibold text-[#e5484d]">{error}</p>}
-      <button type="submit" className="mt-4 rounded-full bg-[#082c45] px-6 py-3 text-sm font-extrabold text-white transition hover:bg-[#0b3a5a]">
-        Опублікувати
+      <label className="mt-4 block">
+        <span className="mb-1.5 block text-sm font-bold">Відгук</span>
+        <textarea
+          value={text}
+          onChange={(e) => { setText(e.target.value); setError(""); }}
+          rows={4}
+          maxLength={2000}
+          className="w-full resize-y rounded-xl border border-[#d5e5ef] px-4 py-2.5 text-sm outline-none focus:border-[#0aa4e8] focus:ring-4 focus:ring-sky-100"
+          placeholder="Що сподобалось, а що можна покращити?"
+        />
+      </label>
+      {error && <p role="alert" className="mt-3 text-sm font-semibold text-[#e5484d]">{error}</p>}
+      <button type="submit" disabled={pending} className="mt-4 rounded-full bg-[#082c45] px-6 py-3 text-sm font-extrabold text-white transition hover:bg-[#0b3a5a] disabled:opacity-60">
+        Надіслати на перевірку
       </button>
     </form>
-  );
-}
-
-function FormField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="mt-4 block">
-      <span className="mb-1.5 block text-sm font-bold">{label}</span>
-      {children}
-    </label>
   );
 }
 

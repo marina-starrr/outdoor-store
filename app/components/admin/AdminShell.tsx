@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useAuth } from "../Auth";
 import AuthForms from "../AuthForms";
 import Icon, { type IconName } from "../Icon";
@@ -14,6 +14,7 @@ export type AdminSummary = {
   revenue: { total: number; last30: number; count30: number };
   products: { total: number; visible: number; outOfStock: number; lowStock: { id: string; name: string; stock: number; category: string }[] };
   messages: { unread: number };
+  reviews: { pending: number };
   customers: number;
 };
 
@@ -22,6 +23,7 @@ const nav: { href: string; label: string; icon: IconName; badge?: (s: AdminSumma
   { href: "/admin/products", label: "Товари", icon: "tent", badge: (s) => s.products.outOfStock },
   { href: "/admin/orders", label: "Замовлення", icon: "package", badge: (s) => s.orders.byStatus.new ?? 0 },
   { href: "/admin/messages", label: "Звернення", icon: "chat", badge: (s) => s.messages.unread },
+  { href: "/admin/reviews", label: "Відгуки", icon: "star", badge: (s) => s.reviews.pending },
 ];
 
 /**
@@ -41,6 +43,13 @@ export default function AdminShell({ title, actions, children }: { title: string
         <h1 className="text-2xl font-extrabold tracking-[-0.03em]">Вхід до адмін-панелі</h1>
         <p className="mb-6 mt-1 text-sm text-[#527083]">Увійдіть з акаунтом адміністратора.</p>
         <AuthForms onSuccess={() => undefined} initialMode="login" />
+      </Centered>
+    );
+  }
+  if (user.adminPending) {
+    return (
+      <Centered>
+        <ConfirmAdminEmail email={user.email} />
       </Centered>
     );
   }
@@ -144,6 +153,58 @@ function AdminFrame({
         </main>
       </div>
     </div>
+  );
+}
+
+/** Адреса є в ADMIN_EMAILS, але ще не підтверджена — без цього доступу немає */
+function ConfirmAdminEmail({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "pending" | "sent" | "no-mail" | "error">("idle");
+  const [message, setMessage] = useState("");
+
+  const resend = async () => {
+    setState("pending");
+    try {
+      const res = await fetch("/api/auth/verify-email/resend", { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        setMessage(data.error);
+        setState("error");
+      } else setState(data.mailEnabled === false ? "no-mail" : "sent");
+    } catch {
+      setMessage("Немає з'єднання з сервером.");
+      setState("error");
+    }
+  };
+
+  return (
+    <>
+      <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[#fff4c2] text-[#8a6100]">
+        <Icon name="mail" className="h-8 w-8" />
+      </span>
+      <h1 className="mt-5 text-center text-2xl font-extrabold tracking-[-0.03em]">Підтвердіть email</h1>
+      <p className="mt-2 text-center text-sm text-[#527083]">
+        Адмін-панель відкриється після підтвердження адреси <b className="text-[#082c45]">{email}</b> — так ніхто інший не
+        зможе отримати доступ, зареєструвавшись з вашою адресою. Натисніть кнопку нижче — надішлемо лист із посиланням.
+      </p>
+      <button
+        type="button"
+        onClick={resend}
+        disabled={state === "pending" || state === "sent"}
+        className="mt-6 block w-full rounded-full bg-[#ffd51f] py-3 text-center text-sm font-extrabold transition hover:bg-[#ffe044] disabled:opacity-60"
+      >
+        {state === "sent" ? "Лист надіслано" : "Надіслати лист ще раз"}
+      </button>
+      <div role="status" className="mt-3 text-center text-sm">
+        {state === "sent" && <p className="text-[#1f7a45]">Перевірте пошту (і папку «Спам»).</p>}
+        {state === "error" && <p className="text-[#c53035]">{message}</p>}
+        {state === "no-mail" && (
+          <p className="text-left text-[#527083]">
+            Надсилання пошти ще не налаштоване (RESEND_API_KEY). Підтвердьте адресу на сервері командою:
+            <code className="mt-2 block rounded-xl bg-[#f3f6f9] px-3 py-2 font-mono text-xs text-[#082c45]">yarn admin:verify {email}</code>
+          </p>
+        )}
+      </div>
+    </>
   );
 }
 

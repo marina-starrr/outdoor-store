@@ -53,13 +53,27 @@ export const deliveryPrice = (id: DeliveryId, subtotal: number) => {
 
 /* ---------- Оплата ---------- */
 
-export type PaymentId = "card" | "cod" | "parts";
+export type PaymentId = "cod" | "invoice" | "card" | "parts";
 
-export const paymentOptions: { id: PaymentId; title: string; text: string; minTotal?: number }[] = [
-  { id: "card", title: "Карткою онлайн", text: "Visa, Mastercard, Apple Pay, Google Pay" },
-  { id: "cod", title: "Накладений платіж", text: "Оплата при отриманні, комісія перевізника" },
-  { id: "parts", title: "Оплата частинами", text: "До 6 платежів без переплат", minTotal: 3000 },
+type PaymentOption = { id: PaymentId; title: string; text: string; minTotal?: number; enabled: boolean };
+
+/**
+ * Усі способи оплати, включно з вимкненими: назви потрібні для старих замовлень.
+ * «Карткою онлайн» і «Частинами» вимкнені, поки не підключено еквайринг
+ * (LiqPay / WayForPay / monobank) — показувати оплату, яку ніхто не приймає, не можна
+ */
+export const allPaymentOptions: PaymentOption[] = [
+  { id: "cod", title: "Накладений платіж", text: "Оплата при отриманні у відділенні, комісія перевізника", enabled: true },
+  { id: "invoice", title: "Оплата на рахунок", text: "Після підтвердження замовлення надішлемо реквізити для оплати", enabled: true },
+  { id: "card", title: "Карткою онлайн", text: "Visa, Mastercard, Apple Pay, Google Pay", enabled: false },
+  { id: "parts", title: "Оплата частинами", text: "До 6 платежів без переплат", minTotal: 3000, enabled: false },
 ];
+
+/** Способи оплати, які зараз доступні покупцям */
+export const paymentOptions = allPaymentOptions.filter((o) => o.enabled);
+
+/** Назва способу оплати (і вимкненого — для історії замовлень) */
+export const paymentTitle = (id: string) => allPaymentOptions.find((o) => o.id === id)?.title ?? id;
 
 /* ---------- Промокоди ---------- */
 

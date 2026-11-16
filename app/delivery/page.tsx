@@ -15,13 +15,13 @@ import { formatPrice } from "../components/catalog-data";
 export const metadata: Metadata = {
   alternates: { canonical: "/delivery" },
   title: "Доставка і оплата",
-  description: `Доставка Новою поштою та Укрпоштою по всій Україні, безкоштовно від ${formatPrice(FREE_SHIPPING_FROM)}. Оплата карткою, накладеним платежем або частинами.`,
+  description: `Доставка Новою поштою та Укрпоштою по всій Україні, безкоштовно від ${formatPrice(FREE_SHIPPING_FROM)}. Оплата накладеним платежем або на рахунок.`,
 };
 
 const minPrice = Math.min(...deliveryOptions.map((o) => o.price));
 
 const deliveryIcon: Record<string, IconName> = { "np-branch": "package", "np-courier": "truck", ukrposhta: "mail" };
-const paymentIcon: Record<PaymentId, IconName> = { card: "card", cod: "package", parts: "clock" };
+const paymentIcon: Record<PaymentId, IconName> = { card: "card", cod: "package", parts: "clock", invoice: "mail" };
 
 export default function DeliveryPage() {
   return (
@@ -105,8 +105,8 @@ export default function DeliveryPage() {
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <Callout tone="blue" icon="clock" title="Коли відправимо">
-            Замовлення приймаємо й опрацьовуємо <b>цілодобово</b>. Оформлені до 15:00 відправляємо того ж дня, пізніші —
-            наступного. Номер ТТН надішлемо в SMS.
+            Замовлення на сайті приймаємо <b>цілодобово</b>. Оформлені до 15:00 відправляємо того ж дня, пізніші —
+            наступного. Коли посилку відправимо, статус замовлення зміниться на «Відправлене».
           </Callout>
           <Callout tone="blue" icon="package" title="Зберігання посилки">
             Посилка чекає у відділенні {PARCEL_STORAGE_DAYS} робочих днів. Огляньте товар перед оплатою — якщо щось не так,
@@ -118,7 +118,7 @@ export default function DeliveryPage() {
       {/* Оплата */}
       <InfoCard id="payment">
         <InfoTitle icon="card" eyebrow="Оплата">Способи оплати</InfoTitle>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className={`mt-6 grid gap-4 ${paymentOptions.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
           {paymentOptions.map((o) => (
             <div key={o.id} className="rounded-[20px] border border-[#e3edf3] p-5">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#ffd51f] text-[#082c45]">
@@ -136,8 +136,8 @@ export default function DeliveryPage() {
         </div>
         <p className="mt-5 flex items-start gap-2.5 text-sm text-[#527083]">
           <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0 text-[#067eb7]" />
-          Онлайн-оплата проходить на захищеній сторінці платіжного сервісу — дані картки ми не бачимо й не зберігаємо.
-          Фіскальний чек надсилаємо на email або в SMS.
+          Оплату карткою онлайн підключимо найближчим часом. Поки що оплачуйте при отриманні або на рахунок — реквізити
+          надішлемо після підтвердження замовлення.
         </p>
       </InfoCard>
 
@@ -147,9 +147,9 @@ export default function DeliveryPage() {
         <Steps
           items={[
             { title: "Додайте товари в кошик", text: "Ціна доставки й прогрес до безкоштовної доставки видно одразу в кошику." },
-            { title: "Увійдіть і заповніть дані", text: "Місто, відділення чи адреса запам’ятовуються в профілі для наступних замовлень." },
-            { title: "Оберіть оплату", text: "Карткою онлайн, при отриманні або частинами — як зручніше." },
-            { title: "Отримайте посилку", text: "SMS із номером ТТН прийде в день відправлення. Огляньте товар у відділенні." },
+            { title: "Заповніть дані", text: "Реєстрація не обов’язкова. З акаунтом місто й відділення запам’ятовуються для наступних замовлень." },
+            { title: "Оберіть оплату", text: "При отриманні або на рахунок — як зручніше." },
+            { title: "Отримайте посилку", text: "Статус замовлення — у профілі або на сторінці «Де моє замовлення?». Огляньте товар у відділенні." },
           ]}
         />
       </InfoCard>
@@ -160,7 +160,7 @@ export default function DeliveryPage() {
           items={[
             { q: "Чи можна забрати замовлення самостійно?", a: "Ні, ми онлайн-магазин без пункту видачі. Найшвидше — Нова пошта: поштомати працюють цілодобово." },
             { q: "Чому кур’єрська доставка платна навіть від 3 000 ₴?", a: `Безкоштовна доставка діє для відділень і поштоматів. Адресна доставка Новою поштою коштує ${formatPrice(deliveryOptions.find((o) => o.id === "np-courier")?.price ?? 0)} за будь-якої суми замовлення.` },
-            { q: "Хто платить комісію за накладений платіж?", a: "Комісію за грошовий переказ стягує перевізник за своїми тарифами. Щоб її уникнути, оплатіть замовлення карткою онлайн." },
+            { q: "Хто платить комісію за накладений платіж?", a: "Комісію за грошовий переказ стягує перевізник за своїми тарифами. Щоб її уникнути, оберіть оплату на рахунок." },
             { q: "Доставляєте за кордон?", a: "Поки що лише по Україні. Слідкуйте за новинами в наших соцмережах." },
           ]}
         />

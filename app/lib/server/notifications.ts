@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { formatPrice, type Product } from "../../components/catalog-data";
 import { productUrl } from "../../components/product-details";
 import { orderStatusInfo, type OrderStatusId } from "../order-status";
-import type { Data, NotificationKind, StoredNotification, StoredUser } from "./db";
+import type { Data, NotificationKind, StoredNotification, StoredOrder, StoredUser } from "./db";
 import type { Mail } from "./mail";
 
 /*
@@ -72,7 +72,7 @@ export function productEvents(db: Data, product: Product, before: ProductSnapsho
 
 const statusText: Partial<Record<OrderStatusId, string>> = {
   confirmed: "підтверджено — готуємо до відправлення",
-  shipped: "відправлено. Номер накладної надішлемо в SMS",
+  shipped: "відправлено. Скоро посилка буде у вибраному відділенні чи за адресою",
   done: "виконано. Дякуємо за покупку — гарного відпочинку!",
   cancelled: "скасовано. Якщо це помилка — напишіть нам",
 };
@@ -87,4 +87,16 @@ export function orderEvent(user: StoredUser, number: string, status: OrderStatus
     text: `Ваше замовлення ${number} ${text}.`,
     href: "/account",
   }, mails);
+}
+
+/** Зміна статусу замовлення гостя → лист на email із замовлення */
+export function guestOrderEvent(order: StoredOrder, status: OrderStatusId, mails: Mail[]) {
+  const text = statusText[status];
+  if (!text || !order.contact.email) return;
+  mails.push({
+    to: order.contact.email,
+    subject: `Замовлення ${order.number}: ${orderStatusInfo[status].label.toLowerCase()}`,
+    text: `Ваше замовлення ${order.number} ${text}.`,
+    href: `/orders/track?number=${encodeURIComponent(order.number)}`,
+  });
 }

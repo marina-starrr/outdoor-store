@@ -11,7 +11,7 @@ const pages = [
   { path: "/favorites", h1: /Обране/ },
   { path: "/compare", h1: /Порівняння/ },
   { path: "/notifications", h1: /Сповіщення/ },
-  { path: "/about", h1: /довіряємо самі/ },
+  { path: "/about", h1: /сімейного відпочинку/ },
   { path: "/contacts", h1: /зв’язку/ },
   { path: "/delivery", h1: /Доставка/ },
   { path: "/returns", h1: /Обмін/ },

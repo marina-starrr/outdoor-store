@@ -26,7 +26,6 @@ export default function Home() {
             email: contacts.email,
             telephone: "+380800330121",
             areaServed: "UA",
-            foundingDate: "2014",
           },
           {
             "@context": "https://schema.org",

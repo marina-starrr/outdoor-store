@@ -11,7 +11,7 @@ import { useNotifications } from "./Notifications";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
-import { deliveryOptions, paymentOptions } from "./cart-logic";
+import { deliveryOptions, paymentTitle } from "./cart-logic";
 import { formatPrice, productsWord } from "./catalog-data";
 import { Field, FormError, PasswordInput, SubmitButton, formatPhone, inputCls, isPhoneComplete } from "./form-ui";
 
@@ -109,7 +109,8 @@ function GuestView({ onSuccess }: { onSuccess: () => void }) {
           ))}
         </ul>
         <p className="mt-8 text-sm text-white/80">
-          Переглядати каталог і додавати товари в кошик можна й без акаунта.
+          Переглядати каталог і оформлювати замовлення можна й без акаунта. Статус замовлення без входу —{" "}
+          <Link href="/orders/track" className="font-bold text-white underline">«Де моє замовлення?»</Link>
         </p>
       </div>
       <div className="p-6 sm:p-10">
@@ -180,7 +181,7 @@ function Dashboard({ user }: { user: AuthUser }) {
               Вийти
             </button>
           </nav>
-          {user.isAdmin && (
+          {(user.isAdmin || user.adminPending) && (
             <Link
               href="/admin"
               className="flex items-center justify-between gap-3 rounded-[22px] bg-[#ffd51f] px-5 py-4 text-[#082c45] transition hover:bg-[#ffe044]"
@@ -228,6 +229,8 @@ function Panel({ title, children, aside }: { title: string; children: ReactNode;
 
 function Orders() {
   const { add, openCart } = useCart();
+  // Після перенесення гостьових замовлень в акаунт список перечитується
+  const { ordersVersion } = useAuth();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -240,7 +243,7 @@ function Orders() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ordersVersion]);
 
   // «Повторити замовлення» — усі товари знову в кошик
   const repeat = (order: Order) => {
@@ -273,7 +276,7 @@ function Orders() {
             const [label, cls] = statusLabel[order.status];
             // «Самовивіз» — для замовлень, оформлених до того, як його прибрали
             const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? "Самовивіз";
-            const payment = paymentOptions.find((o) => o.id === order.payment)?.title;
+            const payment = paymentTitle(order.payment);
             const where = [order.delivery.city, order.delivery.branch && `№ ${order.delivery.branch}`, order.delivery.address].filter(Boolean).join(", ");
             return (
               <li key={order.number} className="rounded-2xl border border-[#e3edf3] p-5">

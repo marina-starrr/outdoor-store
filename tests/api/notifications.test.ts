@@ -11,7 +11,7 @@ import * as favorites from "../../app/api/favorites/route";
 import * as notifications from "../../app/api/notifications/route";
 import * as orders from "../../app/api/orders/route";
 import * as stockAlerts from "../../app/api/stock-alerts/route";
-import { call, sessionCookie, uniqueEmail } from "./helpers";
+import { call, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
 
 const ADMIN_EMAIL = "owner-notify@example.com";
 process.env.ADMIN_EMAILS = ADMIN_EMAIL;
@@ -41,6 +41,7 @@ const patchProduct = (id: string, body: object) => call(withParams(productItem.P
 
 beforeAll(async () => {
   admin = await newUser("Власник", ADMIN_EMAIL);
+  await markEmailVerified(ADMIN_EMAIL);
   customerEmail = uniqueEmail();
   customer = await newUser("Оксана", customerEmail);
   other = await newUser("Іван");
@@ -139,7 +140,7 @@ describe("статус замовлення", () => {
         lines: [{ id: "ch3", qty: 1 }],
         contact: { firstName: "Оксана", lastName: "Тест", phone: "+380 50 111 22 33" },
         delivery: { method: "np-branch", city: "Київ", branch: "1" },
-        payment: "card",
+        payment: "cod",
         agreed: true,
       },
     });

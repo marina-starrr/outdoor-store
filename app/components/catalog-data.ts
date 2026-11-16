@@ -30,8 +30,12 @@ export type Product = {
   oldPrice?: number;
   hit?: boolean;
   isNew?: boolean;
+  /** Середня оцінка зі схвалених відгуків покупців (0 — відгуків ще немає). Рахується при читанні з бази */
   rating: number;
+  /** Кількість схвалених відгуків. Рахується при читанні з бази */
   reviews: number;
+  /** Продано штук за замовленнями (без скасованих). Рахується при читанні з бази */
+  sold?: number;
   /** Похідне від stock: stock > 0 (рахується при читанні з бази) */
   inStock: boolean;
   /** Залишок на складі, шт. */
@@ -140,31 +144,32 @@ export const categoryBySlug = Object.fromEntries(
 
 /* ---------- Товари ---------- */
 
-type TentInput = Omit<Product, "category" | "specs" | "image" | "photo" | "attrs" | "stock"> & {
+/** Рейтинг і відгуки в початковому каталозі не задаються — лише справжні, з бази */
+type TentInput = Omit<Product, "category" | "specs" | "image" | "photo" | "attrs" | "stock" | "rating" | "reviews"> & {
   capacity: number;
   weight: number;
   image: PhotoKey;
 };
 
 const tentInputs: TentInput[] = [
-  { id: "np3", name: "Намет Nature Peak 3", brand: "Nature Peak", capacity: 3, price: 4890, oldPrice: 5790, weight: 3.1, rating: 4.8, reviews: 64, inStock: true, popularity: 1, image: "mountains" },
-  { id: "ov4", name: "Сімейний намет Outventure 4", brand: "Outventure", capacity: 4, price: 6200, oldPrice: 7290, weight: 5.4, rating: 4.7, reviews: 41, inStock: true, popularity: 2, image: "meadow" },
-  { id: "ch3", name: "Кемпінговий намет Coleman Horizon", brand: "Coleman", capacity: 3, price: 6200, hit: true, weight: 4.2, rating: 4.9, reviews: 112, inStock: true, popularity: 3, image: "lake" },
-  { id: "ch5", name: "Кемпінговий намет Coleman Horizon 5", brand: "Coleman", capacity: 5, price: 8400, hit: true, weight: 6.8, rating: 4.8, reviews: 57, inStock: true, popularity: 4, image: "forestNight" },
-  { id: "np2", name: "Намет Nature Peak 2 Lite", brand: "Nature Peak", capacity: 2, price: 3490, oldPrice: 4100, weight: 2.2, rating: 4.6, reviews: 38, inStock: true, popularity: 5, image: "sunset" },
-  { id: "ti-family", name: "Намет Terra Incognita Family 6", brand: "Terra Incognita", capacity: 6, price: 12900, isNew: true, weight: 9.6, rating: 4.9, reviews: 12, inStock: true, popularity: 6, image: "inside" },
-  { id: "tr-lite", name: "Намет Tramp Lite 2", brand: "Tramp", capacity: 2, price: 4990, weight: 1.9, rating: 4.7, reviews: 29, inStock: true, popularity: 7, image: "orange" },
-  { id: "ov-ar", name: "Сімейний намет Outventure Avalon 4", brand: "Outventure", capacity: 4, price: 7600, hit: true, weight: 6.1, rating: 4.8, reviews: 73, inStock: false, popularity: 8, image: "view" },
-  { id: "ti-wonder", name: "Намет Terra Incognita Wonder 2", brand: "Terra Incognita", capacity: 2, price: 5390, weight: 2.6, rating: 4.5, reviews: 18, inStock: true, popularity: 9, image: "starry" },
-  { id: "tr-sphinx", name: "Намет Tramp Sphinx 3", brand: "Tramp", capacity: 3, price: 7290, oldPrice: 8590, weight: 3.4, rating: 4.8, reviews: 46, inStock: true, popularity: 10, image: "rocks" },
-  { id: "np-base", name: "Намет-шатро Nature Peak Base Camp 8", brand: "Nature Peak", capacity: 8, price: 23000, isNew: true, weight: 14.5, rating: 5, reviews: 7, inStock: true, popularity: 11, image: "meadow" },
-  { id: "ch-tasman", name: "Намет Coleman Tasman 2", brand: "Coleman", capacity: 2, price: 3990, weight: 2.8, rating: 4.4, reviews: 22, inStock: true, popularity: 12, image: "milkyWay" },
-  { id: "ti-platou", name: "Намет Terra Incognita Platou 4", brand: "Terra Incognita", capacity: 4, price: 9890, oldPrice: 11290, weight: 5.9, rating: 4.7, reviews: 31, inStock: true, popularity: 13, image: "lake" },
-  { id: "tr-bell", name: "Намет-купол Tramp Bell 3", brand: "Tramp", capacity: 3, price: 5890, weight: 3.8, rating: 4.6, reviews: 15, inStock: true, popularity: 14, image: "mountains" },
-  { id: "ov-camp", name: "Кемпінговий намет Outventure Camp 3", brand: "Outventure", capacity: 3, price: 4890, oldPrice: 5490, weight: 3.9, rating: 4.5, reviews: 26, inStock: true, popularity: 15, image: "sunset" },
-  { id: "ch-ridgeline", name: "Намет Coleman Ridgeline 4 Plus", brand: "Coleman", capacity: 4, price: 10490, weight: 7.2, rating: 4.8, reviews: 49, inStock: true, popularity: 16, image: "forestNight" },
-  { id: "np-trek", name: "Трекінговий намет Nature Peak Trek 1", brand: "Nature Peak", capacity: 1, price: 2490, weight: 1.4, rating: 4.3, reviews: 19, inStock: true, popularity: 17, image: "orange" },
-  { id: "ti-minima", name: "Намет Terra Incognita Minima 3", brand: "Terra Incognita", capacity: 3, price: 6690, hit: true, weight: 3.3, rating: 4.9, reviews: 88, inStock: true, popularity: 18, image: "view" },
+  { id: "np3", name: "Намет Nature Peak 3", brand: "Nature Peak", capacity: 3, price: 4890, oldPrice: 5790, weight: 3.1, inStock: true, popularity: 1, image: "mountains" },
+  { id: "ov4", name: "Сімейний намет Outventure 4", brand: "Outventure", capacity: 4, price: 6200, oldPrice: 7290, weight: 5.4, inStock: true, popularity: 2, image: "meadow" },
+  { id: "ch3", name: "Кемпінговий намет Coleman Horizon", brand: "Coleman", capacity: 3, price: 6200, hit: true, weight: 4.2, inStock: true, popularity: 3, image: "lake" },
+  { id: "ch5", name: "Кемпінговий намет Coleman Horizon 5", brand: "Coleman", capacity: 5, price: 8400, hit: true, weight: 6.8, inStock: true, popularity: 4, image: "forestNight" },
+  { id: "np2", name: "Намет Nature Peak 2 Lite", brand: "Nature Peak", capacity: 2, price: 3490, oldPrice: 4100, weight: 2.2, inStock: true, popularity: 5, image: "sunset" },
+  { id: "ti-family", name: "Намет Terra Incognita Family 6", brand: "Terra Incognita", capacity: 6, price: 12900, isNew: true, weight: 9.6, inStock: true, popularity: 6, image: "inside" },
+  { id: "tr-lite", name: "Намет Tramp Lite 2", brand: "Tramp", capacity: 2, price: 4990, weight: 1.9, inStock: true, popularity: 7, image: "orange" },
+  { id: "ov-ar", name: "Сімейний намет Outventure Avalon 4", brand: "Outventure", capacity: 4, price: 7600, hit: true, weight: 6.1, inStock: false, popularity: 8, image: "view" },
+  { id: "ti-wonder", name: "Намет Terra Incognita Wonder 2", brand: "Terra Incognita", capacity: 2, price: 5390, weight: 2.6, inStock: true, popularity: 9, image: "starry" },
+  { id: "tr-sphinx", name: "Намет Tramp Sphinx 3", brand: "Tramp", capacity: 3, price: 7290, oldPrice: 8590, weight: 3.4, inStock: true, popularity: 10, image: "rocks" },
+  { id: "np-base", name: "Намет-шатро Nature Peak Base Camp 8", brand: "Nature Peak", capacity: 8, price: 23000, isNew: true, weight: 14.5, inStock: true, popularity: 11, image: "meadow" },
+  { id: "ch-tasman", name: "Намет Coleman Tasman 2", brand: "Coleman", capacity: 2, price: 3990, weight: 2.8, inStock: true, popularity: 12, image: "milkyWay" },
+  { id: "ti-platou", name: "Намет Terra Incognita Platou 4", brand: "Terra Incognita", capacity: 4, price: 9890, oldPrice: 11290, weight: 5.9, inStock: true, popularity: 13, image: "lake" },
+  { id: "tr-bell", name: "Намет-купол Tramp Bell 3", brand: "Tramp", capacity: 3, price: 5890, weight: 3.8, inStock: true, popularity: 14, image: "mountains" },
+  { id: "ov-camp", name: "Кемпінговий намет Outventure Camp 3", brand: "Outventure", capacity: 3, price: 4890, oldPrice: 5490, weight: 3.9, inStock: true, popularity: 15, image: "sunset" },
+  { id: "ch-ridgeline", name: "Намет Coleman Ridgeline 4 Plus", brand: "Coleman", capacity: 4, price: 10490, weight: 7.2, inStock: true, popularity: 16, image: "forestNight" },
+  { id: "np-trek", name: "Трекінговий намет Nature Peak Trek 1", brand: "Nature Peak", capacity: 1, price: 2490, weight: 1.4, inStock: true, popularity: 17, image: "orange" },
+  { id: "ti-minima", name: "Намет Terra Incognita Minima 3", brand: "Terra Incognita", capacity: 3, price: 6690, hit: true, weight: 3.3, inStock: true, popularity: 18, image: "view" },
 ];
 
 const places = (n: number) =>
@@ -179,6 +184,8 @@ const tents: Product[] = tentInputs.map(({ weight, image, ...t }) => {
   const big = t.capacity >= 6;
   return {
     ...t,
+    rating: 0,
+    reviews: 0,
     stock: seedStock(t.id, t.inStock),
     category: "tents",
     specs: `${t.capacity} ${places(t.capacity)} · ${kg(weight)}`,
@@ -201,7 +208,7 @@ const tents: Product[] = tentInputs.map(({ weight, image, ...t }) => {
   };
 });
 
-type Input = Omit<Product, "category" | "image" | "popularity" | "photo" | "attrs" | "stock"> & {
+type Input = Omit<Product, "category" | "image" | "popularity" | "photo" | "attrs" | "stock" | "rating" | "reviews"> & {
   image: PhotoKey;
 };
 
@@ -216,6 +223,8 @@ function seedStock(id: string, inStock: boolean) {
 function make(category: CategorySlug, list: Input[]): Product[] {
   return list.map((p, i) => ({
     ...p,
+    rating: 0,
+    reviews: 0,
     stock: seedStock(p.id, p.inStock),
     category,
     popularity: i + 1,
@@ -279,56 +288,56 @@ const otherAttrs: Record<string, [string, string][]> = {
 
 const others: Product[] = [
   ...make("backpacks", [
-    { id: "bp-trail45", name: "Рюкзак Tramp Trail Pro 45L", brand: "Tramp", price: 2690, hit: true, rating: 4.8, reviews: 96, inStock: true, specs: "45 л · 1,4 кг", image: "backpackTrail" },
-    { id: "bp-np65", name: "Рюкзак Nature Peak Expedition 65L", brand: "Nature Peak", price: 4390, oldPrice: 5190, rating: 4.7, reviews: 34, inStock: true, specs: "65 л · 2,1 кг", image: "backpackGreen" },
-    { id: "bp-ov30", name: "Рюкзак Outventure Day 30L", brand: "Outventure", price: 1290, rating: 4.5, reviews: 58, inStock: true, specs: "30 л · 0,8 кг", image: "backpackCity" },
-    { id: "bp-ti55", name: "Рюкзак Terra Incognita Mountain 55L", brand: "Terra Incognita", price: 3590, rating: 4.8, reviews: 27, inStock: true, specs: "55 л · 1,8 кг", image: "hikers" },
-    { id: "bp-kids", name: "Дитячий рюкзак Outventure Junior 18L", brand: "Outventure", price: 890, isNew: true, rating: 4.6, reviews: 11, inStock: true, specs: "18 л · 0,5 кг", image: "backpackGear" },
-    { id: "bp-ch40", name: "Рюкзак Coleman Voyager 40L", brand: "Coleman", price: 2190, oldPrice: 2590, rating: 4.4, reviews: 19, inStock: false, specs: "40 л · 1,2 кг", image: "backpackTrail" },
+    { id: "bp-trail45", name: "Рюкзак Tramp Trail Pro 45L", brand: "Tramp", price: 2690, hit: true, inStock: true, specs: "45 л · 1,4 кг", image: "backpackTrail" },
+    { id: "bp-np65", name: "Рюкзак Nature Peak Expedition 65L", brand: "Nature Peak", price: 4390, oldPrice: 5190, inStock: true, specs: "65 л · 2,1 кг", image: "backpackGreen" },
+    { id: "bp-ov30", name: "Рюкзак Outventure Day 30L", brand: "Outventure", price: 1290, inStock: true, specs: "30 л · 0,8 кг", image: "backpackCity" },
+    { id: "bp-ti55", name: "Рюкзак Terra Incognita Mountain 55L", brand: "Terra Incognita", price: 3590, inStock: true, specs: "55 л · 1,8 кг", image: "hikers" },
+    { id: "bp-kids", name: "Дитячий рюкзак Outventure Junior 18L", brand: "Outventure", price: 890, isNew: true, inStock: true, specs: "18 л · 0,5 кг", image: "backpackGear" },
+    { id: "bp-ch40", name: "Рюкзак Coleman Voyager 40L", brand: "Coleman", price: 2190, oldPrice: 2590, inStock: false, specs: "40 л · 1,2 кг", image: "backpackTrail" },
   ]),
   ...make("sleeping-bags", [
-    { id: "sb-alpine", name: "Спальник Nature Peak Alpine −5°C", brand: "Nature Peak", price: 2290, hit: true, rating: 4.8, reviews: 71, inStock: true, specs: "комфорт −5°C · 1,6 кг", image: "sleepingBlue" },
-    { id: "sb-summer", name: "Спальник-ковдра Outventure Summer +10°C", brand: "Outventure", price: 1590, rating: 4.5, reviews: 44, inStock: true, specs: "комфорт +10°C · 1,1 кг", image: "sleepingGrass" },
-    { id: "sb-double", name: "Двомісний спальник Coleman Duo", brand: "Coleman", price: 3890, oldPrice: 4490, rating: 4.7, reviews: 23, inStock: true, specs: "комфорт +3°C · 3,2 кг", image: "sleepingCar" },
-    { id: "sb-winter", name: "Спальник Terra Incognita Siberia −15°C", brand: "Terra Incognita", price: 5490, isNew: true, rating: 4.9, reviews: 9, inStock: true, specs: "комфорт −15°C · 2,4 кг", image: "sleepingBlue" },
-    { id: "sb-kids", name: "Дитячий спальник Tramp Kids", brand: "Tramp", price: 1790, rating: 4.6, reviews: 16, inStock: true, specs: "комфорт +5°C · 0,9 кг", image: "sleepingGrass" },
+    { id: "sb-alpine", name: "Спальник Nature Peak Alpine −5°C", brand: "Nature Peak", price: 2290, hit: true, inStock: true, specs: "комфорт −5°C · 1,6 кг", image: "sleepingBlue" },
+    { id: "sb-summer", name: "Спальник-ковдра Outventure Summer +10°C", brand: "Outventure", price: 1590, inStock: true, specs: "комфорт +10°C · 1,1 кг", image: "sleepingGrass" },
+    { id: "sb-double", name: "Двомісний спальник Coleman Duo", brand: "Coleman", price: 3890, oldPrice: 4490, inStock: true, specs: "комфорт +3°C · 3,2 кг", image: "sleepingCar" },
+    { id: "sb-winter", name: "Спальник Terra Incognita Siberia −15°C", brand: "Terra Incognita", price: 5490, isNew: true, inStock: true, specs: "комфорт −15°C · 2,4 кг", image: "sleepingBlue" },
+    { id: "sb-kids", name: "Дитячий спальник Tramp Kids", brand: "Tramp", price: 1790, inStock: true, specs: "комфорт +5°C · 0,9 кг", image: "sleepingGrass" },
   ]),
   ...make("cookware", [
-    { id: "ck-set", name: "Набір посуду Tramp Camp Cook", brand: "Tramp", price: 1190, oldPrice: 1490, rating: 4.7, reviews: 83, inStock: true, specs: "6 предметів · 0,7 кг", image: "cookStove" },
-    { id: "ck-kettle", name: "Чайник Nature Peak Trek 1,2 л", brand: "Nature Peak", price: 690, hit: true, rating: 4.8, reviews: 102, inStock: true, specs: "1,2 л · алюміній", image: "kettle" },
-    { id: "ck-burner", name: "Газовий пальник Coleman FyreStorm", brand: "Coleman", price: 1890, rating: 4.6, reviews: 37, inStock: true, specs: "2 800 Вт · п'єзопідпал", image: "cookStove" },
-    { id: "ck-pot", name: "Казанок Terra Incognita Pot 4 л", brand: "Terra Incognita", price: 990, rating: 4.5, reviews: 21, inStock: true, specs: "4 л · з кришкою", image: "campfire" },
-    { id: "ck-mug", name: "Термочашка Outventure 350 мл", brand: "Outventure", price: 390, isNew: true, rating: 4.7, reviews: 48, inStock: true, specs: "350 мл · сталь", image: "mug" },
+    { id: "ck-set", name: "Набір посуду Tramp Camp Cook", brand: "Tramp", price: 1190, oldPrice: 1490, inStock: true, specs: "6 предметів · 0,7 кг", image: "cookStove" },
+    { id: "ck-kettle", name: "Чайник Nature Peak Trek 1,2 л", brand: "Nature Peak", price: 690, hit: true, inStock: true, specs: "1,2 л · алюміній", image: "kettle" },
+    { id: "ck-burner", name: "Газовий пальник Coleman FyreStorm", brand: "Coleman", price: 1890, inStock: true, specs: "2 800 Вт · п'єзопідпал", image: "cookStove" },
+    { id: "ck-pot", name: "Казанок Terra Incognita Pot 4 л", brand: "Terra Incognita", price: 990, inStock: true, specs: "4 л · з кришкою", image: "campfire" },
+    { id: "ck-mug", name: "Термочашка Outventure 350 мл", brand: "Outventure", price: 390, isNew: true, inStock: true, specs: "350 мл · сталь", image: "mug" },
   ]),
   ...make("furniture", [
-    { id: "fu-chair", name: "Крісло розкладне Coleman Deck", brand: "Coleman", price: 1690, hit: true, rating: 4.8, reviews: 66, inStock: true, specs: "до 120 кг · 3,5 кг", image: "campChairs" },
-    { id: "fu-table", name: "Стіл розкладний Tramp Roll 120", brand: "Tramp", price: 2390, oldPrice: 2790, rating: 4.6, reviews: 29, inStock: true, specs: "120×70 см · 4,8 кг", image: "campTable" },
-    { id: "fu-set", name: "Набір меблів Outventure Picnic 4+1", brand: "Outventure", price: 4990, rating: 4.7, reviews: 18, inStock: true, specs: "стіл + 4 стільці", image: "friendsFire" },
-    { id: "fu-stool", name: "Стілець Nature Peak Compact", brand: "Nature Peak", price: 490, rating: 4.4, reviews: 41, inStock: true, specs: "до 100 кг · 0,9 кг", image: "campChairs" },
+    { id: "fu-chair", name: "Крісло розкладне Coleman Deck", brand: "Coleman", price: 1690, hit: true, inStock: true, specs: "до 120 кг · 3,5 кг", image: "campChairs" },
+    { id: "fu-table", name: "Стіл розкладний Tramp Roll 120", brand: "Tramp", price: 2390, oldPrice: 2790, inStock: true, specs: "120×70 см · 4,8 кг", image: "campTable" },
+    { id: "fu-set", name: "Набір меблів Outventure Picnic 4+1", brand: "Outventure", price: 4990, inStock: true, specs: "стіл + 4 стільці", image: "friendsFire" },
+    { id: "fu-stool", name: "Стілець Nature Peak Compact", brand: "Nature Peak", price: 490, inStock: true, specs: "до 100 кг · 0,9 кг", image: "campChairs" },
   ]),
   ...make("lighting", [
-    { id: "li-head", name: "Налобний ліхтар Nature Peak Beam 400", brand: "Nature Peak", price: 790, hit: true, rating: 4.8, reviews: 118, inStock: true, specs: "400 лм · USB-C", image: "glowTent" },
-    { id: "li-lantern", name: "Кемпінгова лампа Coleman Northstar", brand: "Coleman", price: 1490, rating: 4.7, reviews: 32, inStock: true, specs: "600 лм · 3 режими", image: "forestNight" },
-    { id: "li-garland", name: "LED-гірлянда Outventure Camp 5 м", brand: "Outventure", price: 450, isNew: true, rating: 4.6, reviews: 25, inStock: true, specs: "5 м · сонячна панель", image: "glowTent" },
-    { id: "li-hand", name: "Ручний ліхтар Tramp Hunter", brand: "Tramp", price: 590, oldPrice: 720, rating: 4.5, reviews: 19, inStock: true, specs: "300 лм · IPX6", image: "starry" },
+    { id: "li-head", name: "Налобний ліхтар Nature Peak Beam 400", brand: "Nature Peak", price: 790, hit: true, inStock: true, specs: "400 лм · USB-C", image: "glowTent" },
+    { id: "li-lantern", name: "Кемпінгова лампа Coleman Northstar", brand: "Coleman", price: 1490, inStock: true, specs: "600 лм · 3 режими", image: "forestNight" },
+    { id: "li-garland", name: "LED-гірлянда Outventure Camp 5 м", brand: "Outventure", price: 450, isNew: true, inStock: true, specs: "5 м · сонячна панель", image: "glowTent" },
+    { id: "li-hand", name: "Ручний ліхтар Tramp Hunter", brand: "Tramp", price: 590, oldPrice: 720, inStock: true, specs: "300 лм · IPX6", image: "starry" },
   ]),
   ...make("grills", [
-    { id: "gr-mangal", name: "Мангал-валіза Tramp Steel 6", brand: "Tramp", price: 1290, hit: true, rating: 4.7, reviews: 54, inStock: true, specs: "6 шампурів · 3 мм", image: "skewers" },
-    { id: "gr-gas", name: "Газовий гриль Coleman Fold N Go", brand: "Coleman", price: 6490, oldPrice: 7290, rating: 4.8, reviews: 21, inStock: true, specs: "2 200 Вт · 7 кг", image: "steak" },
-    { id: "gr-skewers", name: "Набір шампурів Nature Peak 6 шт", brand: "Nature Peak", price: 350, rating: 4.5, reviews: 38, inStock: true, specs: "60 см · нержавійка", image: "skewers" },
-    { id: "gr-grid", name: "Решітка-гриль Outventure BBQ", brand: "Outventure", price: 420, rating: 4.4, reviews: 14, inStock: true, specs: "30×40 см", image: "ribs" },
+    { id: "gr-mangal", name: "Мангал-валіза Tramp Steel 6", brand: "Tramp", price: 1290, hit: true, inStock: true, specs: "6 шампурів · 3 мм", image: "skewers" },
+    { id: "gr-gas", name: "Газовий гриль Coleman Fold N Go", brand: "Coleman", price: 6490, oldPrice: 7290, inStock: true, specs: "2 200 Вт · 7 кг", image: "steak" },
+    { id: "gr-skewers", name: "Набір шампурів Nature Peak 6 шт", brand: "Nature Peak", price: 350, inStock: true, specs: "60 см · нержавійка", image: "skewers" },
+    { id: "gr-grid", name: "Решітка-гриль Outventure BBQ", brand: "Outventure", price: 420, inStock: true, specs: "30×40 см", image: "ribs" },
   ]),
   ...make("hammocks", [
-    { id: "hm-single", name: "Гамак Tramp Relax Single", brand: "Tramp", price: 990, rating: 4.6, reviews: 27, inStock: true, specs: "до 150 кг · 0,5 кг", image: "hammockCabin" },
-    { id: "hm-double", name: "Гамак Nature Peak Double", brand: "Nature Peak", price: 1590, oldPrice: 1890, hit: true, rating: 4.8, reviews: 42, inStock: true, specs: "до 200 кг · 0,8 кг", image: "hammockTent" },
-    { id: "hm-net", name: "Гамак з москітною сіткою Terra Incognita", brand: "Terra Incognita", price: 2190, isNew: true, rating: 4.7, reviews: 8, inStock: true, specs: "до 150 кг · сітка", image: "hammockCabin" },
+    { id: "hm-single", name: "Гамак Tramp Relax Single", brand: "Tramp", price: 990, inStock: true, specs: "до 150 кг · 0,5 кг", image: "hammockCabin" },
+    { id: "hm-double", name: "Гамак Nature Peak Double", brand: "Nature Peak", price: 1590, oldPrice: 1890, hit: true, inStock: true, specs: "до 200 кг · 0,8 кг", image: "hammockTent" },
+    { id: "hm-net", name: "Гамак з москітною сіткою Terra Incognita", brand: "Terra Incognita", price: 2190, isNew: true, inStock: true, specs: "до 150 кг · сітка", image: "hammockCabin" },
   ]),
   ...make("accessories", [
-    { id: "ac-mat", name: "Самонадувний килимок Tramp Comfort", brand: "Tramp", price: 1890, hit: true, rating: 4.8, reviews: 77, inStock: true, specs: "5 см · 1,2 кг", image: "backpackGear" },
-    { id: "ac-poles", name: "Трекінгові палиці Nature Peak (пара)", brand: "Nature Peak", price: 1190, rating: 4.6, reviews: 33, inStock: true, specs: "алюміній · 110–135 см", image: "hikers" },
-    { id: "ac-flask", name: "Термос Coleman 1 л", brand: "Coleman", price: 890, oldPrice: 1050, rating: 4.7, reviews: 51, inStock: true, specs: "1 л · 24 год тепла", image: "mug" },
-    { id: "ac-carabiner", name: "Карабін Outventure Clip", brand: "Outventure", price: 100, rating: 4.3, reviews: 12, inStock: true, specs: "алюміній · до 10 кг", image: "backpackGear" },
-    { id: "ac-raincover", name: "Чохол на рюкзак Terra Incognita 50–70 л", brand: "Terra Incognita", price: 350, rating: 4.5, reviews: 17, inStock: true, specs: "водовідштовхувальний", image: "backpackGreen" },
+    { id: "ac-mat", name: "Самонадувний килимок Tramp Comfort", brand: "Tramp", price: 1890, hit: true, inStock: true, specs: "5 см · 1,2 кг", image: "backpackGear" },
+    { id: "ac-poles", name: "Трекінгові палиці Nature Peak (пара)", brand: "Nature Peak", price: 1190, inStock: true, specs: "алюміній · 110–135 см", image: "hikers" },
+    { id: "ac-flask", name: "Термос Coleman 1 л", brand: "Coleman", price: 890, oldPrice: 1050, inStock: true, specs: "1 л · 24 год тепла", image: "mug" },
+    { id: "ac-carabiner", name: "Карабін Outventure Clip", brand: "Outventure", price: 100, inStock: true, specs: "алюміній · до 10 кг", image: "backpackGear" },
+    { id: "ac-raincover", name: "Чохол на рюкзак Terra Incognita 50–70 л", brand: "Terra Incognita", price: 350, inStock: true, specs: "водовідштовхувальний", image: "backpackGreen" },
   ]),
 ];
 
@@ -351,6 +360,16 @@ export function withDerived(p: Product): Product {
     inStock: p.stock > 0,
   };
 }
+
+/** Від скількох проданих штук товар потрапляє в хіти без позначки «Хіт» */
+export const HIT_SOLD = 10;
+
+/** Порядок «за продажами»: реально продані штуки, далі — порядок «Популярні» з адмінки */
+export const bySales = (a: Product, b: Product) => (b.sold ?? 0) - (a.sold ?? 0) || a.popularity - b.popularity;
+
+/** Хіти: позначені адміністратором «Хіт» або ті, що справді добре продаються */
+export const selectHits = (products: Product[]) =>
+  products.filter((p) => !p.hidden && (p.hit || (p.sold ?? 0) >= HIT_SOLD)).sort(bySales);
 
 /** Бренди зі списку товарів (для фільтрів) */
 export const brandsOf = (list: Product[]) => Array.from(new Set(list.map((p) => p.brand))).sort();

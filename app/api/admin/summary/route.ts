@@ -3,6 +3,7 @@ import { LOW_STOCK } from "../../../components/catalog-data";
 import { json, requireAdmin } from "../../../lib/server/auth";
 import { loadCatalog } from "../../../lib/server/catalog";
 import { read } from "../../../lib/server/db";
+import { allOrders } from "../../../lib/server/orders";
 
 /** Зведення для головної сторінки адмін-панелі */
 export async function GET(req: NextRequest) {
@@ -10,10 +11,11 @@ export async function GET(req: NextRequest) {
   if ("response" in auth) return auth.response;
 
   const products = await loadCatalog();
-  const { orders, messages, customers } = await read((db) => ({
-    orders: db.users.flatMap((u) => u.orders),
+  const { orders, messages, customers, pendingReviews } = await read((db) => ({
+    orders: allOrders(db).map((r) => r.order),
     messages: db.messages ?? [],
     customers: db.users.length,
+    pendingReviews: (db.reviews ?? []).filter((r) => r.status === "pending").length,
   }));
 
   const active = orders.filter((o) => o.status !== "cancelled");
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
         .map((p) => ({ id: p.id, name: p.name, stock: p.stock, category: p.category })),
     },
     messages: { unread: messages.filter((m) => !m.done).length },
+    reviews: { pending: pendingReviews },
     customers,
   });
 }

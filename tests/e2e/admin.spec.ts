@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { E2E_ADMIN_EMAIL } from "../../playwright.config";
-import { PASSWORD, register, uniqueEmail } from "./helpers";
+import { PASSWORD, register, uniqueEmail, verifyAdminViaScript } from "./helpers";
 
 /*
  * Повний сценарій адмін-панелі в браузері. Кроки залежать один від одного,
@@ -21,7 +21,7 @@ async function customerOrder(request: APIRequestContext, productId: string, qty:
       lines: [{ id: productId, qty }],
       contact: { firstName: "Олег", lastName: "Покупець", phone: "+380 67 123 45 67" },
       delivery: { method: "np-branch", city: "Полтава", branch: "3" },
-      payment: "card",
+      payment: "cod",
       agreed: true,
     },
   });
@@ -67,6 +67,15 @@ test("адміністратор входить і бачить огляд", asy
   // У профілі з'являється посилання на адмін-панель
   await admin.getByRole("link", { name: "Адмін-панель" }).click();
   await expect(admin).toHaveURL("/admin");
+  // Але доступ — лише після підтвердження email: інакше адмінку отримав би будь-хто з цією адресою
+  await expect(admin.getByRole("heading", { name: "Підтвердіть email" })).toBeVisible();
+  expect((await admin.request.get("/api/admin/products")).status()).toBe(403);
+
+  // Пошту на тестовому сервері не налаштовано — сторінка підказує команду для сервера
+  await admin.getByRole("button", { name: "Надіслати лист ще раз" }).click();
+  await expect(admin.getByText(`yarn admin:verify ${E2E_ADMIN_EMAIL}`)).toBeVisible();
+  await verifyAdminViaScript(admin.request, E2E_ADMIN_EMAIL);
+  await admin.reload();
   await expect(admin.getByRole("heading", { name: "Огляд" })).toBeVisible();
   await expect(admin.getByText("Товари на сайті")).toBeVisible();
   await expect(admin.getByText("Закінчуються на складі")).toBeVisible();
@@ -139,8 +148,11 @@ test("зміна ціни прямо в списку оновлює сайт", a
   await admin.goto("/admin/products");
   const price = admin.getByLabel(`Ціна ${PRODUCT.name}`, { exact: true });
   await saveInline(price, "990");
-  await page.goto(productUrl);
-  await expect(page.getByText("990 ₴").first()).toBeVisible();
+  // Перший запит одразу після збереження може ще отримати попередню версію з кешу — перезавантажуємо
+  await expect(async () => {
+    await page.goto(productUrl);
+    await expect(page.getByText("990 ₴").first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
 });
 
 test("залишок: кошик не дає взяти більше, ніж є; 0 — «Очікується»", async ({ page }) => {
@@ -164,9 +176,12 @@ test("залишок: кошик не дає взяти більше, ніж є;
   const stock = admin.getByLabel(`Залишок ${PRODUCT.name}`, { exact: true });
   await saveInline(stock, "0");
 
-  await page.goto(productUrl);
-  // Сторінка приходить потоком: поки він не дійшов, у DOM буває ще прихована копія — шукаємо лише в <main>
-  await expect(page.getByRole("main").getByText("Очікується надходження")).toBeVisible();
+  // Сторінка приходить потоком: поки він не дійшов, у DOM буває ще прихована копія — шукаємо лише в <main>.
+  // Перший запит одразу після збереження може ще отримати попередню версію з кешу — перезавантажуємо
+  await expect(async () => {
+    await page.goto(productUrl);
+    await expect(page.getByRole("main").getByText("Очікується надходження")).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: /^Додати в кошик/ })).toHaveCount(0);
 
   await saveInline(stock, "4");
@@ -184,8 +199,13 @@ test("редагування у формі: стара ціна, опис", asyn
   await editor.getByRole("button", { name: "Зберегти зміни" }).click();
   await expect(editor).toBeHidden();
 
-  await page.goto(productUrl);
-  await expect(page.getByText("Яскравий ліхтар для табору.").first()).toBeVisible();
+  // Паралельні тести оформлюють замовлення, і кожне скидає кеш каталогу:
+  // перший запит одразу після збереження іноді ще отримує попередню версію
+  // сторінки (кеш Next оновлюється за мить). Перевіряємо з перезавантаженням
+  await expect(async () => {
+    await page.goto(productUrl);
+    await expect(page.getByText("Яскравий ліхтар для табору.").first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
   await expect(page.getByText("−23%").first()).toBeVisible();
 });
 

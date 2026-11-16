@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type { NextRequest } from "next/server";
 import {
   cartTotals,
@@ -12,6 +12,7 @@ import {
 import { withDerived } from "../../components/catalog-data";
 import {
   cleanText,
+  clientIp,
   error,
   getUser,
   isEmail,
@@ -19,10 +20,19 @@ import {
   isSameOrigin,
   json,
   knownProductIds,
+  rateLimiter,
   sanitizeCart,
+  sha256,
 } from "../../lib/server/auth";
 import { invalidateCatalog, loadCatalog, writeCatalog } from "../../lib/server/catalog";
 import type { StoredOrder } from "../../lib/server/db";
+import { sendMail } from "../../lib/server/mail";
+import { checkCity } from "../../lib/server/novaposhta";
+import { newOrderNumber, orderPlacedMail } from "../../lib/server/orders";
+import { newOrderText, notifyAdmin } from "../../lib/server/telegram";
+
+/** Гостьові замовлення: не більше 5 за 30 хвилин з однієї IP-адреси */
+const guestOrdersLimited = rateLimiter(5, 30 * 60_000);
 
 /** Історія замовлень поточного користувача */
 export async function GET(req: NextRequest) {
@@ -33,13 +43,17 @@ export async function GET(req: NextRequest) {
 
 class StockError extends Error {}
 
-/** Оформлення замовлення — лише для авторизованих користувачів */
+/**
+ * Оформлення замовлення — і з акаунтом, і без нього (гість).
+ * Гість отримує claimToken: за ним браузер пізніше перенесе замовлення в акаунт
+ */
 export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return error("Forbidden", 403);
   const user = await getUser(req);
-  if (!user) return error("Увійдіть, щоб оформити замовлення", 401);
 
   const body = await req.json().catch(() => ({}));
+  // Пастка для ботів: приховане поле, яке людина не заповнює
+  if (!user && cleanText(body.website, 100)) return error("Не вдалося оформити замовлення");
   if (body.agreed !== true)
     return error("Підтвердьте згоду з умовами доставки, повернення та політикою конфіденційності");
 
@@ -60,7 +74,7 @@ export async function POST(req: NextRequest) {
   const promo = cleanText(body.promo, 20).toUpperCase() || undefined;
   const totals = cartTotals(lines, method, promo && promoCodes[promo] ? promo : undefined);
   if (paymentOption.minTotal && totals.total < paymentOption.minTotal)
-    return error("Оплата частинами доступна від 3 000 ₴");
+    return error(`«${paymentOption.title}» доступна від ${paymentOption.minTotal} ₴`);
 
   const contact = {
     firstName: cleanText(body.contact?.firstName, 50),
@@ -70,10 +84,15 @@ export async function POST(req: NextRequest) {
   };
   if (contact.firstName.length < 2 || contact.lastName.length < 2) return error("Вкажіть ім'я та прізвище");
   if (!contact.phone || !isPhone(contact.phone)) return error("Перевірте номер телефону");
+  // Гостю email потрібен для підтвердження і листів про статус
+  if (!user && !contact.email) return error("Вкажіть email — надішлемо на нього підтвердження");
   if (contact.email && !isEmail(contact.email)) return error("Перевірте email");
 
-  const delivery: StoredOrder["delivery"] = { method, city: cleanText(body.delivery?.city, 60) };
-  if (delivery.city!.length < 2) return error("Вкажіть місто");
+  // Місто: існує в довіднику Нової пошти, і обраним способом туди можна доставити
+  const city = await checkCity(method, cleanText(body.delivery?.cityRef, 60), cleanText(body.delivery?.city, 120));
+  // field — щоб браузер показав помилку під полем «Місто»
+  if (!city.ok) return json({ error: city.error, field: "city" }, 400);
+  const delivery: StoredOrder["delivery"] = { method, city: city.label, ...(city.ref ? { cityRef: city.ref } : {}) };
   if (method === "np-branch" || method === "ukrposhta") {
     delivery.branch = cleanText(body.delivery?.branch, 20);
     if (!delivery.branch) return error("Вкажіть відділення");
@@ -83,6 +102,11 @@ export async function POST(req: NextRequest) {
     if (delivery.address.length < 5) return error("Вкажіть адресу");
   }
 
+  // Ліміт рахуємо лише для замовлень, що пройшли перевірку
+  if (!user && guestOrdersLimited(clientIp(req)))
+    return error("Забагато замовлень за короткий час. Спробуйте пізніше або зателефонуйте нам.", 429);
+
+  const claimToken = user ? undefined : randomBytes(24).toString("base64url");
   let order: StoredOrder;
   try {
     // Перевірка залишків і списання — в одному записі, щоб два покупці
@@ -104,9 +128,8 @@ export async function POST(req: NextRequest) {
         p.inStock = p.stock > 0;
       }
 
-      const u = db.users.find((x) => x.id === user.id)!;
       const created: StoredOrder = {
-        number: `FC-${String(Date.now()).slice(-5)}${randomInt(10, 99)}`,
+        number: newOrderNumber(db),
         createdAt: new Date().toISOString(),
         status: "new",
         lines: lines.map((l) => ({ id: l.id, name: l.product.name, price: l.product.price, qty: l.qty })),
@@ -121,11 +144,16 @@ export async function POST(req: NextRequest) {
         comment: cleanText(body.comment, 500) || undefined,
         noCall: !!body.noCall,
       };
-      u.orders.push(created);
-      u.cart = [];
-      u.lastDelivery = delivery;
-      // Якщо телефону в профілі ще немає — запам'ятовуємо з замовлення
-      if (!u.phone) u.phone = contact.phone;
+      const u = user && db.users.find((x) => x.id === user.id);
+      if (u) {
+        u.orders.push(created);
+        u.cart = [];
+        u.lastDelivery = delivery;
+        // Якщо телефону в профілі ще немає — запам'ятовуємо з замовлення
+        if (!u.phone) u.phone = contact.phone;
+      } else {
+        (db.guestOrders ??= []).push({ ...created, claimHash: sha256(claimToken!) });
+      }
       return created;
     });
   } catch (e) {
@@ -135,5 +163,11 @@ export async function POST(req: NextRequest) {
 
   // Залишки змінились — оновлюємо сторінки каталогу
   invalidateCatalog();
-  return json({ order });
+  const mailTo = contact.email || user?.email;
+  await Promise.all([
+    // Адміністратор дізнається про замовлення одразу
+    notifyAdmin(newOrderText(order, !user)),
+    mailTo ? sendMail(orderPlacedMail(order, mailTo, !user)) : null,
+  ]);
+  return json(claimToken ? { order, claimToken } : { order });
 }

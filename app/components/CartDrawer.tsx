@@ -8,10 +8,17 @@ import Icon from "./Icon";
 import { cartTotals } from "./cart-logic";
 import { CartItem, EmptyCart, FreeShippingBar } from "./cart-ui";
 import { formatPrice, productsWord } from "./catalog-data";
+import { useHydrated } from "./use-hydrated";
 
 /** Бокова панель кошика — відкривається з іконки в хедері */
 export default function CartDrawer() {
-  const { lines, count, isOpen, closeCart } = useCart();
+  const cart = useCart();
+  const { isOpen, closeCart } = cart;
+  // Панель гідратується пізніше (вона в <Suspense>) — до кінця гідратації
+  // показуємо порожній кошик, як у серверному HTML
+  const hydrated = useHydrated();
+  const lines = hydrated ? cart.lines : [];
+  const count = hydrated ? cart.count : 0;
   const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
   const totals = cartTotals(lines);

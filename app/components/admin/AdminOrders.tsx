@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../Icon";
-import { deliveryOptions, paymentOptions } from "../cart-logic";
+import { deliveryOptions, paymentTitle } from "../cart-logic";
 import { formatPrice } from "../catalog-data";
 import { nextStatuses, orderStatusInfo, type OrderStatusId } from "../../lib/order-status";
 import AdminShell, { LoadError, Panel } from "./AdminShell";
@@ -26,7 +26,8 @@ export type AdminOrder = {
   contact: { firstName: string; lastName: string; phone: string; email?: string };
   comment?: string;
   noCall: boolean;
-  customer: { id: string; email: string; name: string };
+  /** guest — замовлення без акаунта */
+  customer: { id: string; email: string; name: string; guest?: boolean };
 };
 
 /** Підписи кнопок переходу статусу */
@@ -175,7 +176,12 @@ function Orders() {
                     <span className="text-xs text-[#527083]">{shortDate(o.createdAt)}</span>
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold">{o.contact.firstName} {o.contact.lastName}</span>
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-bold">
+                      <span className="truncate">{o.contact.firstName} {o.contact.lastName}</span>
+                      {o.customer.guest && (
+                        <span className="shrink-0 rounded-full bg-[#eef6fb] px-2 py-0.5 text-[11px] font-extrabold text-[#527083]">Гість</span>
+                      )}
+                    </span>
                     <span className="block truncate text-xs text-[#527083]">{o.contact.phone} · {o.lines.reduce((s, l) => s + l.qty, 0)} шт.</span>
                   </span>
                   <b className="text-base">{formatPrice(o.total)}</b>
@@ -211,7 +217,7 @@ function Orders() {
                         {o.noCall && <span className="mt-1 block text-xs font-bold text-[#c27c00]">Просить не телефонувати</span>}
                       </Info>
                       <Info label="Доставка">{delivery}{where && <><br />{where}</>}</Info>
-                      <Info label="Оплата">{paymentOptions.find((p) => p.id === o.payment)?.title ?? o.payment}</Info>
+                      <Info label="Оплата">{paymentTitle(o.payment)}</Info>
                       {o.comment && <Info label="Коментар">{o.comment}</Info>}
 
                       {nextStatuses[o.status].length > 0 && (
@@ -251,7 +257,8 @@ function Orders() {
         </ul>
       )}
       <p className="text-xs text-[#8aa5b5]">
-        Покупець бачить статус у <Link href="/account" className="font-bold hover:underline">профілі</Link>. Скасування повертає товари на склад.
+        Покупець бачить статус у <Link href="/account" className="font-bold hover:underline">профілі</Link>, гість — на сторінці{" "}
+        <Link href="/orders/track" className="font-bold hover:underline">«Де моє замовлення?»</Link> і в листах. Скасування повертає товари на склад.
       </p>
     </div>
   );

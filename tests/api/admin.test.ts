@@ -11,7 +11,7 @@ import * as register from "../../app/api/auth/register/route";
 import * as cart from "../../app/api/cart/route";
 import * as contact from "../../app/api/contact/route";
 import * as orders from "../../app/api/orders/route";
-import { call, sessionCookie, uniqueEmail } from "./helpers";
+import { call, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
 
 const ADMIN_EMAIL = "owner@example.com";
 process.env.ADMIN_EMAILS = `someone-else@example.com, ${ADMIN_EMAIL.toUpperCase()}`;
@@ -40,6 +40,7 @@ let customer = "";
 
 beforeAll(async () => {
   admin = sessionCookie((await call(register.POST, { body: { firstName: "Власник", email: ADMIN_EMAIL, phone: "", password: "camping2026" } })).res);
+  await markEmailVerified(ADMIN_EMAIL);
   customer = sessionCookie((await call(register.POST, { body: { firstName: "Покупець", email: uniqueEmail(), phone: "", password: "camping2026" } })).res);
 });
 
@@ -144,7 +145,7 @@ describe("склад і замовлення", () => {
     lines: [{ id: productId, qty }],
     contact: { firstName: "Покупець", lastName: "Тестовий", phone: "+380 50 111 22 33" },
     delivery: { method: "np-branch", city: "Київ", branch: "1" },
-    payment: "card",
+    payment: "cod",
     agreed: true,
   });
   const stockOf = async () =>

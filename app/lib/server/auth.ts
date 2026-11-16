@@ -35,7 +35,7 @@ export async function verifyPassword(password: string, stored: string) {
 
 /* ---------- Сесії ---------- */
 
-const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 export async function createSession(res: NextResponse, userId: string) {
   const token = randomBytes(32).toString("base64url");
@@ -112,6 +112,22 @@ export function loginLimiter(req: NextRequest, email: string) {
   };
 }
 
+/** IP клієнта (за x-forwarded-for від проксі хостингу) */
+export const clientIp = (req: NextRequest) => req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
+
+/** Ковзне вікно: не більше max подій за windowMs для одного ключа */
+export function rateLimiter(max: number, windowMs: number) {
+  const hits = new Map<string, number[]>();
+  return (key: string) => {
+    const now = Date.now();
+    const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+    const limited = recent.length >= max;
+    if (!limited) recent.push(now);
+    hits.set(key, recent);
+    return limited;
+  };
+}
+
 /** id товарів, які зараз показуються на сайті (не приховані) */
 export async function knownProductIds(): Promise<ReadonlySet<string>> {
   return new Set((await loadCatalog()).filter((p) => !p.hidden).map((p) => p.id));
@@ -136,13 +152,18 @@ export function sanitizeIds(input: unknown, knownIds: ReadonlySet<string>): stri
   return [...new Set(input.filter((id): id is string => typeof id === "string" && knownIds.has(id)))].slice(0, 100);
 }
 
-/**
- * Адміністратори — email-и зі змінної середовища ADMIN_EMAILS (через кому),
- * напр. у файлі .env.local: ADMIN_EMAILS=owner@example.com
- */
-export function isAdmin(u: Pick<StoredUser, "email">) {
+/** Email зі списку ADMIN_EMAILS (через кому), напр. у .env.local: ADMIN_EMAILS=owner@example.com */
+export function isAdminEmail(email: string) {
   const list = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  return list.includes(u.email.toLowerCase());
+  return list.includes(email.toLowerCase());
+}
+
+/**
+ * Адміністратор — email у ADMIN_EMAILS І підтверджений власником скриньки.
+ * Без підтвердження будь-хто міг би першим зареєструватися з адресою власника
+ */
+export function isAdmin(u: Pick<StoredUser, "email" | "emailVerifiedAt">) {
+  return isAdminEmail(u.email) && !!u.emailVerifiedAt;
 }
 
 /** Поточний адміністратор або відповідь з помилкою (401 / 403) */
@@ -164,7 +185,10 @@ export function publicUser(u: StoredUser) {
     phone: u.phone,
     lastDelivery: u.lastDelivery ?? null,
     createdAt: u.createdAt,
+    emailVerified: !!u.emailVerifiedAt,
     isAdmin: isAdmin(u),
+    /** Адреса адміністратора, але ще не підтверджена — адмінка попросить підтвердити */
+    adminPending: isAdminEmail(u.email) && !u.emailVerifiedAt,
   };
 }
 

@@ -14,7 +14,9 @@ import {
   sanitizeCart,
   sanitizeIds,
 } from "../../../lib/server/auth";
-import { write } from "../../../lib/server/db";
+import { write, type StoredUser } from "../../../lib/server/db";
+import { issueVerification, verificationMail } from "../../../lib/server/email-verify";
+import { sendMail } from "../../../lib/server/mail";
 
 export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return error("Forbidden", 403);
@@ -36,9 +38,10 @@ export async function POST(req: NextRequest) {
   const known = await knownProductIds();
   const guestCart = sanitizeCart(body.cart, known);
 
+  let token = "";
   const user = await write((db) => {
     if (db.users.some((u) => u.email === email)) return null;
-    const created = {
+    const created: StoredUser = {
       id: newUserId(),
       email,
       firstName,
@@ -50,10 +53,12 @@ export async function POST(req: NextRequest) {
       favorites: sanitizeIds(body.favorites, known),
       orders: [],
     };
+    token = issueVerification(created);
     db.users.push(created);
     return created;
   });
   if (!user) return error("Акаунт з таким email уже існує. Спробуйте увійти.", 409);
+  await sendMail(verificationMail(user, token));
 
   const res = NextResponse.json({ user: publicUser(user), cart: user.cart, favorites: user.favorites });
   await createSession(res, user.id);

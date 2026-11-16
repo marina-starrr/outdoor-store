@@ -12,68 +12,60 @@ export const metadata: Metadata = {
   alternates: { canonical: "/about" },
   title: "Про нас",
   description:
-    "Family Camping — онлайн-магазин туристичного спорядження для сімейного відпочинку з 2014 року. Наша історія, цифри та цінності.",
+    "Family Camping — онлайн-магазин туристичного спорядження для сімейного відпочинку: намети, спальники, посуд і кемпінгові меблі з доставкою по Україні.",
 };
 
-const FOUNDED = 2014;
-const years = 2026 - FOUNDED;
+/*
+ * Лише те, що можна підтвердити: дані каталогу та умови магазину.
+ * Історію магазину (рік заснування, команду) додайте, коли будуть реальні факти.
+ */
 
-const historyFor = (count: number) => [
-  { year: "2014", title: "Перший намет", text: "Двоє друзів-туристів почали возити якісні намети для знайомих, бо в Україні їх було складно знайти за адекватну ціну." },
-  { year: "2017", title: "Власний сайт", text: "Запустили онлайн-магазин і першими додали до кожного товару чесні відгуки та справжні фото з походів." },
-  { year: "2020", title: "Для всієї родини", text: "Зосередилися на сімейному кемпінгу: просторі намети, дитячі спальники, меблі й посуд для відпочинку з дітьми." },
-  { year: "2026", title: "Сьогодні", text: `${count} перевірених товарів у ${categories.length} категоріях, доставка по всій Україні та прийом замовлень цілодобово.` },
-];
-
-const values: { icon: IconName; title: string; text: string }[] = [
-  { icon: "tent", title: "Тестуємо самі", text: "Кожну модель команда бере в похід, перш ніж додати в каталог. Що не витримало вихідних — не продаємо." },
-  { icon: "chat", title: "Чесні поради", text: "Порадимо дешевший намет, якщо дорогий вам не потрібен. Нам важливіше, щоб ви повернулися, ніж продати більше." },
-  { icon: "shield", title: "Гарантія якості", text: `Офіційна гарантія виробника на все спорядження і ${RETURN_DAYS} днів на повернення без зайвих питань.` },
-  { icon: "heart", title: "Природа після нас", text: "Пакуємо замовлення без пластику, коли це можливо, і підтримуємо прибирання туристичних стежок у Карпатах." },
+const promises: { icon: IconName; title: string; text: string }[] = [
+  { icon: "tent", title: "Для всієї родини", text: "Підбираємо спорядження для сімейного кемпінгу: просторі намети, теплі спальники, посуд і меблі для відпочинку з дітьми." },
+  { icon: "chat", title: "Допомога з вибором", text: "Напишіть нам — підкажемо модель під ваш склад сім’ї, сезон і бюджет." },
+  { icon: "return", title: `${RETURN_DAYS} днів на повернення`, text: `Обмін і повернення протягом ${RETURN_DAYS} днів за Законом «Про захист прав споживачів».` },
+  { icon: "shield", title: "Гарантія", text: "Гарантійні зобов’язання — відповідно до умов виробника та законодавства України." },
 ];
 
 const whyOnline: { icon: IconName; title: string; text: string }[] = [
-  { icon: "card", title: "Нижчі ціни", text: "Без оренди шоуруму — економія йде у ваш кошик." },
-  { icon: "clock", title: "Цілодобово", text: "Замовлення приймаємо й опрацьовуємо 24/7." },
-  { icon: "truck", title: "По всій Україні", text: "Нова пошта та Укрпошта, відправка щодня." },
+  { icon: "card", title: "Без шоуруму", text: "Ми працюємо лише онлайн, без витрат на оренду торгових залів." },
+  { icon: "clock", title: "Замовлення 24/7", text: "Оформити замовлення на сайті можна будь-коли." },
+  { icon: "truck", title: "По всій Україні", text: "Доставляємо Новою поштою та Укрпоштою." },
 ];
 
 export default async function AboutPage() {
   const products = await getPublicCatalog();
-  const reviews = products.reduce((s, p) => s + p.reviews, 0);
-  const history = historyFor(products.length);
   const brands = brandsOf(products);
   return (
     <InfoLayout
       eyebrow="Про нас"
       icon="tent"
-      title="Спорядження, якому"
-      accent="довіряємо самі"
-      lead={`Уже ${years} років допомагаємо родинам відкривати Україну і світ: підбираємо надійне туристичне спорядження та ділимося досвідом.`}
+      title="Спорядження для"
+      accent="сімейного відпочинку"
+      lead="Підбираємо туристичне спорядження, з яким відпочинок на природі зручний для всієї родини — від малюка до бабусі."
       aside={
         <BannerStats
           items={[
-            { value: `${years}`, label: "років з вами" },
             { value: `${products.length}`, label: "товарів у каталозі" },
-            { value: reviews.toLocaleString("uk-UA").replace(/\s/g, " "), label: "відгуків покупців" },
+            { value: `${categories.length}`, label: "категорій" },
+            { value: `${brands.length}`, label: "брендів" },
           ]}
         />
       }
     >
-      {/* Історія */}
+      {/* Хто ми */}
       <InfoCard className="overflow-hidden !p-0">
         <div className="grid lg:grid-cols-[1.05fr_1fr]">
           <div className="p-6 sm:p-8">
-            <InfoTitle eyebrow="Наша історія">Від одного намету до сімейного магазину</InfoTitle>
+            <InfoTitle eyebrow="Хто ми">Сімейний кемпінг — наша спеціалізація</InfoTitle>
             <Prose className="mt-4">
               <p>
-                Family Camping почався у {FOUNDED} році з простої ідеї: відпочинок на природі має бути
-                доступним і комфортним для всієї родини — від малюка до бабусі.
+                Family Camping — онлайн-магазин спорядження для відпочинку на природі з родиною: намети, спальники,
+                туристичний посуд, кемпінгові меблі, освітлення та аксесуари.
               </p>
               <p>
-                Ми — <b>онлайн-магазин без фізичних точок</b>. Тому замість вітрин вкладаємося в те, що справді
-                важливо: перевірку товарів, швидку доставку та консультації, які допомагають обрати саме те, що
-                потрібно.
+                Ми — <b>онлайн-магазин без фізичних точок</b>: оформлюйте замовлення на сайті, а ми доставимо його
+                Новою поштою чи Укрпоштою в будь-який населений пункт України.
               </p>
             </Prose>
           </div>
@@ -86,31 +78,11 @@ export default async function AboutPage() {
         </div>
       </InfoCard>
 
-      {/* Хронологія */}
+      {/* Що ми гарантуємо */}
       <InfoCard>
-        <InfoTitle icon="clock">Як ми росли</InfoTitle>
-        <ol className="relative mt-7 grid gap-6 md:grid-cols-4 md:gap-4">
-          <span className="absolute left-[19px] top-2 h-[calc(100%-1rem)] w-0.5 bg-[#e3edf3] md:left-0 md:top-[19px] md:h-0.5 md:w-full" aria-hidden="true" />
-          {history.map((h, i) => (
-            <li key={h.year} className="relative flex gap-4 md:block">
-              <span className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-black ring-4 ring-white ${i === history.length - 1 ? "bg-[#ffd51f] text-[#082c45]" : "bg-[#082c45] text-white"}`}>
-                {h.year.slice(2)}
-              </span>
-              <span className="md:mt-4 md:block">
-                <span className="text-sm font-black text-[#098fd0]">{h.year}</span>
-                <b className="block text-lg">{h.title}</b>
-                <span className="mt-1 block text-sm leading-relaxed text-[#527083]">{h.text}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </InfoCard>
-
-      {/* Цінності */}
-      <InfoCard>
-        <InfoTitle icon="heart" eyebrow="У що ми віримо">Наші цінності</InfoTitle>
+        <InfoTitle icon="heart" eyebrow="Для покупців">Що ми гарантуємо</InfoTitle>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {values.map((v) => (
+          {promises.map((v) => (
             <div key={v.title} className="rounded-[20px] bg-[#f7fafc] p-5 transition hover:bg-[#eef6fb]">
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#ffd51f] text-[#082c45]">
                 <Icon name={v.icon} className="h-5 w-5" />
@@ -146,7 +118,6 @@ export default async function AboutPage() {
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-sm text-[#527083]">Працюємо напряму з виробниками та офіційними дистриб’юторами.</p>
         </InfoCard>
       </div>
 

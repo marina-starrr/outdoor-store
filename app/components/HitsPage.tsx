@@ -10,15 +10,24 @@ import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { Breadcrumbs, CardActions, ProductCard, SortSelect } from "./catalog-ui";
 import {
+  bySales,
   categoryBySlug,
   discountPercent,
   formatPrice,
+  plural,
   productsWord,
+  selectHits,
   type CategorySlug,
   type Product,
 } from "./catalog-data";
-import { productReviews, productUrl } from "./product-details";
+import { productUrl } from "./product-details";
 import { useCatalog } from "./Catalog";
+
+/** Справжній схвалений відгук (див. lib/server/reviews.ts) */
+export type Testimonial = {
+  productId: string;
+  review: { id: string; author: string; rating: number; text: string; verified: boolean };
+};
 
 const sortOptions = [
   { id: "sales", label: "Найпопулярніші" },
@@ -30,8 +39,8 @@ const sortOptions = [
 type SortId = (typeof sortOptions)[number]["id"];
 
 const sorters: Record<SortId, (a: Product, b: Product) => number> = {
-  sales: (a, b) => b.reviews - a.reviews,
-  rating: (a, b) => b.rating - a.rating || b.reviews - a.reviews,
+  sales: bySales,
+  rating: (a, b) => b.rating - a.rating || b.reviews - a.reviews || bySales(a, b),
   cheap: (a, b) => a.price - b.price,
   expensive: (a, b) => b.price - a.price,
   discount: (a, b) => discountPercent(b) - discountPercent(a),
@@ -46,16 +55,16 @@ const bundle: { id: string; qty: number }[] = [
   { id: "li-head", qty: 1 },
 ];
 
-/** Усі розрахунки сторінки — з актуального каталогу (ціни й наявність з бази) */
+/** Усі розрахунки сторінки — з актуального каталогу (ціни, наявність, продажі й відгуки з бази) */
 export function computeHits(products: Product[], byId: ReadonlyMap<string, Product>) {
-  /** Хіти: товари з позначкою «Хіт» або з великою кількістю відгуків (≈ продажів) */
-  const hits = products
-    .filter((p) => p.hit || p.reviews >= 60)
-    .sort((a, b) => b.reviews - a.reviews);
-  /** Місце в рейтингу продажів (1 — найпопулярніший) */
+  /** Хіти: з позначкою «Хіт» або ті, що справді добре продаються; порядок — за продажами */
+  const hits = selectHits(products);
+  /** Місце серед хітів (1 — найпопулярніший) */
   const rankOf = new Map(hits.map((p, i) => [p.id, i + 1]));
-  const totalReviews = hits.reduce((s, p) => s + p.reviews, 0);
-  const avgRating = hits.length ? hits.reduce((s, p) => s + p.rating, 0) / hits.length : 0;
+  // Рейтинг — лише з товарів, що мають справжні відгуки
+  const rated = hits.filter((p) => p.reviews > 0);
+  const totalReviews = rated.reduce((s, p) => s + p.reviews, 0);
+  const avgRating = totalReviews ? rated.reduce((s, p) => s + p.rating * p.reviews, 0) / totalReviews : 0;
   // Набір — лише з товарів, які є в наявності
   const bundleItems = bundle.flatMap((b) => {
     const product = byId.get(b.id);
@@ -63,15 +72,10 @@ export function computeHits(products: Product[], byId: ReadonlyMap<string, Produ
   });
   const bundleTotal = bundleItems.reduce((s, b) => s + b.product.price * b.qty, 0);
   const bundleOld = bundleItems.reduce((s, b) => s + (b.product.oldPrice ?? b.product.price) * b.qty, 0);
-  /** Відгуки з п'ятьма зірками до трьох найпопулярніших хітів */
-  const testimonials = hits.slice(0, 3).flatMap((p) => {
-    const review = productReviews(p).find((r) => r.rating === 5);
-    return review ? [{ product: p, review }] : [];
-  });
-  return { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld, testimonials };
+  return { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld };
 }
 
-export default function HitsPage() {
+export default function HitsPage({ testimonials: rawTestimonials = [] }: { testimonials?: Testimonial[] }) {
   const router = useRouter();
   const { add, openCart } = useCart();
   const [query, setQuery] = useState("");
@@ -79,10 +83,15 @@ export default function HitsPage() {
   const [sort, setSort] = useState<SortId>("sales");
   const [saleOnly, setSaleOnly] = useState(false);
   const { products, byId } = useCatalog();
-  const { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld, testimonials } = useMemo(
+  const { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld } = useMemo(
     () => computeHits(products, byId),
     [products, byId],
   );
+  // Справжні відгуки з сервера — лише для товарів, які зараз є в каталозі
+  const testimonials = rawTestimonials.flatMap((t) => {
+    const product = byId.get(t.productId);
+    return product ? [{ product, review: t.review }] : [];
+  });
 
   const categories = useMemo(() => [...new Set(hits.map((p) => p.category))], [hits]);
   const visible = useMemo(
@@ -118,19 +127,22 @@ export default function HitsPage() {
             <div className="mt-8 grid items-end gap-10 lg:grid-cols-[1fr_auto]">
               <div>
                 <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-[0.16em] backdrop-blur">
-                  <FlameIcon /> Вибір мандрівників
+                  <FlameIcon /> Рекомендуємо
                 </p>
                 <h1 className="mt-5 text-[clamp(2.6rem,6vw,4.8rem)] font-black leading-[0.95] tracking-[-0.055em]">
                   Хіти <span className="text-[#ffff00]">продажу</span>
                 </h1>
                 <p className="mt-4 max-w-xl text-lg font-medium text-white/85">
-                  Перевірене спорядження, яке найчастіше обирають родини для відпочинку на природі цього сезону.
+                  Спорядження, яке ми радимо родинам для відпочинку на природі.
                 </p>
               </div>
-              <dl className="grid grid-cols-3 gap-3 sm:gap-4">
+              <dl className={`grid gap-3 sm:gap-4 ${totalReviews ? "grid-cols-3" : "grid-cols-2"}`}>
                 <Stat value={String(hits.length)} label={productsWord(hits.length)} />
-                <Stat value={`★ ${avgRating.toFixed(1)}`} label="середній рейтинг" />
-                <Stat value={totalReviews.toLocaleString("uk-UA").replace(/\s/g, " ")} label="відгуків" />
+                <Stat value={String(new Set(hits.map((p) => p.category)).size)} label="категорій" />
+                {/* Рейтинг — лише коли є справжні відгуки */}
+                {totalReviews > 0 && (
+                  <Stat value={`★ ${avgRating.toFixed(1)}`} label={`${totalReviews} ${plural(totalReviews, ["відгук", "відгуки", "відгуків"])}`} />
+                )}
               </dl>
             </div>
           </div>
@@ -139,7 +151,7 @@ export default function HitsPage() {
         <div className="mx-auto max-w-[1440px] px-5 pb-20 lg:px-8">
           {/* Топ-3 */}
           <section className="-mt-6 lg:-mt-8" aria-labelledby="top3-title">
-            <h2 id="top3-title" className="sr-only">Топ-3 тижня</h2>
+            <h2 id="top3-title" className="sr-only">Топ-3</h2>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
               {hits.slice(0, 3).map((p, i) => (
                 <TopCard key={p.id} product={p} place={i + 1} onAdd={() => add(p.id)} />
@@ -151,7 +163,7 @@ export default function HitsPage() {
           <section className="mt-16" aria-labelledby="all-hits">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="eyebrow">Рейтинг продажів</p>
+                <p className="eyebrow">Популярне в магазині</p>
                 <h2 id="all-hits" className="mt-1.5 text-3xl font-extrabold tracking-[-0.04em] sm:text-4xl">
                   Усі хіти сезону
                 </h2>
@@ -219,7 +231,7 @@ export default function HitsPage() {
                   Набір для першої сімейної ночівлі
                 </h2>
                 <p className="mt-3 max-w-md text-white/75">
-                  Ми зібрали хіти, які найчастіше купують разом: намет, два спальники, посуд, крісла та ліхтар. Додайте все одним кліком.
+                  Ми зібрали все для першої ночівлі родини: намет, два спальники, посуд, крісла та ліхтар. Додайте все одним кліком.
                 </p>
                 <div className="mt-6 flex flex-wrap items-baseline gap-3">
                   <span className="text-4xl font-black tracking-[-0.03em]">{formatPrice(bundleTotal)}</span>
@@ -271,7 +283,7 @@ export default function HitsPage() {
                 {testimonials.map(({ product, review }) => (
                   <figure key={review.id} className="flex flex-col rounded-[24px] bg-white p-6 shadow-[0_18px_52px_rgba(79,93,101,.08)]">
                     <span className="text-[#f5ad00]" aria-label="5 з 5">★★★★★</span>
-                    <blockquote className="mt-3 flex-1 text-[15px] leading-relaxed text-[#264e65]">
+                    <blockquote className="mt-3 flex-1 whitespace-pre-line text-[15px] leading-relaxed text-[#264e65]">
                       «{review.text}»
                     </blockquote>
                     <figcaption className="mt-5 flex items-center gap-3 border-t border-[#e3edf3] pt-4">
@@ -279,7 +291,10 @@ export default function HitsPage() {
                         {review.author[0]}
                       </span>
                       <span className="min-w-0 text-sm">
-                        <b className="block">{review.author}, {review.city}</b>
+                        <b className="block">
+                          {review.author}
+                          {review.verified && <span className="ml-2 text-xs font-bold text-[#1f9d55]">Підтверджена покупка</span>}
+                        </b>
                         <Link href={`${productUrl(product)}#reviews`} className="block truncate text-[#098fd0] hover:underline">
                           про {product.name}
                         </Link>
@@ -332,9 +347,11 @@ function TopCard({ product, place, onAdd }: { product: Product; place: number; o
           <Link href={`/catalog/${product.category}`} className="font-bold uppercase tracking-[0.1em] text-[#098fd0] hover:underline">
             {categoryBySlug[product.category].name}
           </Link>
-          <span className="font-bold text-[#527083]">
-            <span className="text-[#f5ad00]">★</span> {product.rating.toFixed(1)} · {product.reviews} відгуків
-          </span>
+          {product.reviews > 0 && (
+            <span className="font-bold text-[#527083]">
+              <span className="text-[#f5ad00]">★</span> {product.rating.toFixed(1)} · {product.reviews} {plural(product.reviews, ["відгук", "відгуки", "відгуків"])}
+            </span>
+          )}
         </p>
         <h3 className="mt-2 text-lg font-extrabold leading-snug">
           <Link href={productUrl(product)} className="transition hover:text-[#098fd0]">
@@ -343,7 +360,7 @@ function TopCard({ product, place, onAdd }: { product: Product; place: number; o
         </h3>
         <div className="mt-auto flex items-end justify-between gap-3 pt-5">
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-2xl font-black">{formatPrice(product.price)}</span>
+            <span className="whitespace-nowrap text-2xl font-black">{formatPrice(product.price)}</span>
             {product.oldPrice && (
               <span className="text-sm font-semibold text-slate-400 line-through">{formatPrice(product.oldPrice)}</span>
             )}
@@ -358,7 +375,8 @@ function TopCard({ product, place, onAdd }: { product: Product; place: number; o
             className="inline-flex h-12 shrink-0 items-center gap-2 rounded-full bg-[#ffd51f] px-5 text-sm font-extrabold shadow-[0_8px_20px_rgba(255,213,31,.3)] transition hover:-translate-y-0.5 hover:bg-[#ffe044] disabled:bg-[#e6eef3] disabled:text-[#8aa5b5] disabled:shadow-none"
           >
             <Icon name="cart" className="h-5 w-5" />
-            <span className="hidden sm:inline">В кошик</span>
+            {/* На планшеті три картки в ряд вузькі — лише іконка, щоб ціна не розривалась */}
+            <span className="hidden sm:inline md:max-lg:hidden">В кошик</span>
           </button>
         </div>
       </div>

@@ -7,6 +7,7 @@ import {
   deliveryPrice,
   isDeliveryId,
   paymentOptions,
+  paymentTitle,
   promoCodes,
   resolveLines,
 } from "../../app/components/cart-logic";
@@ -87,8 +88,14 @@ describe("cartTotals", () => {
 });
 
 describe("оплата", () => {
-  it("оплата частинами доступна від 3000 ₴", () => {
-    expect(paymentOptions.find((p) => p.id === "parts")?.minTotal).toBe(3000);
+  it("покупцям доступні лише способи, які справді працюють", () => {
+    expect(paymentOptions.map((p) => p.id)).toEqual(["cod", "invoice"]);
+  });
+
+  it("назви вимкнених способів лишаються для старих замовлень", () => {
+    expect(paymentTitle("card")).toBe("Карткою онлайн");
+    expect(paymentTitle("parts")).toBe("Оплата частинами");
+    expect(paymentTitle("невідомий")).toBe("невідомий");
   });
 });
 

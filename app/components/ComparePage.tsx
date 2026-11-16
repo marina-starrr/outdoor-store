@@ -10,7 +10,7 @@ import { COMPARE_LIMIT, useLists } from "./Lists";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
-import { categoryBySlug, formatPrice, type CategorySlug, type Product } from "./catalog-data";
+import { categoryBySlug, formatPrice, plural, type CategorySlug, type Product } from "./catalog-data";
 import { productUrl } from "./product-details";
 
 type Row = {
@@ -43,12 +43,16 @@ function buildRows(items: Product[]): Row[] {
     {
       label: "Рейтинг",
       raw: items.map((p) => String(p.rating)),
-      values: items.map((p) => (
-        <span key={p.id}>
-          <b>★ {p.rating.toFixed(1)}</b> <span className="text-[#8aa5b5]">({p.reviews} відгуків)</span>
-        </span>
-      )),
-      best: indexesOf((p) => p.rating === maxRating),
+      values: items.map((p) =>
+        p.reviews > 0 ? (
+          <span key={p.id}>
+            <b>★ {p.rating.toFixed(1)}</b> <span className="text-[#8aa5b5]">({p.reviews} {plural(p.reviews, ["відгук", "відгуки", "відгуків"])})</span>
+          </span>
+        ) : (
+          <span key={p.id} className="text-[#8aa5b5]">Відгуків ще немає</span>
+        ),
+      ),
+      best: maxRating > 0 ? indexesOf((p) => p.reviews > 0 && p.rating === maxRating) : [],
     },
     {
       label: "Наявність",

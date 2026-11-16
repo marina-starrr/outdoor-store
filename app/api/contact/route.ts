@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { MESSAGE_MAX, contactTopics } from "../../components/contact-topics";
 import { cleanText, error, getUser, isEmail, isPhone, isSameOrigin, json } from "../../lib/server/auth";
 import { contactRateLimited, saveMessage } from "../../lib/server/messages";
+import { newMessageText, notifyAdmin } from "../../lib/server/telegram";
 
 /** Форма зворотного зв'язку — доступна і гостям, і авторизованим */
 export async function POST(req: NextRequest) {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (contactRateLimited(ip)) return error("Забагато звернень. Спробуйте за кілька хвилин.", 429);
 
   const user = await getUser(req);
-  await saveMessage({
+  const saved = {
     id: randomUUID(),
     createdAt: new Date().toISOString(),
     topic: topic.label,
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
     order: order || undefined,
     message,
     userId: user?.id,
-  });
+  };
+  await saveMessage(saved);
+  await notifyAdmin(newMessageText(saved));
   return json({ ok: true });
 }
