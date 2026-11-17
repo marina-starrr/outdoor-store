@@ -1,6 +1,6 @@
 import "server-only";
 import { existsSync } from "node:fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DeliveryId, PaymentId } from "../../components/cart-logic";
 
@@ -205,6 +205,8 @@ async function pglite(dir: string | null): Promise<Backend> {
   const template = process.env.FC_DB_TEMPLATE;
   const fresh = !dir || !existsSync(join(dir, "PG_VERSION"));
   const loadDataDir = template && fresh && existsSync(template) ? new Blob([await readFile(template)]) : undefined;
+  // PGlite не створює батьківські теки сам (напр. тестова тека даних щойно видалена)
+  if (dir) await mkdir(dir, { recursive: true });
   const db = await PGlite.create(dir ?? undefined, { extensions: { citext }, loadDataDir });
   await migrate(db);
   const wrap = (c: { query: (t: string, p?: unknown[]) => Promise<{ rows: unknown[] }> }): Queryable => ({

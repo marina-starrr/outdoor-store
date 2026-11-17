@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   experimental: {
     agentFeedback: true,
+    agentUpgrade: "security",
   },
   cacheComponents: true,
   // Драйвери бази завантажуються з node_modules як є (PGlite містить WASM і файли даних)
