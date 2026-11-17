@@ -20,5 +20,7 @@ export default defineConfig({
     setupFiles: ["tests/setup.ts"],
     // scrypt навмисно повільний
     testTimeout: 15_000,
+    // Тести з базою на диску (команди yarn admin:verify, db:import) створюють її кілька секунд
+    hookTimeout: 30_000,
   },
 });
