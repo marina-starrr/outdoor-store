@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { error, getUser, isSameOrigin, json, rateLimiter } from "../../../../lib/server/auth";
-import { write } from "../../../../lib/server/db";
 import { issueVerification, verificationMail } from "../../../../lib/server/email-verify";
 import { mailEnabled, sendMail } from "../../../../lib/server/mail";
 
@@ -17,10 +16,7 @@ export async function POST(req: NextRequest) {
   if (!mailEnabled()) return json({ sent: false, mailEnabled: false });
   if (limited(user.id)) return error("Лист уже надіслано кілька разів. Перевірте папку «Спам» або спробуйте за годину.", 429);
 
-  const token = await write((db) => {
-    const u = db.users.find((x) => x.id === user.id)!;
-    return issueVerification(u);
-  });
+  const token = await issueVerification(user.id);
   const sent = await sendMail(verificationMail(user, token));
   return json({ sent, mailEnabled: true });
 }

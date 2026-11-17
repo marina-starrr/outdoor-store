@@ -44,9 +44,20 @@ export const uniqueEmail = () => `test${Date.now()}${++n}@example.com`;
 
 /** Позначити email підтвердженим (як після переходу за посиланням з листа) — для адмінів у тестах */
 export async function markEmailVerified(email: string) {
-  const { write } = await import("../../app/lib/server/db");
-  await write((db) => {
-    const u = db.users.find((x) => x.email === email.toLowerCase());
-    if (u) u.emailVerifiedAt = new Date().toISOString();
-  });
+  await dbQuery("update users set email_verified_at = now() where email = $1", [email.toLowerCase()]);
+}
+
+/** Запит до тимчасової тестової бази */
+export async function dbQuery(text: string, params?: unknown[]) {
+  const { sql } = await import("../../app/lib/server/db");
+  return sql(text, params);
+}
+
+/** Увесь вміст бази одним текстом — щоб перевірити, що секрети в ній не зберігаються */
+export async function dbDump() {
+  const tables = await dbQuery("select tablename from pg_tables where schemaname = 'public'");
+  const parts = await Promise.all(
+    tables.map(async (t) => JSON.stringify(await dbQuery(`select * from public."${t.tablename}"`))),
+  );
+  return parts.join("\n");
 }

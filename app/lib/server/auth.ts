@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 import { NextResponse, type NextRequest } from "next/server";
 import { MAX_QTY, type CartLine } from "../../components/cart-logic";
 import { loadCatalog } from "./catalog";
-import { read, write, type StoredUser } from "./db";
+import { sql, userFromRow, type StoredUser } from "./db";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
 
@@ -39,13 +39,10 @@ export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex"
 
 export async function createSession(res: NextResponse, userId: string) {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = Date.now() + SESSION_DAYS * 86_400_000;
-  await write((db) => {
-    // Заодно прибираємо прострочені сесії
-    for (const [key, s] of Object.entries(db.sessions))
-      if (s.expiresAt < Date.now()) delete db.sessions[key];
-    db.sessions[sha256(token)] = { userId, expiresAt };
-  });
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
+  // Заодно прибираємо прострочені сесії
+  await sql("delete from sessions where expires_at < now()");
+  await sql("insert into sessions (token_hash, user_id, expires_at) values ($1, $2, $3)", [sha256(token), userId, expiresAt]);
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -57,19 +54,26 @@ export async function createSession(res: NextResponse, userId: string) {
 
 export async function destroySession(req: NextRequest, res: NextResponse) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (token) await write((db) => void delete db.sessions[sha256(token)]);
+  if (token) await sql("delete from sessions where token_hash = $1", [sha256(token)]);
   res.cookies.delete(SESSION_COOKIE);
 }
 
 /** Поточний користувач за cookie сесії, або null */
 export async function getUser(req: NextRequest): Promise<StoredUser | null> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  return read((db) => {
-    const session = db.sessions[sha256(token)];
-    if (!session || session.expiresAt < Date.now()) return null;
-    return db.users.find((u) => u.id === session.userId) ?? null;
-  });
+  if (!token || token.length > 100) return null;
+  const [row] = await sql(
+    `select u.* from sessions s join users u on u.id = s.user_id
+     where s.token_hash = $1 and s.expires_at > now()`,
+    [sha256(token)],
+  );
+  return row ? userFromRow(row) : null;
+}
+
+/** Користувач за email (без урахування регістру) */
+export async function findUserByEmail(email: string): Promise<StoredUser | null> {
+  const [row] = await sql("select * from users where email = $1", [email]);
+  return row ? userFromRow(row) : null;
 }
 
 export const newUserId = () => randomUUID();

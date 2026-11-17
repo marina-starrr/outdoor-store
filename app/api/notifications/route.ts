@@ -1,15 +1,17 @@
 import type { NextRequest } from "next/server";
 import { error, getUser, isSameOrigin, json } from "../../lib/server/auth";
-import { write, type StoredUser } from "../../lib/server/db";
+import { sql, type StoredUser } from "../../lib/server/db";
+import { getStockAlerts } from "../../lib/server/lists";
 import { mailEnabled } from "../../lib/server/mail";
+import { userNotifications } from "../../lib/server/notifications";
 
-const payload = (u: StoredUser) => {
-  const notifications = [...(u.notifications ?? [])].reverse();
+const payload = async (u: Pick<StoredUser, "id" | "emailNotifications">) => {
+  const [notifications, stockAlerts] = await Promise.all([userNotifications(u.id), getStockAlerts(u.id)]);
   return {
     notifications,
     unread: notifications.filter((n) => !n.read).length,
-    stockAlerts: u.stockAlerts ?? [],
-    emailNotifications: u.emailNotifications !== false,
+    stockAlerts,
+    emailNotifications: u.emailNotifications,
     mailEnabled: mailEnabled(),
   };
 };
@@ -18,7 +20,7 @@ const payload = (u: StoredUser) => {
 export async function GET(req: NextRequest) {
   const user = await getUser(req);
   if (!user) return error("Потрібно увійти", 401);
-  return json(payload(user));
+  return json(await payload(user));
 }
 
 /**
@@ -31,15 +33,16 @@ export async function PATCH(req: NextRequest) {
   if (!user) return error("Потрібно увійти", 401);
   const body = await req.json().catch(() => ({}));
 
-  const readIds = body.read === "all" ? "all" : Array.isArray(body.read) ? new Set(body.read.filter((x: unknown) => typeof x === "string")) : null;
+  const readIds: "all" | string[] | null =
+    body.read === "all" ? "all" : Array.isArray(body.read) ? body.read.filter((x: unknown) => typeof x === "string").slice(0, 200) : null;
   const email = typeof body.emailNotifications === "boolean" ? body.emailNotifications : null;
   if (!readIds && email === null) return error("Нічого змінювати");
 
-  const updated = await write((db) => {
-    const u = db.users.find((x) => x.id === user.id)!;
-    if (readIds) for (const n of u.notifications ?? []) if (readIds === "all" || readIds.has(n.id)) n.read = true;
-    if (email !== null) u.emailNotifications = email;
-    return u;
-  });
-  return json(payload(updated));
+  if (readIds === "all") await sql("update notifications set read = true where user_id = $1 and not read", [user.id]);
+  else if (readIds?.length)
+    // id порівнюємо як текст — некоректні значення просто нічого не знайдуть
+    await sql("update notifications set read = true where user_id = $1 and id::text = any($2::text[])", [user.id, readIds]);
+  if (email !== null) await sql("update users set email_notifications = $2 where id = $1", [user.id, email]);
+
+  return json(await payload({ id: user.id, emailNotifications: email ?? user.emailNotifications }));
 }

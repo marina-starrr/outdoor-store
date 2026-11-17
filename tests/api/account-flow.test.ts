@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as account from "../../app/api/account/route";
@@ -13,7 +12,7 @@ import { seedProducts, withDerived } from "../../app/components/catalog-data";
 
 const products = seedProducts.map(withDerived);
 import { MAX_QTY } from "../../app/components/cart-logic";
-import { call, sessionCookie, uniqueEmail } from "./helpers";
+import { call, dbDump, dbQuery, sessionCookie, uniqueEmail } from "./helpers";
 
 const inStock = products.filter((p) => p.inStock);
 const tent = inStock.find((p) => p.category === "tents")!;
@@ -244,12 +243,10 @@ describe("оформлення замовлення", () => {
     expect(history.data.orders).toHaveLength(3);
   });
 
-  it("дані справді записані у файл тимчасової бази", () => {
-    const file = join(process.env.FC_DATA_DIR!, "db.json");
-    expect(existsSync(file)).toBe(true);
-    const db = JSON.parse(readFileSync(file, "utf8"));
-    expect(db.users.length).toBeGreaterThan(0);
+  it("дані справді записані у тимчасову базу", async () => {
+    const [{ n }] = await dbQuery("select count(*)::int as n from users");
+    expect(n).toBeGreaterThan(0);
     // Пароль ніде не зберігається у відкритому вигляді
-    expect(readFileSync(file, "utf8")).not.toContain(PASSWORD);
+    expect(await dbDump()).not.toContain(PASSWORD);
   });
 });

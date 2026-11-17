@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { MESSAGE_MAX, contactTopics } from "../../components/contact-topics";
 import { cleanText, error, getUser, isEmail, isPhone, isSameOrigin, json } from "../../lib/server/auth";
@@ -29,9 +28,7 @@ export async function POST(req: NextRequest) {
   if (contactRateLimited(ip)) return error("Забагато звернень. Спробуйте за кілька хвилин.", 429);
 
   const user = await getUser(req);
-  const saved = {
-    id: randomUUID(),
-    createdAt: new Date().toISOString(),
+  const saved = await saveMessage({
     topic: topic.label,
     name,
     email,
@@ -39,8 +36,7 @@ export async function POST(req: NextRequest) {
     order: order || undefined,
     message,
     userId: user?.id,
-  };
-  await saveMessage(saved);
+  });
   await notifyAdmin(newMessageText(saved));
   return json({ ok: true });
 }

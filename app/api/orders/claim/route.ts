@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { error, getUser, isSameOrigin, json } from "../../../lib/server/auth";
-import { write } from "../../../lib/server/db";
 import { claimGuestOrders } from "../../../lib/server/orders";
 
 /**
@@ -12,9 +11,6 @@ export async function POST(req: NextRequest) {
   const user = await getUser(req);
   if (!user) return error("Потрібно увійти", 401);
   const body = await req.json().catch(() => ({}));
-  const claimed = await write((db) => {
-    const u = db.users.find((x) => x.id === user.id);
-    return u ? claimGuestOrders(db, u, body.tokens) : 0;
-  });
+  const claimed = await claimGuestOrders(user, body.tokens);
   return json({ claimed });
 }

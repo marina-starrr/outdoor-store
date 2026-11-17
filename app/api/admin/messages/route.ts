@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { json, requireAdmin } from "../../../lib/server/auth";
-import { read } from "../../../lib/server/db";
 import { mailEnabled } from "../../../lib/server/mail";
+import { loadMessages } from "../../../lib/server/messages";
 
 /**
  * Звернення з форми контактів, найновіші першими.
@@ -11,13 +11,5 @@ import { mailEnabled } from "../../../lib/server/mail";
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req);
   if ("response" in auth) return auth.response;
-  const messages = await read((db) =>
-    [...(db.messages ?? [])]
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((m) => ({
-        ...m,
-        hasAccount: db.users.some((u) => u.id === m.userId || u.email.toLowerCase() === m.email.toLowerCase()),
-      })),
-  );
-  return json({ messages, mailEnabled: mailEnabled() });
+  return json({ messages: await loadMessages(), mailEnabled: mailEnabled() });
 }

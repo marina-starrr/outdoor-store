@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   createSession,
   error,
+  findUserByEmail,
   hashPassword,
   isSameOrigin,
   knownProductIds,
@@ -12,7 +13,8 @@ import {
   sanitizeIds,
   verifyPassword,
 } from "../../../lib/server/auth";
-import { read, write } from "../../../lib/server/db";
+import { tx } from "../../../lib/server/db";
+import { getCart, getFavorites, setCart, setFavorites } from "../../../lib/server/lists";
 
 const WRONG = "Невірний email або пароль";
 
@@ -26,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (limiter.blocked())
     return error("Забагато спроб входу. Спробуйте через 15 хвилин.", 429);
 
-  const user = await read((db) => db.users.find((u) => u.email === email));
+  const user = email ? await findUserByEmail(email) : null;
   // Для неіснуючого email теж рахуємо хеш — щоб за часом відповіді не можна було
   // з'ясувати, які адреси зареєстровані
   const valid = user
@@ -42,11 +44,12 @@ export async function POST(req: NextRequest) {
   const known = await knownProductIds();
   const guestCart = sanitizeCart(body.cart, known);
   const guestFavorites = sanitizeIds(body.favorites, known);
-  const { cart, favorites } = await write((db) => {
-    const u = db.users.find((x) => x.id === user.id)!;
-    u.cart = sanitizeCart([...u.cart, ...guestCart], known);
-    u.favorites = sanitizeIds([...(u.favorites ?? []), ...guestFavorites], known);
-    return { cart: u.cart, favorites: u.favorites };
+  const { cart, favorites } = await tx(async (q) => {
+    const cart = sanitizeCart([...(await getCart(user.id, q)), ...guestCart], known);
+    const favorites = sanitizeIds([...(await getFavorites(user.id, q)), ...guestFavorites], known);
+    await setCart(user.id, cart, q);
+    await setFavorites(user.id, favorites, q);
+    return { cart, favorites };
   });
 
   const res = NextResponse.json({ user: publicUser(user), cart, favorites });

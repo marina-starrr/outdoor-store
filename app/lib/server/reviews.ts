@@ -1,12 +1,11 @@
 import "server-only";
-import type { Data, StoredReview, StoredUser } from "./db";
-import { allOrders } from "./orders";
+import { db, reviewFromRow, type Queryable, type StoredReview, type StoredUser } from "./db";
 
 /*
  * Справжні відгуки покупців. Пише лише покупець з акаунтом (один відгук на
  * товар), на сайті з'являється після схвалення адміністратором. Позначка
  * «Підтверджена покупка» — лише якщо автор справді купував товар.
- * Рейтинг товару рахується тільки зі схвалених відгуків.
+ * Рейтинг товару рахується тільки зі схвалених відгуків (див. loadCatalog).
  */
 
 export const REVIEW_MIN = 10;
@@ -17,30 +16,15 @@ export const reviewAuthor = (u: Pick<StoredUser, "firstName" | "lastName">) =>
   [u.firstName.trim(), u.lastName.trim() ? `${u.lastName.trim()[0]}.` : ""].filter(Boolean).join(" ");
 
 /** Купував товар: є відправлене або виконане замовлення з ним */
-export const hasBought = (u: StoredUser, productId: string) =>
-  u.orders.some((o) => (o.status === "shipped" || o.status === "done") && o.lines.some((l) => l.id === productId));
-
-/** Середня оцінка і кількість схвалених відгуків по товарах */
-export function reviewStats(db: Data) {
-  const sums = new Map<string, { sum: number; count: number }>();
-  for (const r of db.reviews ?? []) {
-    if (r.status !== "approved") continue;
-    const s = sums.get(r.productId) ?? { sum: 0, count: 0 };
-    s.sum += r.rating;
-    s.count++;
-    sums.set(r.productId, s);
-  }
-  return new Map([...sums].map(([id, s]) => [id, { rating: Math.round((s.sum / s.count) * 10) / 10, reviews: s.count }]));
-}
-
-/** Продано штук кожного товару (замовлення без скасованих) */
-export function soldCounts(db: Data) {
-  const sold = new Map<string, number>();
-  for (const { order } of allOrders(db)) {
-    if (order.status === "cancelled") continue;
-    for (const l of order.lines) sold.set(l.id, (sold.get(l.id) ?? 0) + l.qty);
-  }
-  return sold;
+export async function hasBought(userId: string, productId: string, q: Queryable = db): Promise<boolean> {
+  const [row] = await q.query(
+    `select exists(
+       select 1 from orders o join order_items i on i.order_number = o.number
+       where o.user_id = $1 and i.product_id = $2 and o.status in ('shipped', 'done')
+     ) as bought`,
+    [userId, productId],
+  );
+  return !!row?.bought;
 }
 
 /** Що бачать відвідувачі сайту */
@@ -56,8 +40,16 @@ export const publicReview = (r: StoredReview) => ({
 export type PublicReview = ReturnType<typeof publicReview>;
 
 /** Схвалені відгуки товару, найновіші першими */
-export const approvedReviews = (db: Data, productId: string) =>
-  (db.reviews ?? [])
-    .filter((r) => r.productId === productId && r.status === "approved")
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(publicReview);
+export async function approvedReviews(productId: string, q: Queryable = db): Promise<PublicReview[]> {
+  const rows = await q.query(
+    "select * from reviews where product_id = $1 and status = 'approved' order by created_at desc",
+    [productId],
+  );
+  return rows.map((r) => publicReview(reviewFromRow(r)));
+}
+
+/** Власний відгук покупця на товар */
+export async function ownReview(userId: string, productId: string, q: Queryable = db): Promise<StoredReview | null> {
+  const [row] = await q.query("select * from reviews where user_id = $1 and product_id = $2", [userId, productId]);
+  return row ? reviewFromRow(row) : null;
+}

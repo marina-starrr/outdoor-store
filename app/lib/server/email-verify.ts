@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { SITE_NAME } from "../site";
 import { sha256 } from "./auth";
-import type { Data, StoredUser } from "./db";
+import { db, userFromRow, type Queryable, type StoredUser } from "./db";
 import type { Mail } from "./mail";
 
 /*
@@ -14,9 +14,13 @@ import type { Mail } from "./mail";
 const TTL = 48 * 3_600_000;
 
 /** Створює нове посилання (попереднє перестає діяти) і повертає токен для листа */
-export function issueVerification(user: StoredUser): string {
+export async function issueVerification(userId: string, q: Queryable = db): Promise<string> {
   const token = randomBytes(32).toString("base64url");
-  user.emailVerify = { hash: sha256(token), expiresAt: Date.now() + TTL };
+  await q.query("update users set email_verify_hash = $2, email_verify_expires_at = $3 where id = $1", [
+    userId,
+    sha256(token),
+    new Date(Date.now() + TTL),
+  ]);
   return token;
 }
 
@@ -32,12 +36,12 @@ export function verificationMail(user: Pick<StoredUser, "email" | "firstName">, 
 }
 
 /** Підтверджує email за токеном; повертає користувача або null (невірне чи прострочене посилання) */
-export function confirmVerification(db: Data, token: string): StoredUser | null {
+export async function confirmVerification(token: string, q: Queryable = db): Promise<StoredUser | null> {
   if (!token || token.length > 100) return null;
-  const hash = sha256(token);
-  const user = db.users.find((u) => u.emailVerify?.hash === hash);
-  if (!user || user.emailVerify!.expiresAt < Date.now()) return null;
-  user.emailVerifiedAt = new Date().toISOString();
-  delete user.emailVerify;
-  return user;
+  const [row] = await q.query(
+    `update users set email_verified_at = now(), email_verify_hash = null, email_verify_expires_at = null
+     where email_verify_hash = $1 and email_verify_expires_at > now() returning *`,
+    [sha256(token)],
+  );
+  return row ? userFromRow(row) : null;
 }

@@ -1,19 +1,16 @@
-import { execFileSync } from "node:child_process";
 import { expect, request as playwrightRequest, type APIRequestContext, type Page } from "@playwright/test";
-import { E2E_DATA_DIR, E2E_HELPER_ADMIN_EMAIL } from "../../playwright.config";
+import { E2E_HELPER_ADMIN_EMAIL } from "../../playwright.config";
 
 /**
- * Підтвердити email адміністратора командою `yarn admin:verify` — як це робить
- * власник, поки не налаштовано пошту. Команда й сервер пишуть в одну базу,
- * тож повторюємо, доки сервер не побачить підтвердження (паралельний запис
- * іншого тесту міг його перезаписати)
+ * Підтвердити email адміністратора без листа — як це робить власник командою
+ * `yarn admin:verify`, поки не налаштовано пошту. Тестовий сервер має для цього
+ * службовий маршрут (працює лише з тимчасовою тестовою базою)
  */
 export async function verifyAdminViaScript(api: APIRequestContext, email: string) {
-  await expect(async () => {
-    execFileSync(process.execPath, ["scripts/verify-email.mjs", email], { env: { ...process.env, FC_DATA_DIR: E2E_DATA_DIR }, stdio: "pipe" });
-    const me = await (await api.get("/api/auth/me")).json();
-    expect(me.user?.isAdmin).toBe(true);
-  }).toPass({ timeout: 10_000 });
+  const r = await api.post("/api/test/verify-email", { data: { email } });
+  expect(await r.json()).toEqual({ verified: true });
+  const me = await (await api.get("/api/auth/me")).json();
+  expect(me.user?.isAdmin).toBe(true);
 }
 
 let n = 0;

@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { error, getUser, isSameOrigin, json, knownProductIds, sanitizeIds } from "../../lib/server/auth";
-import { write } from "../../lib/server/db";
+import { tx } from "../../lib/server/db";
+import { setFavorites } from "../../lib/server/lists";
 
 /** Зберігає список обраних товарів в акаунті */
 export async function PUT(req: NextRequest) {
@@ -10,8 +11,6 @@ export async function PUT(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const favorites = sanitizeIds(body.ids, await knownProductIds());
-  await write((db) => {
-    db.users.find((u) => u.id === user.id)!.favorites = favorites;
-  });
+  await tx((q) => setFavorites(user.id, favorites, q));
   return json({ favorites });
 }

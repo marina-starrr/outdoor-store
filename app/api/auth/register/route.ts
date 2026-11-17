@@ -8,14 +8,14 @@ import {
   isPhone,
   isSameOrigin,
   knownProductIds,
-  newUserId,
   normalizeEmail,
   publicUser,
   sanitizeCart,
   sanitizeIds,
 } from "../../../lib/server/auth";
-import { write, type StoredUser } from "../../../lib/server/db";
+import { tx, userFromRow } from "../../../lib/server/db";
 import { issueVerification, verificationMail } from "../../../lib/server/email-verify";
+import { setCart, setFavorites } from "../../../lib/server/lists";
 import { sendMail } from "../../../lib/server/mail";
 
 export async function POST(req: NextRequest) {
@@ -36,31 +36,27 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await hashPassword(password);
   const known = await knownProductIds();
-  const guestCart = sanitizeCart(body.cart, known);
+  const cart = sanitizeCart(body.cart, known);
+  const favorites = sanitizeIds(body.favorites, known);
 
-  let token = "";
-  const user = await write((db) => {
-    if (db.users.some((u) => u.email === email)) return null;
-    const created: StoredUser = {
-      id: newUserId(),
-      email,
-      firstName,
-      lastName,
-      phone,
-      passwordHash,
-      createdAt: new Date().toISOString(),
-      cart: guestCart,
-      favorites: sanitizeIds(body.favorites, known),
-      orders: [],
-    };
-    token = issueVerification(created);
-    db.users.push(created);
-    return created;
+  const created = await tx(async (q) => {
+    // Унікальність email гарантує база: при збігу рядок не вставиться
+    const [row] = await q.query(
+      `insert into users (email, first_name, last_name, phone, password_hash)
+       values ($1, $2, $3, $4, $5) on conflict (email) do nothing returning *`,
+      [email, firstName, lastName, phone, passwordHash],
+    );
+    if (!row) return null;
+    const user = userFromRow(row);
+    await setCart(user.id, cart, q);
+    await setFavorites(user.id, favorites, q);
+    return { user, token: await issueVerification(user.id, q) };
   });
-  if (!user) return error("Акаунт з таким email уже існує. Спробуйте увійти.", 409);
+  if (!created) return error("Акаунт з таким email уже існує. Спробуйте увійти.", 409);
+  const { user, token } = created;
   await sendMail(verificationMail(user, token));
 
-  const res = NextResponse.json({ user: publicUser(user), cart: user.cart, favorites: user.favorites });
+  const res = NextResponse.json({ user: publicUser(user), cart, favorites });
   await createSession(res, user.id);
   return res;
 }

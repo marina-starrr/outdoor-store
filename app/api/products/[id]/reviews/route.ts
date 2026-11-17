@@ -1,9 +1,8 @@
-import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { cleanText, error, getUser, isSameOrigin, json, knownProductIds, rateLimiter } from "../../../../lib/server/auth";
 import { invalidateCatalog } from "../../../../lib/server/catalog";
-import { read, write } from "../../../../lib/server/db";
-import { REVIEW_MAX, REVIEW_MIN, approvedReviews, hasBought, reviewAuthor } from "../../../../lib/server/reviews";
+import { reviewFromRow, sql } from "../../../../lib/server/db";
+import { REVIEW_MAX, REVIEW_MIN, approvedReviews, hasBought, ownReview, reviewAuthor } from "../../../../lib/server/reviews";
 import { newReviewText, notifyAdmin } from "../../../../lib/server/telegram";
 
 /** Не більше 10 відгуків на годину з одного акаунта */
@@ -17,16 +16,17 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/products/[id
   const { id } = await ctx.params;
   if (!(await knownProductIds()).has(id)) return error("Товар не знайдено", 404);
   const user = await getUser(req);
-  const data = await read((db) => {
-    const own = user && (db.reviews ?? []).find((r) => r.productId === id && r.userId === user.id);
-    return {
-      reviews: approvedReviews(db, id),
-      mine: own ? { rating: own.rating, text: own.text, status: own.status } : null,
-      verifiedBuyer: !!user && hasBought(user, id),
-      loggedIn: !!user,
-    };
+  const [reviews, own, bought] = await Promise.all([
+    approvedReviews(id),
+    user ? ownReview(user.id, id) : null,
+    user ? hasBought(user.id, id) : false,
+  ]);
+  return json({
+    reviews,
+    mine: own ? { rating: own.rating, text: own.text, status: own.status } : null,
+    verifiedBuyer: bought,
+    loggedIn: !!user,
   });
-  return json(data);
 }
 
 /** Новий відгук (або зміна свого) — потрапляє на модерацію */
@@ -44,24 +44,17 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/products/[i
   if (text.length < REVIEW_MIN) return error(`Відгук має містити щонайменше ${REVIEW_MIN} символів`);
   if (limited(user.id)) return error("Забагато відгуків за короткий час. Спробуйте пізніше.", 429);
 
-  const review = await write((db) => {
-    const list = (db.reviews ??= []);
-    const u = db.users.find((x) => x.id === user.id)!;
-    const existing = list.find((r) => r.productId === id && r.userId === user.id);
-    const fields = {
-      author: reviewAuthor(u),
-      rating,
-      text,
-      createdAt: new Date().toISOString(),
-      // Змінений відгук знову проходить модерацію
-      status: "pending" as const,
-      verified: hasBought(u, id),
-    };
-    if (existing) return Object.assign(existing, fields);
-    const created = { id: randomUUID(), productId: id, userId: user.id, ...fields };
-    list.push(created);
-    return created;
-  });
+  // Один відгук на товар: повторний замінює попередній і знову йде на модерацію
+  const [row] = await sql(
+    `insert into reviews (product_id, user_id, author, rating, text, created_at, status, verified)
+     values ($1, $2, $3, $4, $5, now(), 'pending', $6)
+     on conflict (product_id, user_id) do update set
+       author = excluded.author, rating = excluded.rating, text = excluded.text,
+       created_at = excluded.created_at, status = 'pending', verified = excluded.verified
+     returning *`,
+    [id, user.id, reviewAuthor(user), rating, text, await hasBought(user.id, id)],
+  );
+  const review = reviewFromRow(row);
   // Якщо змінили вже схвалений відгук — він знову на модерації, рейтинг товару зміниться
   invalidateCatalog();
   await notifyAdmin(newReviewText(review));

@@ -1,21 +1,22 @@
 import type { NextRequest } from "next/server";
 import { json, requireAdmin } from "../../../lib/server/auth";
-import { loadCatalog } from "../../../lib/server/catalog";
-import { read } from "../../../lib/server/db";
+import { reviewFromRow, sql } from "../../../lib/server/db";
 
 /** Усі відгуки для модерації, найновіші першими */
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req);
   if ("response" in auth) return auth.response;
-  const names = new Map((await loadCatalog()).map((p) => [p.id, { name: p.name, category: p.category }]));
-  const reviews = await read((db) =>
-    (db.reviews ?? [])
-      .map((r) => ({
-        ...r,
-        product: names.get(r.productId) ?? { name: r.productId, category: "" },
-        email: db.users.find((u) => u.id === r.userId)?.email ?? "",
-      }))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  const rows = await sql(
+    `select r.*, p.name as product_name, p.category as product_category, u.email as user_email
+     from reviews r
+     left join products p on p.id = r.product_id
+     left join users u on u.id = r.user_id
+     order by r.created_at desc`,
   );
+  const reviews = rows.map((r) => ({
+    ...reviewFromRow(r),
+    product: { name: r.product_name ?? r.product_id, category: r.product_category ?? "" },
+    email: r.user_email ?? "",
+  }));
   return json({ reviews });
 }

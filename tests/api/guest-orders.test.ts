@@ -9,7 +9,7 @@ import * as claim from "../../app/api/orders/claim/route";
 import * as orders from "../../app/api/orders/route";
 import * as track from "../../app/api/orders/track/route";
 import { seedProducts, withDerived } from "../../app/components/catalog-data";
-import { call, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
+import { call, dbDump, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
 
 const ADMIN_EMAIL = "guest-admin@example.com";
 process.env.ADMIN_EMAILS = ADMIN_EMAIL;
@@ -66,8 +66,7 @@ describe("оформлення без акаунта", () => {
     expect(r.data.order.total).toBe(r.data.order.subtotal + r.data.order.shipping);
     expect(r.data.claimToken).toMatch(/^[\w-]{30,}$/);
     // Сам токен у базі не зберігається — лише його хеш
-    const db = readFileSync(join(process.env.FC_DATA_DIR!, "db.json"), "utf8");
-    expect(db).not.toContain(r.data.claimToken);
+    expect(await dbDump()).not.toContain(r.data.claimToken);
     expect(JSON.stringify(r.data)).not.toContain("claimHash");
   });
 

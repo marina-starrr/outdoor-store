@@ -9,7 +9,6 @@ import {
   type DeliveryId,
   type PaymentId,
 } from "../../components/cart-logic";
-import { withDerived } from "../../components/catalog-data";
 import {
   cleanText,
   clientIp,
@@ -24,11 +23,12 @@ import {
   sanitizeCart,
   sha256,
 } from "../../lib/server/auth";
-import { invalidateCatalog, loadCatalog, writeCatalog } from "../../lib/server/catalog";
-import type { StoredOrder } from "../../lib/server/db";
+import { invalidateCatalog, loadCatalog } from "../../lib/server/catalog";
+import { tx, type StoredOrder } from "../../lib/server/db";
+import { setCart } from "../../lib/server/lists";
 import { sendMail } from "../../lib/server/mail";
 import { checkCity } from "../../lib/server/novaposhta";
-import { newOrderNumber, orderPlacedMail } from "../../lib/server/orders";
+import { insertOrder, orderPlacedMail, userOrders } from "../../lib/server/orders";
 import { newOrderText, notifyAdmin } from "../../lib/server/telegram";
 
 /** Гостьові замовлення: не більше 5 за 30 хвилин з однієї IP-адреси */
@@ -38,7 +38,7 @@ const guestOrdersLimited = rateLimiter(5, 30 * 60_000);
 export async function GET(req: NextRequest) {
   const user = await getUser(req);
   if (!user) return error("Потрібно увійти", 401);
-  return json({ orders: [...user.orders].reverse() });
+  return json({ orders: await userOrders(user.id) });
 }
 
 class StockError extends Error {}
@@ -109,27 +109,27 @@ export async function POST(req: NextRequest) {
   const claimToken = user ? undefined : randomBytes(24).toString("base64url");
   let order: StoredOrder;
   try {
-    // Перевірка залишків і списання — в одному записі, щоб два покупці
-    // не купили одну й ту саму останню одиницю
-    order = await writeCatalog((products, db) => {
-      for (const l of lines) {
-        const p = products.find((x) => x.id === l.id);
-        const stock = p && !p.hidden ? withDerived(p).stock : 0;
-        if (stock < l.qty)
-          throw new StockError(
-            stock > 0
-              ? `«${l.product.name}»: на складі залишилось лише ${stock} шт. Зменште кількість у кошику.`
-              : `«${l.product.name}» щойно закінчився. Приберіть його з кошика.`,
-          );
-      }
-      for (const l of lines) {
-        const p = products.find((x) => x.id === l.id)!;
-        p.stock -= l.qty;
-        p.inStock = p.stock > 0;
+    // Перевірка залишків і списання — в одній транзакції: списання з умовою
+    // stock >= qty атомарне, тож два покупці не куплять одну й ту саму останню одиницю
+    order = await tx(async (q) => {
+      // Однаковий порядок блокування рядків у всіх транзакціях — без взаємних блокувань
+      for (const l of [...lines].sort((a, b) => a.id.localeCompare(b.id))) {
+        const [taken] = await q.query(
+          "update products set stock = stock - $2 where id = $1 and not hidden and stock >= $2 returning id",
+          [l.id, l.qty],
+        );
+        if (taken) continue;
+        const [p] = await q.query("select stock, hidden from products where id = $1", [l.id]);
+        const stock = p && !p.hidden ? Number(p.stock) : 0;
+        // Помилка відкочує всю транзакцію — уже списані рядки повертаються
+        throw new StockError(
+          stock > 0
+            ? `«${l.product.name}»: на складі залишилось лише ${stock} шт. Зменште кількість у кошику.`
+            : `«${l.product.name}» щойно закінчився. Приберіть його з кошика.`,
+        );
       }
 
-      const created: StoredOrder = {
-        number: newOrderNumber(db),
+      const created: Omit<StoredOrder, "number"> = {
         createdAt: new Date().toISOString(),
         status: "new",
         lines: lines.map((l) => ({ id: l.id, name: l.product.name, price: l.product.price, qty: l.qty })),
@@ -144,17 +144,16 @@ export async function POST(req: NextRequest) {
         comment: cleanText(body.comment, 500) || undefined,
         noCall: !!body.noCall,
       };
-      const u = user && db.users.find((x) => x.id === user.id);
-      if (u) {
-        u.orders.push(created);
-        u.cart = [];
-        u.lastDelivery = delivery;
-        // Якщо телефону в профілі ще немає — запам'ятовуємо з замовлення
-        if (!u.phone) u.phone = contact.phone;
-      } else {
-        (db.guestOrders ??= []).push({ ...created, claimHash: sha256(claimToken!) });
-      }
-      return created;
+      if (!user) return insertOrder(q, created, { claimHash: sha256(claimToken!) });
+
+      const saved = await insertOrder(q, created, { userId: user.id });
+      await setCart(user.id, [], q);
+      // Останні дані доставки; якщо телефону в профілі ще немає — запам'ятовуємо з замовлення
+      await q.query(
+        "update users set last_delivery = $2::jsonb, phone = case when phone = '' then $3 else phone end where id = $1",
+        [user.id, JSON.stringify(delivery), contact.phone],
+      );
+      return saved;
     });
   } catch (e) {
     if (e instanceof StockError) return error(e.message, 409);

@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import { withDerived, type Product } from "../../../../components/catalog-data";
 import { applyProductInput, validateProduct } from "../../../../lib/admin-product";
 import { error, json, requireAdmin } from "../../../../lib/server/auth";
-import { invalidateCatalog, writeCatalog } from "../../../../lib/server/catalog";
+import { ensureCatalog, invalidateCatalog, loadCatalog, lockProduct, updateProduct } from "../../../../lib/server/catalog";
+import { tx } from "../../../../lib/server/db";
 import { sendMails, type Mail } from "../../../../lib/server/mail";
 import { productEvents, snapshot } from "../../../../lib/server/notifications";
 
@@ -20,9 +21,11 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/prod
   const quickKeys = ["stock", "price", "hidden"];
   const isQuick = Object.keys(body).length > 0 && Object.keys(body).every((k) => quickKeys.includes(k));
 
+  await ensureCatalog();
   const mails: Mail[] = [];
-  const result = await writeCatalog((products, db) => {
-    const product = products.find((p) => p.id === id);
+  const result = await tx(async (q) => {
+    // Рядок заблоковано до кінця транзакції — паралельне замовлення чекає
+    const product = await lockProduct(q, id);
     if (!product) return { notFound: true as const };
     const before = snapshot(product);
 
@@ -44,19 +47,22 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/prod
         if (data.hidden) product.hidden = true;
         else delete product.hidden;
       }
-      product.inStock = product.stock > 0;
       product.updatedAt = new Date().toISOString();
     } else {
       applyProductInput(product as Partial<Product>, data);
     }
+    const updated = withDerived(product);
+    await updateProduct(q, updated);
     // Сповіщення: «з'явився в наявності» підписникам, «знижка» — тим, у кого в обраному
-    productEvents(db, product, before, mails);
-    return { product: withDerived(product) };
+    await productEvents(q, updated, before, mails);
+    return { ok: true as const };
   });
 
   if ("notFound" in result) return error("Товар не знайдено", 404);
   if ("errors" in result) return json({ error: "Перевірте поля форми", errors: result.errors }, 400);
   invalidateCatalog();
   await sendMails(mails);
-  return json({ product: result.product });
+  // Товар з рейтингом і продажами — як у списку адмін-панелі
+  const product = (await loadCatalog()).find((p) => p.id === id);
+  return json({ product });
 }

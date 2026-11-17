@@ -2,32 +2,37 @@ import type { NextRequest } from "next/server";
 import { LOW_STOCK } from "../../../components/catalog-data";
 import { json, requireAdmin } from "../../../lib/server/auth";
 import { loadCatalog } from "../../../lib/server/catalog";
-import { read } from "../../../lib/server/db";
-import { allOrders } from "../../../lib/server/orders";
+import { ORDER_STATUSES, num, sql } from "../../../lib/server/db";
 
 /** Зведення для головної сторінки адмін-панелі */
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req);
   if ("response" in auth) return auth.response;
 
-  const products = await loadCatalog();
-  const { orders, messages, customers, pendingReviews } = await read((db) => ({
-    orders: allOrders(db).map((r) => r.order),
-    messages: db.messages ?? [],
-    customers: db.users.length,
-    pendingReviews: (db.reviews ?? []).filter((r) => r.status === "pending").length,
-  }));
+  const [products, statusRows, [revenue], [counts]] = await Promise.all([
+    loadCatalog(),
+    sql("select status, count(*) as n from orders group by status"),
+    sql(
+      `select coalesce(sum(total), 0) as total,
+              coalesce(sum(total) filter (where created_at >= now() - interval '30 days'), 0) as last30,
+              count(*) filter (where created_at >= now() - interval '30 days') as count30
+       from orders where status <> 'cancelled'`,
+    ),
+    sql(
+      `select (select count(*) from users) as customers,
+              (select count(*) from messages where not done) as unread,
+              (select count(*) from reviews where status = 'pending') as pending`,
+    ),
+  ]);
 
-  const active = orders.filter((o) => o.status !== "cancelled");
-  const since = Date.now() - 30 * 86_400_000;
-  const recent = active.filter((o) => Date.parse(o.createdAt) >= since);
   const byStatus = Object.fromEntries(
-    ["new", "confirmed", "shipped", "done", "cancelled"].map((s) => [s, orders.filter((o) => o.status === s).length]),
+    ORDER_STATUSES.map((s) => [s, num(statusRows.find((r) => r.status === s)?.n)]),
   );
+  const total = Object.values(byStatus).reduce((a, b) => a + b, 0);
 
   return json({
-    orders: { total: orders.length, byStatus },
-    revenue: { total: active.reduce((s, o) => s + o.total, 0), last30: recent.reduce((s, o) => s + o.total, 0), count30: recent.length },
+    orders: { total, byStatus },
+    revenue: { total: num(revenue.total), last30: num(revenue.last30), count30: num(revenue.count30) },
     products: {
       total: products.length,
       visible: products.filter((p) => !p.hidden).length,
@@ -37,8 +42,8 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => a.stock - b.stock)
         .map((p) => ({ id: p.id, name: p.name, stock: p.stock, category: p.category })),
     },
-    messages: { unread: messages.filter((m) => !m.done).length },
-    reviews: { pending: pendingReviews },
-    customers,
+    messages: { unread: num(counts.unread) },
+    reviews: { pending: num(counts.pending) },
+    customers: num(counts.customers),
   });
 }

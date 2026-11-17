@@ -10,18 +10,21 @@
     "admin:verify": "node scripts/verify-email.mjs",
     "test": "node scripts/vitest.mjs run",
     "test:watch": "node scripts/vitest.mjs",
-    "test:e2e": "next build && playwright test",
-    "test:all": "tsc --noEmit && eslint && node scripts/vitest.mjs run && next build && playwright test"
+    "test:e2e": "node scripts/e2e.mjs",
+    "test:all": "tsc --noEmit && eslint && node scripts/vitest.mjs run && node scripts/e2e.mjs"
   },
   "dependencies": {
     "next": "16.4.3",
+    "pg": "^8",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@playwright/test": "^1.65.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { cleanText, clientIp, error, isSameOrigin, json, rateLimiter } from "../../../lib/server/auth";
-import { read } from "../../../lib/server/db";
 import { findOrder, phoneDigits, trackingView } from "../../../lib/server/orders";
 
 /** Не більше 10 спроб за 10 хвилин з однієї IP-адреси — щоб не перебирали номери */
@@ -16,7 +15,7 @@ export async function POST(req: NextRequest) {
   if (phone.length !== 12) return error("Номер телефону у форматі +380 XX XXX XX XX");
   if (limited(clientIp(req))) return error("Забагато спроб. Спробуйте за кілька хвилин.", 429);
 
-  const order = await read((db) => findOrder(db, number)?.order);
+  const order = (await findOrder(number))?.order;
   // Однакова відповідь, якщо номера немає або телефон не збігся
   if (!order || phoneDigits(order.contact.phone) !== phone)
     return error("Замовлення не знайдено. Перевірте номер і телефон, вказаний при оформленні.", 404);

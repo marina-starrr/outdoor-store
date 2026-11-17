@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { error, getUser, isSameOrigin, json, knownProductIds, sanitizeCart } from "../../lib/server/auth";
-import { write } from "../../lib/server/db";
+import { tx } from "../../lib/server/db";
+import { setCart } from "../../lib/server/lists";
 
 /** Зберігає кошик в акаунті (викликається браузером при кожній зміні кошика) */
 export async function PUT(req: NextRequest) {
@@ -10,8 +11,6 @@ export async function PUT(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const cart = sanitizeCart(body.lines, await knownProductIds());
-  await write((db) => {
-    db.users.find((u) => u.id === user.id)!.cart = cart;
-  });
+  await tx((q) => setCart(user.id, cart, q));
   return json({ cart });
 }

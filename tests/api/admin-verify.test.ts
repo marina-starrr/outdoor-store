@@ -7,10 +7,13 @@ import * as me from "../../app/api/auth/me/route";
 import * as register from "../../app/api/auth/register/route";
 import * as verify from "../../app/api/auth/verify-email/route";
 import * as resend from "../../app/api/auth/verify-email/resend/route";
-import { call, sessionCookie, uniqueEmail } from "./helpers";
+import { closeDatabase } from "../../app/lib/server/db";
+import { call, dbDump, sessionCookie, uniqueEmail } from "./helpers";
 
 const ADMIN_EMAIL = "verify-owner@example.com";
 process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+// Команда yarn admin:verify — окремий процес, тож база має бути на диску (у тимчасовій теці)
+delete process.env.FC_DB_MEMORY;
 
 const outbox = (): { to: string; subject: string; href?: string }[] => {
   const file = join(process.env.FC_DATA_DIR!, "outbox.json");
@@ -56,7 +59,7 @@ describe("адміністратор лише з підтвердженим emai
     await signUp(email);
     const token = tokenFor(email);
     expect(token.length).toBeGreaterThan(30);
-    expect(readFileSync(join(process.env.FC_DATA_DIR!, "db.json"), "utf8")).not.toContain(token);
+    expect(await dbDump()).not.toContain(token);
   });
 
   it("невірний токен і CSRF відхиляються", async () => {
@@ -96,10 +99,11 @@ describe("адміністратор лише з підтвердженим emai
   it("команда yarn admin:verify підтверджує email у базі", async () => {
     const email = uniqueEmail();
     const cookie = await signUp(email);
+    // Вбудовану базу відкриває лише один процес — закриваємо її на час команди
+    await closeDatabase();
     const out = execFileSync(process.execPath, ["scripts/verify-email.mjs", email], { env: process.env, encoding: "utf8" });
     expect(out).toContain("підтверджено");
-    expect((await call(me.GET, { method: "GET", cookie })).data.user.emailVerified).toBe(true);
-
     expect(() => execFileSync(process.execPath, ["scripts/verify-email.mjs", "nobody@example.com"], { env: process.env, stdio: "pipe" })).toThrow();
+    expect((await call(me.GET, { method: "GET", cookie })).data.user.emailVerified).toBe(true);
   });
 });

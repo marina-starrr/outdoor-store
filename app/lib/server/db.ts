@@ -1,19 +1,25 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { CartLine, DeliveryId, PaymentId } from "../../components/cart-logic";
-import type { Product } from "../../components/catalog-data";
+import type { DeliveryId, PaymentId } from "../../components/cart-logic";
 
 /*
- * Просте файлове сховище (.data/db.json) — щоб сайт працював без окремої БД.
- * Увесь доступ іде через функції цього модуля, тож для продакшену достатньо
- * переписати лише їх під PostgreSQL / SQLite / інше.
- * Увага: на serverless-хостингах (Vercel тощо) файлова система не зберігається.
+ * База даних — PostgreSQL.
+ *
+ * - На хостингу (Vercel) — Supabase: рядок підключення з POSTGRES_URL
+ *   (його додає інтеграція Vercel ↔ Supabase) або DATABASE_URL.
+ * - Тести й локальна розробка без ключів — вбудований Postgres (PGlite) з тими
+ *   самими міграціями з supabase/migrations. Якщо задано FC_DATA_DIR (тести),
+ *   завжди використовується саме він — тести НІКОЛИ не торкаються справжньої бази.
+ *
+ * Увесь доступ — через sql() (окремий запит) і tx() (транзакція).
  */
 
 export const ORDER_STATUSES = ["new", "confirmed", "shipped", "done", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+export type OrderDelivery = { method: DeliveryId; city?: string; cityRef?: string; branch?: string; address?: string };
 
 export type StoredOrder = {
   number: string;
@@ -28,20 +34,12 @@ export type StoredOrder = {
   shipping: number;
   total: number;
   /** city — підпис «м. Полтава, Полтавська обл.», cityRef — Ref Нової пошти (s:… — населений пункт без НП) */
-  delivery: { method: DeliveryId; city?: string; cityRef?: string; branch?: string; address?: string };
+  delivery: OrderDelivery;
   payment: PaymentId;
   contact: { firstName: string; lastName: string; phone: string; email?: string };
   comment?: string;
   noCall: boolean;
 };
-
-/**
- * Замовлення гостя (без акаунта). claimHash — SHA-256 від секретного токена,
- * який отримав лише браузер покупця: за ним замовлення переноситься в акаунт
- * після реєстрації чи входу. За email не прив'язуємо — email не підтверджується,
- * тож інакше чужі замовлення міг би «забрати» будь-хто.
- */
-export type StoredGuestOrder = StoredOrder & { claimHash: string };
 
 export type StoredUser = {
   id: string;
@@ -53,20 +51,10 @@ export type StoredUser = {
   createdAt: string;
   /** Коли власник підтвердив email за посиланням з листа (без цього — немає прав адміністратора) */
   emailVerifiedAt?: string;
-  /** Активне посилання підтвердження: SHA-256 від токена і строк дії */
-  emailVerify?: { hash: string; expiresAt: number };
-  cart: CartLine[];
-  /** id обраних товарів (поле з'явилось пізніше — у старих записах може бути відсутнім) */
-  favorites?: string[];
   /** Останні дані доставки — підставляються при наступному замовленні */
-  lastDelivery?: StoredOrder["delivery"];
-  orders: StoredOrder[];
-  /** Сповіщення для покупця, найновіші в кінці (див. lib/server/notifications.ts) */
-  notifications?: StoredNotification[];
-  /** id товарів, про появу яких просили повідомити */
-  stockAlerts?: string[];
-  /** Дублювати сповіщення на email (типово — так) */
-  emailNotifications?: boolean;
+  lastDelivery?: OrderDelivery;
+  /** Дублювати сповіщення на email */
+  emailNotifications: boolean;
 };
 
 export type NotificationKind = "reply" | "stock" | "order" | "price";
@@ -79,7 +67,7 @@ export type StoredNotification = {
   text: string;
   /** Куди веде сповіщення на сайті */
   href?: string;
-  read?: boolean;
+  read: boolean;
 };
 
 export type MessageReply = {
@@ -123,119 +111,205 @@ export type StoredReview = {
   verified: boolean;
 };
 
-type Session = { userId: string; expiresAt: number };
+/* ---------- Підключення ---------- */
 
-export type Data = {
-  users: StoredUser[];
-  /** ключ — SHA-256 від токена сесії (сам токен зберігається лише в cookie) */
-  sessions: Record<string, Session>;
-  /** Каталог; відсутній до першого запуску — тоді береться початковий (seed) */
-  products?: Product[];
-  /** Звернення з форми «Контакти» */
-  messages?: StoredMessage[];
-  /** Замовлення гостей, ще не перенесені в акаунт */
-  guestOrders?: StoredGuestOrder[];
-  /** Відгуки покупців (з модерацією) */
-  reviews?: StoredReview[];
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Row = Record<string, any>;
+export type Queryable = { query<T extends Row = Row>(text: string, params?: unknown[]): Promise<T[]> };
+type Backend = Queryable & { transaction<T>(fn: (q: Queryable) => Promise<T>): Promise<T>; close(): Promise<void> };
 
-/**
- * Тека з даними. FC_DATA_DIR дозволяє тестам працювати з окремою тимчасовою
- * базою — щоб жоден тест ніколи не торкався справжніх акаунтів у .data
- */
+/** Тека вбудованої бази. FC_DATA_DIR — окрема тимчасова база для тестів */
 export const dataDir = () => process.env.FC_DATA_DIR || join(process.cwd(), ".data");
-export const dbFile = () => join(dataDir(), "db.json");
+
+const remoteUrl = () => process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+/** Вбудована база: у тестах (FC_DATA_DIR) завжди, інакше — лише якщо не задано підключення */
+const embeddedMode = () => !!process.env.FC_DATA_DIR || !remoteUrl();
+
+/** Працює окрема тимчасова тестова база (не Supabase і не локальна .data) */
+export const isTestDatabase = () => !!process.env.FC_DATA_DIR && !process.env.VERCEL;
 
 /*
  * Next завантажує цей модуль кілька разів в одному процесі (окремо для різних
- * маршрутів). Щоб записи з різних екземплярів не перезаписували одне одного,
- * а читання не бачило застарілих даних, черга записів і кеш спільні для
- * процесу — зберігаються в globalThis (окремо для кожного файлу бази).
+ * маршрутів), тому підключення зберігається в globalThis — одне на процес.
  */
-type Store = {
-  cache: Data | null;
-  /** Ідентифікатор версії файлу, з якої прочитано cache (inode + розмір + час зміни) */
-  key: string;
-  queue: Promise<unknown>;
-};
+const g = globalThis as { __fcDb?: Map<string, Promise<Backend>> };
+const backends = (g.__fcDb ??= new Map());
 
-const stores = ((globalThis as { __fcDbStores?: Map<string, Store> }).__fcDbStores ??= new Map());
-
-function store(): Store {
-  const file = dbFile();
-  let s = stores.get(file);
-  if (!s) stores.set(file, (s = { cache: null, key: "", queue: Promise.resolve() }));
-  return s;
+function backend(): Promise<Backend> {
+  const embedded = embeddedMode();
+  if (!embedded) return cached(`pg:${remoteUrl()}`, () => postgres(remoteUrl()));
+  if (process.env.VERCEL)
+    throw new Error("Не задано POSTGRES_URL — підключіть Supabase до проєкту у Vercel (Storage → Supabase)");
+  // Під час `next build` збірка працює в кількох процесах — кожен отримує власну базу в пам'яті.
+  // FC_DB_MEMORY — модульні тести: база в пам'яті, без запису на диск (швидко)
+  const memory = process.env.NEXT_PHASE === "phase-production-build" || process.env.FC_DB_MEMORY === "1";
+  const dir = memory ? null : join(dataDir(), "pg");
+  return cached(`pglite:${dir ?? `memory:${dataDir()}`}`, () => pglite(dir));
 }
 
-const versionKey = (st: { ino: number; size: number; mtimeMs: number }) => `${st.ino}:${st.size}:${st.mtimeMs}`;
-
-async function fileKey() {
-  try {
-    return versionKey(await stat(dbFile()));
-  } catch {
-    return "";
+function cached(key: string, create: () => Promise<Backend>) {
+  let b = backends.get(key);
+  if (!b) {
+    b = create();
+    backends.set(key, b);
+    b.catch(() => backends.delete(key));
   }
+  return b;
 }
 
-/** Дані з кешу, якщо файл не змінював ніхто інший (напр. інший процес чи yarn admin:verify) */
-async function load(s: Store): Promise<Data> {
-  const key = await fileKey();
-  if (s.cache && key === s.key) return s.cache;
-  try {
-    s.cache = JSON.parse(await readFile(dbFile(), "utf8")) as Data;
-  } catch {
-    s.cache = { users: [], sessions: {} };
-  }
-  s.key = key;
-  return s.cache;
+/** Supabase / будь-який PostgreSQL через node-postgres */
+async function postgres(url: string): Promise<Backend> {
+  const { Pool } = await import("pg");
+  const parsed = new URL(url);
+  // SSL налаштовуємо самі: sslmode із рядка Supabase у node-postgres вимагає перевірки сертифіката
+  // через CA, якого в системі немає. DATABASE_CA_CERT (сертифікат із Supabase → Settings → Database) вмикає перевірку
+  parsed.searchParams.delete("sslmode");
+  parsed.searchParams.delete("supa");
+  const local = ["localhost", "127.0.0.1"].includes(parsed.hostname);
+  const ca = process.env.DATABASE_CA_CERT?.replace(/\\n/g, "\n");
+  const pool = new Pool({
+    connectionString: parsed.toString(),
+    ssl: local ? undefined : ca ? { ca } : { rejectUnauthorized: false },
+    // Serverless: кілька з'єднань на екземпляр функції, решту тримає пулер Supabase
+    max: 5,
+    idleTimeoutMillis: 10_000,
+  });
+  const wrap = (c: { query: (t: string, p?: unknown[]) => Promise<{ rows: Row[] }> }): Queryable => ({
+    query: async <T extends Row>(t: string, p?: unknown[]) => (await c.query(t, p)).rows as T[],
+  });
+  return {
+    ...wrap(pool),
+    close: () => pool.end(),
+    async transaction(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const result = await fn(wrap(client));
+        await client.query("commit");
+        return result;
+      } catch (e) {
+        await client.query("rollback").catch(() => undefined);
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
+  };
 }
 
-async function persist(s: Store, data: Data) {
-  await mkdir(dataDir(), { recursive: true });
-  // Атомарний запис: спершу тимчасовий файл (унікальне ім'я), потім перейменування
-  const file = dbFile();
-  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
-  await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  // Версію беремо з нашого ж файлу ДО перейменування — після нього файл міг уже замінити хтось інший
-  const key = versionKey(await stat(tmp));
-  await renameWithRetry(tmp, file);
-  s.key = key;
+/** Вбудований Postgres (WASM) — для тестів і розробки без Supabase */
+async function pglite(dir: string | null): Promise<Backend> {
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { citext } = await import("@electric-sql/pglite/contrib/citext");
+  // Нова база з готового шаблону (тести) — у десятки разів швидше, ніж створювати з нуля
+  const template = process.env.FC_DB_TEMPLATE;
+  const fresh = !dir || !existsSync(join(dir, "PG_VERSION"));
+  const loadDataDir = template && fresh && existsSync(template) ? new Blob([await readFile(template)]) : undefined;
+  const db = await PGlite.create(dir ?? undefined, { extensions: { citext }, loadDataDir });
+  await migrate(db);
+  const wrap = (c: { query: (t: string, p?: unknown[]) => Promise<{ rows: unknown[] }> }): Queryable => ({
+    query: async <T extends Row>(t: string, p?: unknown[]) => (await c.query(t, p)).rows as T[],
+  });
+  return { ...wrap(db), transaction: (fn) => db.transaction((t) => fn(wrap(t))), close: () => db.close() };
+}
+
+/** Шаблон порожньої бази з усіма міграціями — створюється один раз на запуск тестів */
+export async function createTemplate(file: string) {
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { citext } = await import("@electric-sql/pglite/contrib/citext");
+  const db = await PGlite.create({ extensions: { citext } });
+  await migrate(db);
+  const dump = await db.dumpDataDir("none");
+  await writeFile(file, Buffer.from(await dump.arrayBuffer()));
+  await db.close();
 }
 
 /**
- * Windows не дає замінити файл, поки його хтось читає (паралельний запит,
- * антивірус, індексатор) — rename падає з EPERM/EBUSY/EACCES. Це тимчасово,
- * тож повторюємо кілька разів із короткою паузою.
+ * Закриває підключення (наступний запит відкриє знову). Потрібно тестам:
+ * вбудовану базу може відкрити лише один процес, а `yarn admin:verify` — окремий
  */
-async function renameWithRetry(from: string, to: string) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await rename(from, to);
-    } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code;
-      if (attempt >= 10 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw e;
-      await new Promise((r) => setTimeout(r, 15 * (attempt + 1)));
-    }
+export async function closeDatabase() {
+  const all = [...backends.values()];
+  backends.clear();
+  await Promise.all(all.map(async (b) => (await b).close()));
+}
+
+/** Застосовує міграції з supabase/migrations, яких ще немає у вбудованій базі */
+async function migrate(db: { exec: (sql: string) => Promise<unknown>; query: (t: string, p?: unknown[]) => Promise<{ rows: unknown[] }> }) {
+  // Ролі, які в Supabase є завжди — щоб міграції виконувались без змін
+  await db.exec(`
+    do $$ begin
+      if not exists (select from pg_roles where rolname = 'anon') then create role anon; end if;
+      if not exists (select from pg_roles where rolname = 'authenticated') then create role authenticated; end if;
+      if not exists (select from pg_roles where rolname = 'service_role') then create role service_role; end if;
+    end $$;
+    create table if not exists _fc_migrations (name text primary key, applied_at timestamptz not null default now());
+  `);
+  const done = new Set(((await db.query("select name from _fc_migrations")).rows as { name: string }[]).map((r) => r.name));
+  const dir = join(process.cwd(), "supabase", "migrations");
+  for (const name of (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort()) {
+    if (done.has(name)) continue;
+    await db.exec(await readFile(join(dir, name), "utf8"));
+    await db.query("insert into _fc_migrations (name) values ($1)", [name]);
   }
 }
 
-/** Читання */
-export async function read<T>(fn: (data: Data) => T): Promise<T> {
-  const s = store();
-  await s.queue;
-  return fn(await load(s));
+/** Окремий запит */
+export async function sql<T extends Row = Row>(text: string, params?: unknown[]): Promise<T[]> {
+  return (await backend()).query<T>(text, params);
 }
 
-/** Зміна даних — виконується послідовно (одна черга на процес), щоб паралельні запити не перезаписали одне одного */
-export function write<T>(fn: (data: Data) => T): Promise<T> {
-  const s = store();
-  const run = s.queue.then(async () => {
-    const data = await load(s);
-    const result = fn(data);
-    await persist(s, data);
-    return result;
-  });
-  s.queue = run.catch(() => undefined);
-  return run;
+/** Транзакція: усі запити fn виконуються разом або (при помилці) жоден */
+export async function tx<T>(fn: (q: Queryable) => Promise<T>): Promise<T> {
+  return (await backend()).transaction(fn);
 }
+
+/** Запити поза транзакцією — для функцій, які приймають і транзакцію, і звичайне підключення */
+export const db: Queryable = { query: sql };
+
+/* ---------- Перетворення значень з бази ---------- */
+
+/** timestamptz → ISO-рядок (node-postgres і PGlite повертають Date) */
+export const iso = (v: unknown): string => (v instanceof Date ? v : new Date(String(v))).toISOString();
+export const isoOpt = (v: unknown): string | undefined => (v == null ? undefined : iso(v));
+/** numeric / bigint повертаються рядком — перетворюємо на число */
+export const num = (v: unknown): number => Number(v ?? 0);
+/** null → undefined (у типах застосунку необов'язкові поля відсутні, а не null) */
+export const opt = <T>(v: T | null | undefined): T | undefined => (v == null ? undefined : v);
+/** jsonb-параметр: завжди рядком, інакше node-postgres перетворить масив на масив Postgres */
+export const jsonb = (v: unknown) => (v === undefined ? null : JSON.stringify(v));
+
+export const userFromRow = (r: Row): StoredUser => ({
+  id: r.id,
+  email: r.email,
+  firstName: r.first_name,
+  lastName: r.last_name,
+  phone: r.phone,
+  passwordHash: r.password_hash,
+  createdAt: iso(r.created_at),
+  emailVerifiedAt: isoOpt(r.email_verified_at),
+  lastDelivery: opt(r.last_delivery),
+  emailNotifications: r.email_notifications !== false,
+});
+
+export const notificationFromRow = (r: Row): StoredNotification => ({
+  id: r.id,
+  createdAt: iso(r.created_at),
+  kind: r.kind,
+  title: r.title,
+  text: r.text,
+  href: opt(r.href),
+  read: !!r.read,
+});
+
+export const reviewFromRow = (r: Row): StoredReview => ({
+  id: r.id,
+  productId: r.product_id,
+  userId: r.user_id,
+  author: r.author,
+  rating: num(r.rating),
+  text: r.text,
+  createdAt: iso(r.created_at),
+  status: r.status,
+  verified: !!r.verified,
+});

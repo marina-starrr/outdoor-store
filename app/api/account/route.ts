@@ -10,7 +10,7 @@ import {
   publicUser,
   verifyPassword,
 } from "../../lib/server/auth";
-import { write } from "../../lib/server/db";
+import { sql, userFromRow } from "../../lib/server/db";
 
 /** Оновлення особистих даних (і, за бажанням, пароля) */
 export async function PATCH(req: NextRequest) {
@@ -34,10 +34,10 @@ export async function PATCH(req: NextRequest) {
     passwordHash = await hashPassword(String(body.newPassword));
   }
 
-  const updated = await write((db) => {
-    const u = db.users.find((x) => x.id === user.id)!;
-    Object.assign(u, { firstName, lastName, phone }, passwordHash ? { passwordHash } : {});
-    return u;
-  });
-  return json({ user: publicUser(updated) });
+  const [row] = await sql(
+    `update users set first_name = $2, last_name = $3, phone = $4, password_hash = coalesce($5, password_hash)
+     where id = $1 returning *`,
+    [user.id, firstName, lastName, phone, passwordHash ?? null],
+  );
+  return json({ user: publicUser(userFromRow(row)) });
 }
