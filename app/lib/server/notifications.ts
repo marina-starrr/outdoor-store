@@ -1,7 +1,7 @@
 import "server-only";
 import { formatPrice, type Product } from "../../components/catalog-data";
 import { productUrl } from "../../components/product-details";
-import { PAYMENT_DAYS, orderStatusInfo, paymentDue, type OrderStatusId } from "../order-status";
+import { PAYMENT_DAYS, orderStatusInfo, paymentDue, type CancelReason, type OrderStatusId } from "../order-status";
 import { paymentDetailsText } from "../payment";
 import { db, notificationFromRow, userFromRow, type NotificationKind, type Queryable, type StoredNotification, type StoredOrder, type StoredUser } from "./db";
 import type { Mail } from "./mail";
@@ -89,7 +89,7 @@ export async function productEvents(q: Queryable, product: Product, before: Prod
 }
 
 /** Що сталося із замовленням — продовження фрази «Ваше замовлення FC-… …» */
-function statusText(order: StoredOrder, status: OrderStatusId, reason?: "unpaid"): string | null {
+function statusText(order: StoredOrder, status: OrderStatusId, reason?: CancelReason): string | null {
   switch (status) {
     case "confirmed":
       return `підтверджено, товар заброньовано за вами. Оплатіть ${formatPrice(order.total)} до ${formatDue(order)} — після оплати відправимо посилку`;
@@ -100,9 +100,10 @@ function statusText(order: StoredOrder, status: OrderStatusId, reason?: "unpaid"
     case "done":
       return "виконано. Дякуємо за покупку — гарного відпочинку!";
     case "cancelled":
-      return reason === "unpaid"
-        ? `скасовано, бо оплата не надійшла протягом ${PAYMENT_DAYS} днів. Якщо ви вже оплатили — напишіть нам`
-        : "скасовано. Якщо це помилка — напишіть нам";
+      if (reason === "unpaid")
+        return `скасовано, бо оплата не надійшла протягом ${PAYMENT_DAYS} днів. Якщо ви вже оплатили — напишіть нам`;
+      if (reason === "customer") return "скасовано на ваше прохання. Будемо раді новому замовленню";
+      return "скасовано. Якщо це помилка — напишіть нам";
     default:
       return null;
   }
@@ -128,7 +129,7 @@ export async function orderEvent(
   order: StoredOrder,
   status: OrderStatusId,
   mails: Mail[],
-  reason?: "unpaid",
+  reason?: CancelReason,
 ) {
   const text = statusText(order, status, reason);
   if (!text) return;
@@ -144,7 +145,7 @@ export async function orderEvent(
 }
 
 /** Зміна статусу замовлення гостя → лист на email із замовлення */
-export function guestOrderEvent(order: StoredOrder, status: OrderStatusId, mails: Mail[], reason?: "unpaid") {
+export function guestOrderEvent(order: StoredOrder, status: OrderStatusId, mails: Mail[], reason?: CancelReason) {
   const text = statusText(order, status, reason);
   if (!text || !order.contact.email) return;
   mails.push({

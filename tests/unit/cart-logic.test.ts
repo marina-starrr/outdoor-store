@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  FREE_SHIPPING_FROM,
   cartRecommendations,
   cartTotals,
   deliveryOptions,
-  deliveryPrice,
+  SHIPPING_BY_CARRIER,
   isDeliveryId,
+  shippingLabel,
   paymentOptions,
   paymentTitle,
   promoCodes,
@@ -18,7 +18,7 @@ const catalog = new Map(products.map((p) => [p.id, p]));
 
 const byId = (id: string) => products.find((p) => p.id === id)!;
 const cheap = products.filter((p) => p.inStock).sort((a, b) => a.price - b.price)[0];
-const expensive = products.filter((p) => p.inStock && p.price >= FREE_SHIPPING_FROM)[0];
+const expensive = products.filter((p) => p.inStock && p.price >= 3000)[0];
 
 describe("resolveLines", () => {
   it("додає дані товару і відкидає невідомі id", () => {
@@ -36,33 +36,28 @@ describe("доставка", () => {
     expect(isDeliveryId("np-branch")).toBe(true);
   });
 
-  it("ціни доставки збігаються з опублікованими на сторінці «Доставка і оплата»", () => {
-    expect(deliveryPrice("np-branch", 100)).toBe(70);
-    expect(deliveryPrice("np-courier", 100)).toBe(120);
-    expect(deliveryPrice("ukrposhta", 100)).toBe(45);
-  });
-
-  it("безкоштовна доставка від 3000 ₴ — для відділень, але не для кур'єра", () => {
-    expect(deliveryPrice("np-branch", FREE_SHIPPING_FROM - 1)).toBe(70);
-    expect(deliveryPrice("np-branch", FREE_SHIPPING_FROM)).toBe(0);
-    expect(deliveryPrice("ukrposhta", FREE_SHIPPING_FROM)).toBe(0);
-    expect(deliveryPrice("np-courier", 50_000)).toBe(120);
+  it("ціни доставки немає — лише «за тарифами перевізника»", () => {
+    expect(SHIPPING_BY_CARRIER).toBe("За тарифами перевізника");
+    expect(shippingLabel(0, String)).toBe("За тарифами перевізника");
+    // Старі замовлення з фіксованою ціною показують її як була
+    expect(shippingLabel(70, (n) => `${n} ₴`)).toBe("70 ₴");
   });
 });
 
 describe("cartTotals", () => {
-  it("порожній кошик — усе нулі, доставка безкоштовна", () => {
+  it("порожній кошик — усе нулі", () => {
     const t = cartTotals([]);
     expect(t).toMatchObject({ count: 0, subtotal: 0, shipping: 0, total: 0 });
   });
 
-  it("рахує суму, кількість і доставку", () => {
-    const t = cartTotals(resolveLines([{ id: cheap.id, qty: 2 }], catalog), "np-branch");
-    expect(t.count).toBe(2);
-    expect(t.subtotal).toBe(cheap.price * 2);
-    expect(t.shipping).toBe(cheap.price * 2 >= FREE_SHIPPING_FROM ? 0 : 70);
-    expect(t.total).toBe(t.subtotal + t.shipping);
-    expect(t.leftForFreeShipping).toBe(Math.max(0, FREE_SHIPPING_FROM - t.subtotal));
+  it("рахує суму й кількість; доставка — за тарифом перевізника, у суму не входить", () => {
+    for (const method of ["np-branch", "np-courier", "ukrposhta"] as const) {
+      const t = cartTotals(resolveLines([{ id: cheap.id, qty: 2 }], catalog), method);
+      expect(t.count).toBe(2);
+      expect(t.subtotal).toBe(cheap.price * 2);
+      expect(t.shipping).toBe(0);
+      expect(t.total).toBe(t.subtotal);
+    }
   });
 
   it("враховує економію за акційними цінами", () => {

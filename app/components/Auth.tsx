@@ -19,7 +19,18 @@ export type AuthUser = {
   lastName: string;
   phone: string;
   createdAt: string;
-  lastDelivery: { method: DeliveryId; city?: string; cityRef?: string; branch?: string; address?: string } | null;
+  lastDelivery: {
+    method: DeliveryId;
+    city?: string;
+    cityRef?: string;
+    branch?: string;
+    branchRef?: string;
+    address?: string;
+    street?: string;
+    streetRef?: string;
+    house?: string;
+    flat?: string;
+  } | null;
   /** Власник підтвердив email за посиланням з листа */
   emailVerified?: boolean;
   /** Має доступ до адмін-панелі */

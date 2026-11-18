@@ -242,7 +242,7 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
                 </div>
                 <p className="mt-1 text-sm text-[#7ee2a8]">
                   <Icon name="truck" className="mr-1.5 inline h-4 w-4 align-[-3px]" />
-                  Безкоштовна доставка — сума більша за 3 000 ₴
+                  Доставка Новою поштою чи Укрпоштою по всій Україні
                 </p>
                 <button
                   onClick={addBundle}

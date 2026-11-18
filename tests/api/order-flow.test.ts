@@ -6,6 +6,7 @@ import * as ordersItem from "../../app/api/admin/orders/[number]/route";
 import * as adminOrders from "../../app/api/admin/orders/route";
 import * as register from "../../app/api/auth/register/route";
 import * as cronOrders from "../../app/api/cron/orders/route";
+import * as cancelRoute from "../../app/api/orders/cancel/route";
 import * as orders from "../../app/api/orders/route";
 import * as track from "../../app/api/orders/track/route";
 import { loadCatalog } from "../../app/lib/server/catalog";
@@ -201,5 +202,54 @@ describe("замовлення, оформлені до зміни (товар �
     await dbQuery("update orders set confirmed_at = now() - interval '10 days' where number = $1", [n]);
     await cron("Bearer flow-secret");
     expect((await setStatus(n, "shipped")).status).toBe(200);
+  });
+});
+
+describe("покупець скасовує замовлення сам", () => {
+  const cancel = (body: Record<string, unknown>, cookie?: string) =>
+    call(cancelRoute.POST, { body, cookie, ip: `10.92.0.${++ipSeq}` });
+
+  it("гість — за номером і телефоном; підтверджене: товар повертається на склад", async () => {
+    await setStock(5);
+    const n = (await place()).data.order.number;
+    await setStatus(n, "confirmed");
+    expect(await stock()).toBe(3);
+    // Чужий телефон — «не знайдено», нічого не змінюється
+    expect((await cancel({ number: n, phone: "+380 50 000 00 00" })).status).toBe(404);
+    const r = await cancel({ number: n, phone: PHONE });
+    expect(r.status).toBe(200);
+    expect(r.data.order.status).toBe("cancelled");
+    expect(await stock()).toBe(5);
+    expect(lastMailFor(n)!.text).toMatch(/скасовано на ваше прохання/);
+  });
+
+  it("з акаунтом — лише своє замовлення, без телефону", async () => {
+    const reg = await call(register.POST, { body: { email: "flow-buyer@example.com", password: "secret123", firstName: "Тарас" } });
+    const buyer = sessionCookie(reg.res);
+    const mine = await call(orders.POST, {
+      cookie: buyer,
+      body: {
+        lines: [{ id: PRODUCT, qty: 1 }],
+        contact: { firstName: "Тарас", lastName: "Оплатний", phone: "+380 67 999 88 77" },
+        delivery: { method: "np-branch", city: "Київ", branch: "1" },
+        payment: "invoice",
+        agreed: true,
+      },
+    });
+    const n = mine.data.order.number;
+    // Інший покупець (гість без телефону) скасувати не може
+    expect((await cancel({ number: n })).status).toBe(404);
+    expect((await cancel({ number: n }, buyer)).status).toBe(200);
+  });
+
+  it("оплачене скасувати самостійно не можна", async () => {
+    await setStock(5);
+    const n = (await place()).data.order.number;
+    await setStatus(n, "confirmed");
+    await setStatus(n, "paid");
+    const r = await cancel({ number: n, phone: PHONE });
+    expect(r.status).toBe(409);
+    expect(r.data.error).toMatch(/Оплачене замовлення/);
+    expect((await dbQuery("select status from orders where number = $1", [n]))[0].status).toBe("paid");
   });
 });

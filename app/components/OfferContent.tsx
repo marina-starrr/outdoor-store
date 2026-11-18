@@ -1,13 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  FREE_SHIPPING_FROM,
   PARCEL_STORAGE_DAYS,
   RETURN_DAYS,
   deliveryOptions,
   paymentOptions,
 } from "./cart-logic";
-import { formatPrice } from "./catalog-data";
 import { PAYMENT_DAYS } from "../lib/order-status";
 import { contacts } from "./data";
 import { InfoCard, InfoTitle, Prose, Toc } from "./info-ui";
@@ -131,8 +129,8 @@ export default function OfferContent({ seller }: { seller: Seller }) {
           сплачує Покупець.
         </p>
         <p>
-          Вартість доставки показується при оформленні замовлення до його підтвердження. Продавець надає Покупцю
-          розрахунковий документ відповідно до законодавства.
+          Вартість доставки не входить у ціну товару: її сплачує Покупець перевізнику при отриманні замовлення за
+          тарифами перевізника. Продавець надає Покупцю розрахунковий документ відповідно до законодавства.
         </p>
       </Section>
 
@@ -141,8 +139,7 @@ export default function OfferContent({ seller }: { seller: Seller }) {
         <ul>
           {deliveryOptions.map((o) => (
             <li key={o.id}>
-              <b>{o.title}</b> — {o.text}; {o.price} ₴
-              {o.freeAbove ? `, безкоштовно для замовлень від ${formatPrice(FREE_SHIPPING_FROM)}` : ""}.
+              <b>{o.title}</b> — {o.text}.
             </li>
           ))}
         </ul>

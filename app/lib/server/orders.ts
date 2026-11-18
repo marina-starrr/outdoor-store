@@ -1,6 +1,6 @@
 import "server-only";
 import { randomInt } from "node:crypto";
-import { deliveryOptions } from "../../components/cart-logic";
+import { deliveryOptions, shippingLabel, deliveryWhere } from "../../components/cart-logic";
 import { formatPrice } from "../../components/catalog-data";
 import { sha256 } from "./auth";
 import { db, iso, isoOpt, num, opt, userFromRow, type Queryable, type Row, type StoredOrder, type StoredUser } from "./db";
@@ -192,13 +192,13 @@ export const trackHref = (number: string) => `/orders/track?number=${encodeURICo
 export function orderPlacedMail(order: StoredOrder, to: string, guest: boolean): Mail {
   const items = order.lines.map((l) => `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}`).join("\n");
   const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? "";
-  const where = [order.delivery.city, order.delivery.branch && `№ ${order.delivery.branch}`, order.delivery.address].filter(Boolean).join(", ");
+  const where = deliveryWhere(order.delivery);
   return {
     to,
     subject: `Замовлення ${order.number} прийнято`,
     text:
       `${order.contact.firstName}, дякуємо за замовлення!\n\n${items}\n\n` +
-      `Доставка: ${delivery}${where ? `, ${where}` : ""} — ${order.shipping ? formatPrice(order.shipping) : "безкоштовно"}\n` +
+      `Доставка: ${delivery}${where ? `, ${where}` : ""} — ${shippingLabel(order.shipping, formatPrice).toLowerCase()}\n` +
       (order.promoDiscount ? `Знижка за промокодом: −${formatPrice(order.promoDiscount)}\n` : "") +
       `Разом: ${formatPrice(order.total)}\n\n` +
       (guest

@@ -19,7 +19,20 @@ import type { DeliveryId, PaymentId } from "../../components/cart-logic";
 export const ORDER_STATUSES = ["new", "confirmed", "paid", "shipped", "done", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-export type OrderDelivery = { method: DeliveryId; city?: string; cityRef?: string; branch?: string; address?: string };
+export type OrderDelivery = {
+  method: DeliveryId;
+  city?: string;
+  cityRef?: string;
+  /** Нова пошта — підпис відділення з довідника; Укрпошта — індекс */
+  branch?: string;
+  branchRef?: string;
+  /** Кур'єр: повна адреса «вул. Садова, буд. 5, кв. 12» і її частини (для наступного замовлення) */
+  address?: string;
+  street?: string;
+  streetRef?: string;
+  house?: string;
+  flat?: string;
+};
 
 export type StoredOrder = {
   number: string;

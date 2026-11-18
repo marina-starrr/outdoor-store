@@ -236,7 +236,7 @@ describe("оформлення замовлення", () => {
     const who = await call(me.GET, { method: "GET", cookie });
     expect(who.data.cart).toEqual([]);
     // Місто розпізнане за довідником: повний підпис і Ref Нової пошти
-    expect(who.data.user.lastDelivery).toMatchObject({ method: "np-branch", city: "м. Львів, Львівська обл.", cityRef: "ref-lviv", branch: "12" });
+    expect(who.data.user.lastDelivery).toMatchObject({ method: "np-branch", city: "м. Львів, Львівська обл.", cityRef: "ref-lviv", branch: "Відділення №12: вул. Тестова, 12", branchRef: "ref-lviv-wh-12" });
     expect(who.data.user.phone).toBe("+380 50 111 22 33");
 
     const history = await call(orders.GET, { method: "GET", cookie });

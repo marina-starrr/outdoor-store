@@ -1,6 +1,6 @@
 import "server-only";
 import type { NextRequest } from "next/server";
-import { sql } from "./db";
+import { isTestDatabase, sql } from "./db";
 
 /*
  * Обмеження частоти запитів. Лічильники — у базі (таблиця rate_limits):
@@ -41,7 +41,10 @@ export function rateLimiter(name: string, max: number, windowMs: number) {
       [`${name}|${key}`.slice(0, 400), windowMs],
     );
     await cleanup();
-    return Number(row.count) > max;
+    // Наскрізні тести: десятки замовлень з однієї адреси за хвилини. Лише тестовий
+    // сервер (FC_E2E і тимчасова база) — на хостингу ця умова неможлива
+    const factor = process.env.FC_E2E === "1" && isTestDatabase() ? 100 : 1;
+    return Number(row.count) > max * factor;
   };
 }
 

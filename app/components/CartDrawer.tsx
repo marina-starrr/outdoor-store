@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { useCart } from "./Cart";
 import Icon from "./Icon";
 import { cartTotals } from "./cart-logic";
-import { CartItem, EmptyCart, FreeShippingBar } from "./cart-ui";
+import { CartItem, EmptyCart, ShippingNote } from "./cart-ui";
 import { formatPrice, productsWord } from "./catalog-data";
 import { useHydrated } from "./use-hydrated";
 
@@ -92,7 +92,7 @@ export default function CartDrawer() {
         ) : (
           <>
             <div className="px-5 pt-4">
-              <FreeShippingBar subtotal={totals.subtotal} />
+              <ShippingNote />
             </div>
             <ul className="flex-1 divide-y divide-[#e3edf3] overflow-y-auto px-5">
               {lines.map((line) => (

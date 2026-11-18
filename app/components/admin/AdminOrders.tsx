@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../Icon";
-import { deliveryOptions, paymentTitle } from "../cart-logic";
+import { deliveryOptions, paymentTitle, shippingLabel, deliveryWhere } from "../cart-logic";
 import { formatPrice } from "../catalog-data";
 import { PAYMENT_DAYS, nextStatusesFor, orderStatusInfo, paymentDue, type OrderStatusId } from "../../lib/order-status";
 import AdminShell, { LoadError, Panel } from "./AdminShell";
@@ -168,7 +168,7 @@ function Orders() {
           {visible.map((o) => {
             const expanded = open === o.number;
             const delivery = deliveryOptions.find((d) => d.id === o.delivery.method)?.title ?? "Самовивіз";
-            const where = [o.delivery.city, o.delivery.branch && `№ ${o.delivery.branch}`, o.delivery.address].filter(Boolean).join(", ");
+            const where = deliveryWhere(o.delivery);
             return (
               <li key={o.number} className="rounded-[22px] bg-white shadow-[0_10px_30px_rgba(79,93,101,.08)]">
                 <button
@@ -208,7 +208,7 @@ function Orders() {
                       </ul>
                       <dl className="mt-2 space-y-1 text-sm text-[#527083]">
                         {o.promoDiscount > 0 && <div className="flex justify-between"><dt>Промокод {o.promo}</dt><dd>−{formatPrice(o.promoDiscount)}</dd></div>}
-                        <div className="flex justify-between"><dt>Доставка</dt><dd>{o.shipping ? formatPrice(o.shipping) : "Безкоштовно"}</dd></div>
+                        <div className="flex justify-between"><dt>Доставка</dt><dd>{shippingLabel(o.shipping, formatPrice)}</dd></div>
                         <div className="flex justify-between font-extrabold text-[#082c45]"><dt>Разом</dt><dd>{formatPrice(o.total)}</dd></div>
                       </dl>
                     </div>

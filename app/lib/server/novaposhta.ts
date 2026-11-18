@@ -264,3 +264,122 @@ export async function checkCity(method: DeliveryId, ref: string, text: string): 
   if (fuzzy && cities[0]) return { ok: false, error: `Не знайшли «${text.trim()}». Можливо, ви мали на увазі «${cities[0].name}»?` };
   return { ok: false, error: "Не знайшли такого населеного пункту — перевірте написання і оберіть зі списку" };
 }
+
+/* ---------- Відділення й поштомати міста ---------- */
+
+export type Warehouse = {
+  ref: string;
+  /** Номер відділення / поштомату */
+  number: string;
+  kind: "branch" | "postomat" | "point";
+  /** «Відділення №3 (до 30 кг на одне місце): вул. Просвіти, 13» */
+  label: string;
+};
+
+type NpWarehouse = {
+  Ref: string;
+  Number: string;
+  Description: string;
+  CategoryOfWarehouse: string;
+  WarehouseStatus: string;
+  DenyToSelect: string;
+};
+
+const warehouseKinds: Record<string, Warehouse["kind"]> = { Branch: "branch", Postomat: "postomat", OtherOperating: "point" };
+const WAREHOUSES_TTL = 12 * 3_600_000;
+const warehousesCache = new Map<string, { at: number; list: Promise<Warehouse[] | null> }>();
+
+async function loadWarehouses(cityRef: string): Promise<Warehouse[] | null> {
+  try {
+    const all: NpWarehouse[] = [];
+    // Великі міста — тисячі відділень і поштоматів (Київ — понад 8 тис.), тому сторінками
+    for (let page = 1; page <= 40; page++) {
+      const part = await npCall<NpWarehouse>("getWarehouses", { CityRef: cityRef, Limit: "500", Page: String(page), Language: "UA" }, "Address", 15_000);
+      all.push(...part);
+      if (part.length < 500) break;
+    }
+    return all
+      .filter((w) => w.WarehouseStatus === "Working" && w.DenyToSelect !== "1" && warehouseKinds[w.CategoryOfWarehouse])
+      .map((w) => ({ ref: w.Ref, number: w.Number, kind: warehouseKinds[w.CategoryOfWarehouse], label: w.Description }))
+      .sort((a, b) => Number(a.number) - Number(b.number) || a.label.localeCompare(b.label, "uk"));
+  } catch (e) {
+    console.error("[novaposhta] getWarehouses", e);
+    return null;
+  }
+}
+
+const testWarehouses = (cityRef: string): Warehouse[] => [
+  ...[1, 2, 3, 5, 12].map((n) => ({ ref: `${cityRef}-wh-${n}`, number: String(n), kind: "branch" as const, label: `Відділення №${n}: вул. Тестова, ${n}` })),
+  { ref: `${cityRef}-pm-9001`, number: "9001", kind: "postomat", label: "Поштомат №9001: вул. Соборності, 1 (у магазині)" },
+];
+
+/**
+ * Відділення за тим, що прислав покупець: Ref зі списку або просто номер
+ * («12», «№ 12») — якщо ввів вручну, не обираючи
+ */
+export function findWarehouse(list: Warehouse[], ref: string, text: string) {
+  // Обрано зі списку, але такого в цьому місті немає (напр. з іншого міста) — не вгадуємо
+  if (ref) return list.find((w) => w.ref === ref);
+  const n = text.replace(/^(відділення|поштомат)?\s*№?\s*/i, "").trim();
+  return /^\d+$/.test(n) ? list.find((w) => w.number === n) : undefined;
+}
+
+/** Усі робочі відділення, поштомати й пункти міста; null — Нова пошта не відповіла */
+export async function cityWarehouses(cityRef: string): Promise<Warehouse[] | null> {
+  // Тести (NP_CITIES_FIXTURE): однаковий набір відділень у кожному місті, без мережі
+  if (process.env.NP_CITIES_FIXTURE) return testWarehouses(cityRef);
+  const hit = warehousesCache.get(cityRef);
+  if (hit && Date.now() - hit.at < WAREHOUSES_TTL) return hit.list;
+  const list = loadWarehouses(cityRef);
+  warehousesCache.set(cityRef, { at: Date.now(), list });
+  // Помилку не кешуємо — наступний запит спробує знову
+  list.then((l) => l === null && warehousesCache.delete(cityRef));
+  if (warehousesCache.size > 500) warehousesCache.delete(warehousesCache.keys().next().value!);
+  return list;
+}
+
+/** Пошук серед відділень міста: за номером («12») або за вулицею / словом («поштомат», «Соборна») */
+export function filterWarehouses(list: Warehouse[], query: string, limit = 100) {
+  const q = query.trim().toLowerCase().replace(/[№#]/g, "").trim();
+  if (!q) return list.slice(0, limit);
+  if (/^\d+$/.test(q)) {
+    const exact = list.filter((w) => w.number === q);
+    return [...exact, ...list.filter((w) => w.number !== q && w.number.startsWith(q))].slice(0, limit);
+  }
+  const words = q.split(/\s+/);
+  return list.filter((w) => words.every((word) => w.label.toLowerCase().includes(word))).slice(0, limit);
+}
+
+/* ---------- Вулиці (кур'єрська доставка) ---------- */
+
+export type Street = { ref: string; label: string };
+
+const streetsCache = new Map<string, { at: number; list: Street[] }>();
+
+/** Вулиці міста за початком назви; null — Нова пошта не відповіла */
+export async function searchStreets(cityRef: string, query: string, limit = 20): Promise<Street[] | null> {
+  const q = query.trim().slice(0, 60);
+  if (process.env.NP_CITIES_FIXTURE) {
+    const streets = [{ ref: "street-sobornosti", label: "вул. Соборності" }, { ref: "street-sadova", label: "вул. Садова" }];
+    return streets.filter((s) => s.label.toLowerCase().includes(q.toLowerCase()));
+  }
+  if (q.length < 2) return [];
+  const key = `${cityRef}|${q.toLowerCase()}`;
+  const hit = streetsCache.get(key);
+  if (hit && Date.now() - hit.at < 86_400_000) return hit.list;
+  try {
+    const data = await npCall<{ Ref: string; Description: string; StreetsType: string }>(
+      "getStreet",
+      { CityRef: cityRef, FindByString: q, Limit: String(limit) },
+      "Address",
+      5000,
+    );
+    const list = data.map((s) => ({ ref: s.Ref, label: `${s.StreetsType} ${s.Description}`.trim() }));
+    if (streetsCache.size > 2000) streetsCache.clear();
+    streetsCache.set(key, { at: Date.now(), list });
+    return list;
+  } catch (e) {
+    console.error("[novaposhta] getStreet", e);
+    return null;
+  }
+}

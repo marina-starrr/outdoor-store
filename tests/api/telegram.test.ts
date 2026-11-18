@@ -25,7 +25,7 @@ describe("сповіщення адміністратору в Telegram", () => 
       body: {
         lines: [{ id: "np3", qty: 2 }],
         contact: { firstName: "Тетяна", lastName: "Телеграм", phone: "+380 63 555 44 33", email: "tg@example.com" },
-        delivery: { method: "np-branch", city: "Київ", branch: "7" },
+        delivery: { method: "np-branch", city: "Київ", branch: "5" },
         payment: "invoice",
         comment: "Після 18:00",
         noCall: true,
@@ -39,7 +39,7 @@ describe("сповіщення адміністратору в Telegram", () => 
     expect(text).toMatch(/Намет Nature Peak 3 × 2/);
     expect(text).toContain("Тетяна Телеграм (без акаунта)");
     expect(text).toContain("+380 63 555 44 33 — просить не телефонувати");
-    expect(text).toContain("м. Київ, Київська обл., № 7");
+    expect(text).toContain("м. Київ, Київська обл., Відділення №5: вул. Тестова, 5");
     expect(text).toContain("Оплата на рахунок");
     expect(text).toContain("Після 18:00");
     expect(text).toContain(`/admin/orders?q=${n}`);

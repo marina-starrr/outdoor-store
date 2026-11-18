@@ -16,14 +16,15 @@ import { Breadcrumbs, ProductCard } from "./catalog-ui";
 import { contacts } from "./data";
 import { SELLER } from "../lib/seller";
 import { PAYMENT_DAYS } from "../lib/order-status";
-import { CartItem, EmptyCart, FreeShippingBar, TrashIcon } from "./cart-ui";
+import { CartItem, EmptyCart, ShippingNote, TrashIcon } from "./cart-ui";
 import { ORDER_CLAIMS_STORAGE_KEY, readIds, writeIds } from "./cart-storage";
 import CityInput from "./CityInput";
+import SuggestInput from "./SuggestInput";
 import {
   cartRecommendations,
   cartTotals,
+  SHIPPING_BY_CARRIER,
   deliveryOptions,
-  deliveryPrice,
   isDeliveryId,
   paymentOptions,
   promoCodes,
@@ -40,8 +41,14 @@ type Form = {
   city: string;
   /** Ref населеного пункту, обраного з підказок (порожній — введено вручну) */
   cityRef: string;
+  /** Нова пошта — відділення зі списку (branchRef); Укрпошта — індекс */
   branch: string;
-  address: string;
+  branchRef: string;
+  /** Кур'єр: вулиця зі списку, будинок, квартира */
+  street: string;
+  streetRef: string;
+  house: string;
+  flat: string;
   comment: string;
   noCall: boolean;
 };
@@ -54,7 +61,11 @@ const emptyForm: Form = {
   city: "",
   cityRef: "",
   branch: "",
-  address: "",
+  branchRef: "",
+  street: "",
+  streetRef: "",
+  house: "",
+  flat: "",
   comment: "",
   noCall: false,
 };
@@ -98,10 +109,13 @@ function validate(form: Form, delivery: DeliveryId, guest: boolean): Errors {
   if (guest && !form.email.trim()) errors.email = "Вкажіть email — надішлемо підтвердження";
   else if (form.email && !/^\S+@\S+\.\S+$/.test(form.email.trim())) errors.email = "Перевірте email";
   if (form.city.trim().length < 2) errors.city = "Вкажіть місто";
-  if ((delivery === "np-branch" || delivery === "ukrposhta") && !form.branch.trim())
-    errors.branch = "Вкажіть номер відділення";
-  if (delivery === "np-courier" && form.address.trim().length < 5)
-    errors.address = "Вкажіть вулицю, будинок і квартиру";
+  if (delivery === "np-branch" && !form.branch.trim()) errors.branch = "Оберіть відділення або поштомат";
+  if (delivery === "ukrposhta" && !/^\d{5}$/.test(form.branch.replace(/\s/g, "")))
+    errors.branch = "Вкажіть індекс відділення — 5 цифр";
+  if (delivery === "np-courier") {
+    if (form.street.trim().length < 2) errors.street = "Вкажіть вулицю";
+    if (!form.house.trim()) errors.house = "Вкажіть будинок";
+  }
   return errors;
 }
 
@@ -143,14 +157,25 @@ export default function CartPage() {
       email: f.email || user.email,
       city: f.city || d?.city || "",
       cityRef: f.city ? f.cityRef : d?.cityRef || "",
-      branch: f.branch || d?.branch || "",
-      address: f.address || d?.address || "",
+      // Відділення й адреса — з того самого минулого замовлення, лише якщо місто теж звідти
+      ...(f.city
+        ? {}
+        : {
+            branch: d?.branch || "",
+            branchRef: d?.branchRef || "",
+            street: d?.street || "",
+            streetRef: d?.streetRef || "",
+            house: d?.house || "",
+            flat: d?.flat || "",
+          }),
     }));
     // Старі замовлення могли мати спосіб, якого вже немає (самовивіз)
     if (d && isDeliveryId(d.method)) setDelivery(d.method);
   }
 
   const totals = cartTotals(lines, delivery, promo);
+  // Довідник Нової пошти — лише для населеного пункту з її Ref (не з пошуку для Укрпошти)
+  const npCityRef = form.cityRef && !form.cityRef.startsWith("s:") ? form.cityRef : "";
   // Спосіб з мінімальною сумою (напр. «частинами») недоступний для меншого замовлення
   const paymentAllowed = (o: (typeof paymentOptions)[number]) => !o.minTotal || totals.total >= o.minTotal;
   const effectivePayment = paymentOptions.some((o) => o.id === payment && paymentAllowed(o)) ? payment : paymentOptions[0].id;
@@ -203,7 +228,14 @@ export default function CartPage() {
             phone: form.phone,
             email: form.email.trim(),
           },
-          delivery: { method: delivery, city: form.city, cityRef: form.cityRef, branch: form.branch, address: form.address },
+          delivery: {
+            method: delivery,
+            city: form.city,
+            cityRef: form.cityRef,
+            ...(delivery === "np-courier"
+              ? { street: form.street, streetRef: form.streetRef, house: form.house, flat: form.flat }
+              : { branch: form.branch, branchRef: delivery === "np-branch" ? form.branchRef : "" }),
+          },
           payment: effectivePayment,
           promo,
           comment: form.comment,
@@ -307,7 +339,7 @@ export default function CartPage() {
                       )}
                     </div>
                     <div className="mt-4">
-                      <FreeShippingBar subtotal={totals.subtotal} />
+                      <ShippingNote />
                     </div>
                     <ul className="mt-2 divide-y divide-[#e3edf3]">
                       {lines.map((line) => (
@@ -349,21 +381,20 @@ export default function CartPage() {
                     <CardTitle step={3}>Доставка</CardTitle>
                     <div className="mt-5 grid gap-3 sm:grid-cols-2">
                       {deliveryOptions.map((o) => {
-                        const price = deliveryPrice(o.id, totals.subtotal);
                         return (
                           <OptionCard
                             key={o.id}
                             name="delivery"
                             checked={delivery === o.id}
                             onChange={() => {
+                              // Відділення Нової пошти й індекс Укрпошти — різні поля, старе значення не підходить
+                              if ((delivery === "ukrposhta") !== (o.id === "ukrposhta")) setForm((f) => ({ ...f, branch: "", branchRef: "" }));
                               setDelivery(o.id);
                               // Населений пункт без Нової пошти (з пошуку для Укрпошти) — обрати заново
                               if (o.id !== "ukrposhta" && form.cityRef.startsWith("s:")) setForm((f) => ({ ...f, cityRef: "" }));
                             }}
                             title={o.title}
                             text={o.text}
-                            aside={price === 0 ? "Безкоштовно" : formatPrice(price)}
-                            asideAccent={price === 0}
                           />
                         );
                       })}
@@ -376,21 +407,81 @@ export default function CartPage() {
                             method={delivery}
                             error={errors.city}
                             onChange={(text, ref) => {
-                              setForm((f) => ({ ...f, city: text, cityRef: ref }));
+                              // Інше місто — відділення й вулиця з попереднього не підходять
+                              setForm((f) =>
+                                ref === f.cityRef
+                                  ? { ...f, city: text }
+                                  : { ...f, city: text, cityRef: ref, branch: f.branchRef ? "" : f.branch, branchRef: "", street: f.streetRef ? "" : f.street, streetRef: "" },
+                              );
                               if (errors.city) setErrors((e) => ({ ...e, city: undefined }));
                             }}
                           />
                         </Field>
-                        {delivery === "np-courier" ? (
-                          <Field id="address" label="Адреса" error={errors.address}>
-                            <input id="field-address" autoComplete="street-address" value={form.address} onChange={(e) => set("address", e.target.value)} className={inputCls(errors.address)} placeholder="Вулиця, будинок, квартира" />
+                        {delivery === "np-branch" && (
+                          <Field id="branch" label="Відділення або поштомат" error={errors.branch}>
+                            <SuggestInput
+                              id="branch"
+                              label="Відділення й поштомати"
+                              value={form.branch}
+                              selectedRef={form.branchRef}
+                              url={(q) => (npCityRef ? `/api/warehouses?cityRef=${encodeURIComponent(npCityRef)}&q=${encodeURIComponent(q)}` : null)}
+                              openOnFocus
+                              disabled={!form.city.trim()}
+                              disabledText="Спершу оберіть місто"
+                              placeholder={npCityRef ? "Номер або вулиця, напр. 12" : "Номер відділення"}
+                              emptyText="Не знайшли — спробуйте номер або назву вулиці"
+                              hint={({ total, shown, query }) =>
+                                !total ? null : query ? (shown >= 100 ? "Показано перші 100 — уточніть пошук" : null) : `Усього ${total} — введіть номер чи вулицю, щоб знайти швидше`
+                              }
+                              error={errors.branch}
+                              onChange={(text, ref) => {
+                                setForm((f) => ({ ...f, branch: text, branchRef: ref }));
+                                if (errors.branch) setErrors((e) => ({ ...e, branch: undefined }));
+                              }}
+                            />
                           </Field>
-                        ) : (
-                          <Field id="branch" label={delivery === "ukrposhta" ? "Індекс або номер відділення" : "Відділення / поштомат №"} error={errors.branch}>
-                            <input id="field-branch" value={form.branch} onChange={(e) => set("branch", e.target.value)} className={inputCls(errors.branch)} placeholder={delivery === "ukrposhta" ? "01001" : "12"} />
+                        )}
+                        {delivery === "ukrposhta" && (
+                          <Field id="branch" label="Індекс відділення Укрпошти" error={errors.branch}>
+                            <input id="field-branch" inputMode="numeric" maxLength={5} autoComplete="postal-code" value={form.branch} onChange={(e) => set("branch", e.target.value.replace(/\D/g, ""))} className={inputCls(errors.branch)} placeholder="Напр. 36000" />
+                            <span className="mt-1.5 block text-xs text-[#8aa5b5]">
+                              5 цифр. Індекс свого відділення можна знайти на{" "}
+                              <a href="https://www.ukrposhta.ua/" target="_blank" rel="noopener noreferrer" className="font-bold text-[#098fd0] hover:underline">сайті Укрпошти</a>
+                            </span>
+                          </Field>
+                        )}
+                        {delivery === "np-courier" && (
+                          <Field id="street" label="Вулиця" error={errors.street}>
+                            <SuggestInput
+                              id="street"
+                              label="Вулиці"
+                              value={form.street}
+                              selectedRef={form.streetRef}
+                              url={(q) => (npCityRef ? `/api/streets?cityRef=${encodeURIComponent(npCityRef)}&q=${encodeURIComponent(q)}` : null)}
+                              minChars={2}
+                              disabled={!form.city.trim()}
+                              disabledText="Спершу оберіть місто"
+                              placeholder="Почніть вводити, напр. Соборна"
+                              emptyText="Не знайшли таку вулицю — перевірте назву"
+                              error={errors.street}
+                              onChange={(text, ref) => {
+                                setForm((f) => ({ ...f, street: text, streetRef: ref }));
+                                if (errors.street) setErrors((e) => ({ ...e, street: undefined }));
+                              }}
+                            />
                           </Field>
                         )}
                     </div>
+                    {delivery === "np-courier" && (
+                      <div className="mt-4 grid grid-cols-2 gap-4 sm:ml-auto sm:w-1/2 sm:pl-2">
+                        <Field id="house" label="Будинок" error={errors.house}>
+                          <input id="field-house" value={form.house} onChange={(e) => set("house", e.target.value)} className={inputCls(errors.house)} placeholder="Напр. 5А" />
+                        </Field>
+                        <Field id="flat" label="Квартира">
+                          <input id="field-flat" value={form.flat} onChange={(e) => set("flat", e.target.value)} className={inputCls()} placeholder="Необов'язково" />
+                        </Field>
+                      </div>
+                    )}
                     <p className="mt-4 text-xs text-[#8aa5b5]">
                       Відправляємо щодня. Детальніше про строки й вартість —{" "}
                       <Link href="/delivery" target="_blank" className="font-bold text-[#098fd0] hover:underline">
@@ -439,7 +530,7 @@ export default function CartPage() {
                       <Row label={`${count} ${productsWord(count)} на суму`} value={formatPrice(totals.subtotal + totals.savings)} />
                       {totals.savings > 0 && <Row label="Знижка за акціями" value={`−${formatPrice(totals.savings)}`} accent />}
                       {totals.promoDiscount > 0 && <Row label={`Промокод ${promo}`} value={`−${formatPrice(totals.promoDiscount)}`} accent />}
-                      <Row label="Доставка" value={totals.shipping === 0 ? "Безкоштовно" : formatPrice(totals.shipping)} accent={totals.shipping === 0} />
+                      <Row label="Доставка" value={SHIPPING_BY_CARRIER} />
                     </dl>
 
                     {/* Промокод */}

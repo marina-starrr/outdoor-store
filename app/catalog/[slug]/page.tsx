@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: PageProps<"/catalog/[slug]">)
   const category = getCategory((await params).slug);
   if (!category) return {};
   const url = `/catalog/${category.slug}`;
-  const description = `${category.subtitle} ${category.name} з доставкою по Україні — фільтри за ціною та брендом, відгуки покупців, безкоштовна доставка від 3 000 ₴.`;
+  const description = `${category.subtitle} ${category.name} з доставкою по Україні — фільтри за ціною та брендом, відгуки покупців, доставка Новою поштою та Укрпоштою.`;
   return {
     title: category.title,
     description,

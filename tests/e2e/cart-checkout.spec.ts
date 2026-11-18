@@ -45,9 +45,9 @@ test.describe("кошик", () => {
     await expect(page.getByText("Промокод FAMILY10")).toBeVisible();
   });
 
-  test("доставка від 3000 ₴ безкоштовна, самовивозу немає", async ({ page }) => {
+  test("доставка — за тарифами перевізника, самовивозу немає", async ({ page }) => {
     await page.goto("/cart");
-    await expect(page.locator("aside").getByText("Безкоштовно").first()).toBeVisible();
+    await expect(page.locator("aside").getByText("За тарифами перевізника").first()).toBeVisible();
     await expect(page.getByText("Самовивіз")).toHaveCount(0);
   });
 

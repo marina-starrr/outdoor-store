@@ -11,9 +11,10 @@ import { useNotifications } from "./Notifications";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
-import { deliveryOptions, paymentTitle } from "./cart-logic";
+import { deliveryOptions, paymentTitle, deliveryWhere } from "./cart-logic";
 import OrderPayment from "./OrderPayment";
-import { orderStatusInfo, type OrderStatusId } from "../lib/order-status";
+import { customerCanCancel, orderStatusInfo, type OrderStatusId } from "../lib/order-status";
+import CancelOrder from "./CancelOrder";
 import { formatPrice, productsWord } from "./catalog-data";
 import { Field, FormError, PasswordInput, SubmitButton, formatPhone, inputCls, isPhoneComplete } from "./form-ui";
 
@@ -274,7 +275,7 @@ function Orders() {
             // «Самовивіз» — для замовлень, оформлених до того, як його прибрали
             const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? "Самовивіз";
             const payment = paymentTitle(order.payment);
-            const where = [order.delivery.city, order.delivery.branch && `№ ${order.delivery.branch}`, order.delivery.address].filter(Boolean).join(", ");
+            const where = deliveryWhere(order.delivery);
             return (
               <li key={order.number} className="rounded-2xl border border-[#e3edf3] p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -304,7 +305,16 @@ function Orders() {
                     {payment}
                     {order.promoDiscount > 0 && ` · знижка ${formatPrice(order.promoDiscount)}`}
                   </p>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+                    {/* До оплати покупець може скасувати сам; заброньований товар повернеться в продаж */}
+                    {customerCanCancel(order.status) && (
+                      <CancelOrder
+                        number={order.number}
+                        onCancelled={() =>
+                          setOrders((list) => list && list.map((o) => (o.number === order.number ? { ...o, status: "cancelled" } : o)))
+                        }
+                      />
+                    )}
                     <button onClick={() => repeat(order)} className="rounded-full bg-[#eaf3f8] px-4 py-2 text-xs font-extrabold text-[#264e65] transition hover:bg-[#d8ecf7]">
                       Повторити замовлення
                     </button>

@@ -27,7 +27,7 @@ import { invalidateCatalog, loadCatalog } from "../../lib/server/catalog";
 import { tx, type StoredOrder } from "../../lib/server/db";
 import { setCart } from "../../lib/server/lists";
 import { sendMail } from "../../lib/server/mail";
-import { checkCity } from "../../lib/server/novaposhta";
+import { checkCity, cityWarehouses, findWarehouse, searchStreets } from "../../lib/server/novaposhta";
 import { expireUnpaidOrders } from "../../lib/server/order-flow";
 import { insertOrder, orderPlacedMail, userOrders } from "../../lib/server/orders";
 import { newOrderText, notifyAdmin } from "../../lib/server/telegram";
@@ -96,13 +96,51 @@ export async function POST(req: NextRequest) {
   // field — щоб браузер показав помилку під полем «Місто»
   if (!city.ok) return json({ error: city.error, field: "city" }, 400);
   const delivery: StoredOrder["delivery"] = { method, city: city.label, ...(city.ref ? { cityRef: city.ref } : {}) };
-  if (method === "np-branch" || method === "ukrposhta") {
-    delivery.branch = cleanText(body.delivery?.branch, 20);
-    if (!delivery.branch) return error("Вкажіть відділення");
+  const npCity = city.ref && !city.ref.startsWith("s:") ? city.ref : "";
+  const fieldError = (field: string, message: string) => json({ error: message, field }, 400);
+
+  if (method === "np-branch") {
+    // Відділення — лише зі списку цього міста (якщо Нова пошта відповідає)
+    const list = npCity ? await cityWarehouses(npCity) : null;
+    if (list) {
+      const w = findWarehouse(list, cleanText(body.delivery?.branchRef, 60), cleanText(body.delivery?.branch, 200));
+      if (!w) return fieldError("branch", "Оберіть відділення або поштомат зі списку");
+      delivery.branch = w.label;
+      delivery.branchRef = w.ref;
+    } else {
+      delivery.branch = cleanText(body.delivery?.branch, 200);
+      if (!delivery.branch) return fieldError("branch", "Вкажіть номер відділення");
+    }
+  }
+  if (method === "ukrposhta") {
+    delivery.branch = cleanText(body.delivery?.branch, 20).replace(/\s/g, "");
+    if (!/^\d{5}$/.test(delivery.branch)) return fieldError("branch", "Вкажіть індекс відділення Укрпошти — 5 цифр");
   }
   if (method === "np-courier") {
-    delivery.address = cleanText(body.delivery?.address, 150);
-    if (delivery.address.length < 5) return error("Вкажіть адресу");
+    const street = cleanText(body.delivery?.street, 120);
+    const streetRef = cleanText(body.delivery?.streetRef, 60);
+    const house = cleanText(body.delivery?.house, 20);
+    const flat = cleanText(body.delivery?.flat, 20);
+    if (street) {
+      if (street.length < 2) return fieldError("street", "Вкажіть вулицю");
+      // Вулицю обрано зі списку — перевіряємо, що вона справді в цьому місті
+      if (npCity && streetRef) {
+        // «вул. Соборності (Жовтнева)» → шукаємо за першим словом назви, без типу вулиці
+        const name = street.replace(/^\S+\.?\s+/, "").split(/[\s(]/)[0];
+        const found = await searchStreets(npCity, name, 50);
+        if (found && !found.some((s) => s.ref === streetRef)) return fieldError("street", "Оберіть вулицю зі списку");
+      }
+      if (!house) return fieldError("house", "Вкажіть номер будинку");
+      delivery.street = street;
+      if (streetRef) delivery.streetRef = streetRef;
+      delivery.house = house;
+      if (flat) delivery.flat = flat;
+      delivery.address = [street, `буд. ${house}`, flat && `кв. ${flat}`].filter(Boolean).join(", ");
+    } else {
+      // Старий формат — адреса одним рядком
+      delivery.address = cleanText(body.delivery?.address, 150);
+      if (delivery.address.length < 5) return fieldError("street", "Вкажіть вулицю і номер будинку");
+    }
   }
 
   // Ліміт рахуємо лише для замовлень, що пройшли перевірку

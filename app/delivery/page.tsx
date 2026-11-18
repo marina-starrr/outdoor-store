@@ -1,25 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Icon, { type IconName } from "../components/Icon";
+import { formatPrice } from "../components/catalog-data";
 import InfoLayout from "../components/InfoLayout";
 import { BannerStats, Callout, Faq, InfoCard, InfoTitle, Steps } from "../components/info-ui";
 import {
-  FREE_SHIPPING_FROM,
   PARCEL_STORAGE_DAYS,
   deliveryOptions,
   paymentOptions,
   type PaymentId,
 } from "../components/cart-logic";
-import { formatPrice } from "../components/catalog-data";
 import { PAYMENT_DAYS } from "../lib/order-status";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/delivery" },
   title: "Доставка і оплата",
-  description: `Доставка Новою поштою та Укрпоштою по всій Україні, безкоштовно від ${formatPrice(FREE_SHIPPING_FROM)}. Оплата на рахунок після підтвердження замовлення.`,
+  description: "Доставка Новою поштою та Укрпоштою по всій Україні за тарифами перевізника. Оплата на рахунок після підтвердження замовлення.",
 };
-
-const minPrice = Math.min(...deliveryOptions.map((o) => o.price));
 
 const deliveryIcon: Record<string, IconName> = { "np-branch": "package", "np-courier": "truck", ukrposhta: "mail" };
 const paymentIcon: Record<PaymentId, IconName> = { card: "card", cod: "package", parts: "clock", invoice: "mail" };
@@ -31,26 +28,27 @@ export default function DeliveryPage() {
       icon="truck"
       title="Доставка"
       accent="і оплата"
-      lead={`Відправляємо щодня по всій Україні. Замовлення від ${formatPrice(FREE_SHIPPING_FROM)} у відділення чи поштомат доставляємо безкоштовно.`}
+      lead="Відправляємо по всій Україні Новою поштою та Укрпоштою. Вартість доставки — за тарифами перевізника, її сплачуєте при отриманні посилки."
       aside={
         <BannerStats
           items={[
             { value: "1–3", label: "дні доставки" },
-            { value: `${minPrice} ₴`, label: "мін. вартість" },
+            { value: "3", label: "способи доставки" },
             { value: "24/7", label: "приймаємо замовлення" },
           ]}
         />
       }
     >
-      {/* Безкоштовна доставка */}
+      {/* Вартість доставки */}
       <section className="flex flex-col gap-5 rounded-[24px] bg-[#ffd51f] p-6 sm:flex-row sm:items-center sm:p-8">
         <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-white text-[#082c45]">
           <Icon name="truck" className="h-8 w-8" />
         </span>
         <div className="flex-1">
-          <p className="text-2xl font-black tracking-[-0.03em]">Безкоштовна доставка від {formatPrice(FREE_SHIPPING_FROM)}</p>
+          <p className="text-2xl font-black tracking-[-0.03em]">Доставка — за тарифами перевізника</p>
           <p className="mt-1 font-medium text-[#264e65]">
-            Діє для відділень і поштоматів Нової пошти та для Укрпошти. Сума рахується після всіх знижок на товари.
+            Вартість залежить від ваги, розміру посилки та способу доставки. Її сплачуєте Новій пошті чи Укрпошті при
+            отриманні — у суму замовлення вона не входить.
           </p>
         </div>
         <Link href="/catalog" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#082c45] px-6 py-3.5 text-sm font-extrabold text-white transition hover:bg-[#0b3a5a]">
@@ -91,12 +89,8 @@ export default function DeliveryPage() {
                     </td>
                     <td className="hidden px-5 py-4 font-bold sm:table-cell">{term}</td>
                     <td className="px-5 py-4 text-right">
-                      <b className="block text-[15px]">{formatPrice(o.price)}</b>
-                      {o.freeAbove ? (
-                        <span className="text-xs font-bold text-[#1f9d55]">0 ₴ від {formatPrice(FREE_SHIPPING_FROM)}</span>
-                      ) : (
-                        <span className="text-xs text-[#8aa5b5]">за будь-якої суми</span>
-                      )}
+                      <b className="block text-[15px]">За тарифом</b>
+                      <span className="text-xs text-[#8aa5b5]">при отриманні</span>
                     </td>
                   </tr>
                 );
@@ -156,7 +150,7 @@ export default function DeliveryPage() {
         <InfoTitle icon="package">Як оформити й отримати замовлення</InfoTitle>
         <Steps
           items={[
-            { title: "Додайте товари в кошик", text: "Ціна доставки й прогрес до безкоштовної доставки видно одразу в кошику." },
+            { title: "Додайте товари в кошик", text: "Сума замовлення — це вартість товарів; доставку оплачуєте перевізнику при отриманні." },
             { title: "Заповніть дані", text: "Реєстрація не обов’язкова. З акаунтом місто й відділення запам’ятовуються для наступних замовлень." },
             { title: "Оплатіть на рахунок", text: `Після підтвердження замовлення — протягом ${PAYMENT_DAYS} днів, реквізити надішлемо на email.` },
             { title: "Отримайте посилку", text: "Статус замовлення — у профілі або на сторінці «Де моє замовлення?». Огляньте товар у відділенні." },
@@ -169,7 +163,7 @@ export default function DeliveryPage() {
         <Faq
           items={[
             { q: "Чи можна забрати замовлення самостійно?", a: "Ні, ми онлайн-магазин без пункту видачі. Найшвидше — Нова пошта: поштомати працюють цілодобово." },
-            { q: "Чому кур’єрська доставка платна навіть від 3 000 ₴?", a: `Безкоштовна доставка діє для відділень і поштоматів. Адресна доставка Новою поштою коштує ${formatPrice(deliveryOptions.find((o) => o.id === "np-courier")?.price ?? 0)} за будь-якої суми замовлення.` },
+            { q: "Скільки коштує доставка?", a: "За тарифами Нової пошти чи Укрпошти — залежно від ваги, розміру й способу доставки. Розрахувати точну суму можна в калькуляторі на сайті перевізника. Оплачуєте її при отриманні посилки." },
             { q: "Що буде, якщо не встигну оплатити?", a: `Замовлення автоматично скасується через ${PAYMENT_DAYS} дні після підтвердження, а товар повернеться в продаж. Якщо потрібно більше часу — напишіть нам.` },
             { q: "Чи можна оплатити при отриманні?", a: "Ні, накладеним платежем ми не відправляємо: посилку відправляємо після оплати на рахунок." },
             { q: "Доставляєте за кордон?", a: "Поки що лише по Україні. Слідкуйте за новинами в наших соцмережах." },

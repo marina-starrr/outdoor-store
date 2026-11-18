@@ -9,7 +9,8 @@ import { useCart } from "./Cart";
 import { useLists } from "./Lists";
 import { useNotifications } from "./Notifications";
 import RecentlyViewed, { useTrackView } from "./RecentlyViewed";
-import { FREE_SHIPPING_FROM, RETURN_DAYS, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
+import { RETURN_DAYS, SHIPPING_BY_CARRIER, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
+import { ShippingNote } from "./cart-ui";
 import { useCatalog } from "./Catalog";
 import Icon from "./Icon";
 import SiteFooter from "./SiteFooter";
@@ -54,8 +55,6 @@ export default function ProductPage({ product }: { product: Product }) {
 
   // Кількість схвалених відгуків — з каталогу (рахується на сервері)
   const reviewCount = product.reviews;
-  const total = product.price * quantity;
-  const leftForFree = Math.max(0, FREE_SHIPPING_FROM - total);
 
   const addToCart = () => add(product.id, quantity);
 
@@ -265,23 +264,9 @@ export default function ProductPage({ product }: { product: Product }) {
                 </button>
               </div>
 
-              {/* Прогрес до безкоштовної доставки */}
               {product.inStock && (
-                <div className="mt-4 rounded-2xl bg-[#f3f9fd] px-4 py-3 text-sm">
-                  {leftForFree > 0 ? (
-                    <p>
-                      До <b>безкоштовної доставки</b> ще{" "}
-                      <b className="text-[#067eb7]">{formatPrice(leftForFree)}</b>
-                    </p>
-                  ) : (
-                    <p className="font-bold text-[#1f9d55]">Доставка для цього замовлення безкоштовна</p>
-                  )}
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
-                    <div
-                      className="h-full rounded-full bg-[#ffd51f] transition-[width] duration-300"
-                      style={{ width: `${Math.min(100, (total / FREE_SHIPPING_FROM) * 100)}%` }}
-                    />
-                  </div>
+                <div className="mt-4">
+                  <ShippingNote />
                 </div>
               )}
 
@@ -849,11 +834,11 @@ function ReviewForm({
 }
 
 function DeliveryTab() {
-  // Ті самі способи й ціни, що в кошику
+  // Ті самі способи, що в кошику
   const delivery = deliveryOptions.map((o) => ({
     title: o.title,
     text: `${o.text}.`,
-    aside: o.freeAbove ? `${formatPrice(o.price)} · від ${formatPrice(FREE_SHIPPING_FROM)} безкоштовно` : formatPrice(o.price),
+    aside: SHIPPING_BY_CARRIER.toLowerCase(),
   }));
   const payment = paymentOptions.map((o) => ({
     title: o.title,

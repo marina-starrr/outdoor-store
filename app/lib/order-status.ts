@@ -57,6 +57,12 @@ export function nextStatusesFor(status: OrderStatusId, payment?: string): OrderS
 export const canTransition = (from: OrderStatusId, to: OrderStatusId, payment?: string) =>
   nextStatusesFor(from, payment).includes(to);
 
+/** Покупець може сам скасувати замовлення, доки його не оплатив */
+export const customerCanCancel = (status: OrderStatusId) => status === "new" || status === "confirmed";
+
+/** Хто/чому скасував — для тексту сповіщення */
+export type CancelReason = "unpaid" | "customer";
+
 /** До якого часу треба оплатити підтверджене замовлення */
 export const paymentDue = (confirmedAt: string) =>
   new Date(new Date(confirmedAt).getTime() + PAYMENT_DAYS * 86_400_000).toISOString();

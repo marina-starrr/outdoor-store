@@ -92,7 +92,7 @@ export default function SiteHeader({
   return (
     <>
       <div className="bg-[#067eb7] px-5 py-2.5 text-center text-xs font-bold tracking-wide text-white sm:text-sm">
-        Безкоштовна доставка по Україні від 3 000 ₴
+        Доставка по всій Україні Новою поштою та Укрпоштою
       </div>
 
       <header className="sticky top-0 z-50 border-b border-sky-100 bg-white/95 backdrop-blur-xl">

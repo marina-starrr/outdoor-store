@@ -1,7 +1,7 @@
 import "server-only";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { deliveryOptions, paymentTitle } from "../../components/cart-logic";
+import { deliveryOptions, paymentTitle, shippingLabel, deliveryWhere } from "../../components/cart-logic";
 import { formatPrice } from "../../components/catalog-data";
 import { absoluteUrl } from "../site";
 import { dataDir, type StoredMessage, type StoredOrder, type StoredReview } from "./db";
@@ -67,14 +67,14 @@ export async function notifyAdmin(text: string): Promise<boolean> {
 /** Текст про нове замовлення: усе, щоб передзвонити й відправити, не відкриваючи адмінку */
 export function newOrderText(order: StoredOrder, guest: boolean) {
   const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? order.delivery.method;
-  const where = [order.delivery.city, order.delivery.branch && `№ ${order.delivery.branch}`, order.delivery.address].filter(Boolean).join(", ");
+  const where = deliveryWhere(order.delivery);
   const c = order.contact;
   return [
     `🛒 Нове замовлення ${order.number} — ${formatPrice(order.total)}`,
     "",
     ...order.lines.map((l) => `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}`),
     order.promoDiscount ? `Промокод ${order.promo}: −${formatPrice(order.promoDiscount)}` : null,
-    `Доставка: ${order.shipping ? formatPrice(order.shipping) : "безкоштовно"}`,
+    `Доставка: ${shippingLabel(order.shipping, formatPrice).toLowerCase()}`,
     "",
     `👤 ${c.firstName} ${c.lastName}${guest ? " (без акаунта)" : ""}`,
     `📞 ${c.phone}${order.noCall ? " — просить не телефонувати" : ""}`,

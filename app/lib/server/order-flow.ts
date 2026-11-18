@@ -1,5 +1,5 @@
 import "server-only";
-import { PAYMENT_DAYS, canTransition, orderStatusInfo, type OrderStatusId } from "../order-status";
+import { PAYMENT_DAYS, canTransition, orderStatusInfo, type CancelReason, type OrderStatusId } from "../order-status";
 import { invalidateCatalog, productFromRow } from "./catalog";
 import { sql, tx, type Queryable, type StoredOrder } from "./db";
 import { sendMails, type Mail } from "./mail";
@@ -56,7 +56,13 @@ async function release(q: Queryable, order: StoredOrder, mails: Mail[]) {
  * Переводить замовлення в новий статус: бронює або повертає товар, сповіщає
  * покупця. reason=unpaid — автоматичне скасування через несплату
  */
-export async function changeOrderStatus(number: string, status: OrderStatusId, reason?: "unpaid"): Promise<StatusChange> {
+export async function changeOrderStatus(
+  number: string,
+  status: OrderStatusId,
+  reason?: CancelReason,
+  /** Додаткова умова під блокуванням (напр. покупець може скасувати лише до оплати) */
+  check?: (order: StoredOrder) => string | null,
+): Promise<StatusChange> {
   const mails: Mail[] = [];
   let stockChanged = false;
   let result: StatusChange;
@@ -66,6 +72,8 @@ export async function changeOrderStatus(number: string, status: OrderStatusId, r
       const found = await findOrder(number, q, true);
       if (!found) return { notFound: true as const };
       const { order, owner } = found;
+      const refused = check?.(order);
+      if (refused) return { error: refused };
       if (!canTransition(order.status, status, order.payment))
         return {
           error: `Не можна змінити статус «${orderStatusInfo[order.status].label}» на «${orderStatusInfo[status].label}»`,

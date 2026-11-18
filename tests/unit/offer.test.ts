@@ -2,8 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import OfferContent, { offerSections } from "../../app/components/OfferContent";
-import { FREE_SHIPPING_FROM, RETURN_DAYS, paymentOptions } from "../../app/components/cart-logic";
-import { formatPrice } from "../../app/components/catalog-data";
+import { RETURN_DAYS, paymentOptions } from "../../app/components/cart-logic";
 import { SELLER, sellerCodeLabel, sellerTitle, type Seller } from "../../app/lib/seller";
 
 /*
@@ -46,7 +45,9 @@ describe("публічна оферта", () => {
     for (const o of paymentOptions) expect(html).toContain(o.title);
     // Вимкнені способи оплати (картка, частинами) в оферті не обіцяємо
     expect(html).not.toContain("Карткою онлайн");
-    expect(html).toContain(formatPrice(FREE_SHIPPING_FROM));
+    // Доставка — за тарифами перевізника, без безкоштовної доставки
+    expect(html).toContain("за тарифами перевізника");
+    expect(html).not.toMatch(/безкоштовн/i);
   });
 
   it("зміст посилається на кожен розділ", () => {

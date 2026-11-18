@@ -7,10 +7,11 @@ import Icon from "./Icon";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
-import { deliveryOptions, paymentTitle } from "./cart-logic";
+import { deliveryOptions, paymentTitle, shippingLabel } from "./cart-logic";
 import { formatPrice } from "./catalog-data";
 import { Field, FormError, SubmitButton, formatPhone, inputCls } from "./form-ui";
-import { orderStatusInfo, orderSteps, type OrderStatusId } from "../lib/order-status";
+import { customerCanCancel, orderStatusInfo, orderSteps, type OrderStatusId } from "../lib/order-status";
+import CancelOrder from "./CancelOrder";
 import OrderPayment from "./OrderPayment";
 
 type TrackedOrder = {
@@ -86,7 +87,7 @@ export default function TrackOrderPage() {
             </p>
 
             {order ? (
-              <OrderStatus order={order} onBack={() => setOrder(null)} />
+              <OrderStatus order={order} phone={phone} onCancelled={() => setOrder({ ...order, status: "cancelled" })} onBack={() => setOrder(null)} />
             ) : (
               <form onSubmit={submit} noValidate className="mt-6 grid gap-4 rounded-[24px] bg-white p-5 shadow-[0_18px_52px_rgba(79,93,101,.08)] sm:p-7">
                 <FormError>{error}</FormError>
@@ -109,7 +110,17 @@ export default function TrackOrderPage() {
   );
 }
 
-function OrderStatus({ order, onBack }: { order: TrackedOrder; onBack: () => void }) {
+function OrderStatus({
+  order,
+  phone,
+  onCancelled,
+  onBack,
+}: {
+  order: TrackedOrder;
+  phone: string;
+  onCancelled: () => void;
+  onBack: () => void;
+}) {
   const cancelled = order.status === "cancelled";
   const steps = stepsFor(order.payment);
   const reached = steps.indexOf(order.status);
@@ -167,7 +178,7 @@ function OrderStatus({ order, onBack }: { order: TrackedOrder; onBack: () => voi
         ))}
         <li className="flex justify-between gap-4 px-5 py-3 text-[#527083]">
           <span>{delivery}{order.delivery.city ? `, ${order.delivery.city}` : ""}</span>
-          <span className="shrink-0">{order.shipping ? formatPrice(order.shipping) : "Безкоштовно"}</span>
+          <span className="shrink-0">{shippingLabel(order.shipping, formatPrice)}</span>
         </li>
         {order.promoDiscount > 0 && (
           <li className="flex justify-between gap-4 px-5 py-3 text-[#527083]">
@@ -180,6 +191,12 @@ function OrderStatus({ order, onBack }: { order: TrackedOrder; onBack: () => voi
           <span className="shrink-0 whitespace-nowrap text-lg font-black">{formatPrice(order.total)}</span>
         </li>
       </ul>
+
+      {customerCanCancel(order.status) && (
+        <div className="mt-4 flex justify-end">
+          <CancelOrder number={order.number} phone={phone} onCancelled={onCancelled} />
+        </div>
+      )}
 
       <button type="button" onClick={onBack} className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#098fd0] hover:underline">
         <Icon name="arrow" className="h-4 w-4 rotate-180" /> Перевірити інше замовлення

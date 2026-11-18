@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useCart } from "./Cart";
 import Icon from "./Icon";
-import { FREE_SHIPPING_FROM, MAX_QTY, maxQtyFor, type ResolvedLine } from "./cart-logic";
+import { MAX_QTY, maxQtyFor, type ResolvedLine } from "./cart-logic";
 import { categoryBySlug, formatPrice } from "./catalog-data";
 import { productUrl } from "./product-details";
 import { resizeImage } from "./photo";
@@ -43,28 +43,15 @@ export function QtyStepper({
   );
 }
 
-export function FreeShippingBar({ subtotal }: { subtotal: number }) {
-  const left = Math.max(0, FREE_SHIPPING_FROM - subtotal);
+/** Нагадування: доставку покупець оплачує перевізнику при отриманні */
+export function ShippingNote() {
   return (
-    <div className="rounded-2xl bg-[#f3f9fd] px-4 py-3 text-sm">
-      {left > 0 ? (
-        <p>
-          До <b>безкоштовної доставки</b> ще{" "}
-          <b className="text-[#067eb7]">{formatPrice(left)}</b>
-        </p>
-      ) : (
-        <p className="flex items-center gap-2 font-bold text-[#1f9d55]">
-          <Icon name="truck" className="h-4 w-4" />
-          Безкоштовна доставка Новою поштою та Укрпоштою
-        </p>
-      )}
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
-        <div
-          className="h-full rounded-full bg-[#ffd51f] transition-[width] duration-300"
-          style={{ width: `${Math.min(100, (subtotal / FREE_SHIPPING_FROM) * 100)}%` }}
-        />
-      </div>
-    </div>
+    <p className="flex items-start gap-2 rounded-2xl bg-[#f3f9fd] px-4 py-3 text-sm text-[#3d5d70]">
+      <Icon name="truck" className="mt-0.5 h-4 w-4 shrink-0 text-[#067eb7]" />
+      <span>
+        Доставка — <b>за тарифами перевізника</b>, оплачується при отриманні посилки
+      </span>
+    </p>
   );
 }
 

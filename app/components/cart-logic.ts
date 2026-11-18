@@ -1,6 +1,5 @@
 import type { Product } from "./catalog-data";
 
-export const FREE_SHIPPING_FROM = 3000;
 export const MAX_QTY = 20;
 
 export type CartLine = { id: string; qty: number };
@@ -28,28 +27,40 @@ export type DeliveryId = "np-branch" | "np-courier" | "ukrposhta";
 export const isDeliveryId = (v: unknown): v is DeliveryId =>
   deliveryOptions.some((o) => o.id === v);
 
+/**
+ * Вартість доставки — за тарифами перевізника: покупець сплачує її при
+ * отриманні посилки. У сумі замовлення доставки немає (shipping = 0)
+ */
 export const deliveryOptions: {
   id: DeliveryId;
   title: string;
   text: string;
-  price: number;
-  /** Чи діє безкоштовна доставка від FREE_SHIPPING_FROM */
-  freeAbove: boolean;
 }[] = [
-  { id: "np-branch", title: "Нова пошта — відділення", text: "1–3 дні, відділення або поштомат", price: 70, freeAbove: true },
-  { id: "np-courier", title: "Нова пошта — кур'єр", text: "1–3 дні, доставка до дверей", price: 120, freeAbove: false },
-  { id: "ukrposhta", title: "Укрпошта", text: "3–5 днів, у відділення", price: 45, freeAbove: true },
+  { id: "np-branch", title: "Нова пошта — відділення", text: "1–3 дні, відділення або поштомат" },
+  { id: "np-courier", title: "Нова пошта — кур'єр", text: "1–3 дні, доставка до дверей" },
+  { id: "ukrposhta", title: "Укрпошта", text: "3–5 днів, у відділення" },
 ];
+
+export const SHIPPING_BY_CARRIER = "За тарифами перевізника";
+
+/**
+ * Куди доставити — одним рядком: «м. Полтава, Відділення №3: вул. Просвіти, 13».
+ * Старі замовлення зберігали лише номер відділення, Укрпошта — індекс
+ */
+export function deliveryWhere(d: { method?: string; city?: string; branch?: string; address?: string }) {
+  const branch = d.branch && /^\d+$/.test(d.branch) ? (d.method === "ukrposhta" ? `індекс ${d.branch}` : `№ ${d.branch}`) : d.branch;
+  return [d.city, branch, d.address].filter(Boolean).join(", ");
+}
+
+/** Підпис вартості доставки в замовленні (старі замовлення могли мати фіксовану ціну) */
+export const shippingLabel = (shipping: number, format: (n: number) => string) =>
+  shipping > 0 ? format(shipping) : SHIPPING_BY_CARRIER;
 
 /** Скільки днів перевізник зберігає посилку у відділенні */
 export const PARCEL_STORAGE_DAYS = 5;
 /** Строк повернення за Законом України «Про захист прав споживачів» */
 export const RETURN_DAYS = 14;
 
-export const deliveryPrice = (id: DeliveryId, subtotal: number) => {
-  const option = deliveryOptions.find((o) => o.id === id)!;
-  return option.freeAbove && subtotal >= FREE_SHIPPING_FROM ? 0 : option.price;
-};
 
 /* ---------- Оплата ---------- */
 
@@ -97,7 +108,9 @@ export function cartTotals(
   );
   const percent = promo ? (promoCodes[promo]?.percent ?? 0) : 0;
   const promoDiscount = Math.round((subtotal * percent) / 100);
-  const shipping = lines.length ? deliveryPrice(delivery, subtotal) : 0;
+  // Доставку покупець оплачує перевізнику при отриманні — у суму не входить
+  void delivery;
+  const shipping = 0;
   return {
     count: lines.reduce((s, l) => s + l.qty, 0),
     subtotal,
@@ -105,7 +118,6 @@ export function cartTotals(
     promoDiscount,
     shipping,
     total: subtotal - promoDiscount + shipping,
-    leftForFreeShipping: Math.max(0, FREE_SHIPPING_FROM - subtotal),
   };
 }
 
