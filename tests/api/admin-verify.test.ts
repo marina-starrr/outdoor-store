@@ -1,14 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as adminProducts from "../../app/api/admin/products/route";
 import * as me from "../../app/api/auth/me/route";
 import * as register from "../../app/api/auth/register/route";
 import * as verify from "../../app/api/auth/verify-email/route";
 import * as resend from "../../app/api/auth/verify-email/resend/route";
 import { closeDatabase } from "../../app/lib/server/db";
-import { call, dbDump, sessionCookie, uniqueEmail } from "./helpers";
+import { call, dbDump, dbQuery, sessionCookie, uniqueEmail } from "./helpers";
 
 const ADMIN_EMAIL = "verify-owner@example.com";
 process.env.ADMIN_EMAILS = ADMIN_EMAIL;
@@ -27,6 +27,12 @@ const tokenFor = (email: string) => {
 
 const signUp = async (email: string) =>
   sessionCookie((await call(register.POST, { body: { firstName: "Власник", email, phone: "", password: "camping2026" } })).res);
+
+// База на диску створюється кілька секунд, а під навантаженням (усі тести паралельно) — довше:
+// створюємо її тут, з окремим запасом часу, щоб не впиратись у ліміт першого тесту
+beforeAll(async () => {
+  await dbQuery("select 1");
+}, 60_000);
 
 beforeEach(() => {
   process.env.MAIL_TRANSPORT = "log";

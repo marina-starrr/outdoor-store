@@ -5,12 +5,18 @@ import { SITE_NAME, absoluteUrl } from "../site";
 import { dataDir } from "./db";
 
 /*
- * Надсилання листів.
+ * Надсилання листів. Два способи (Vercel → Settings → Environment Variables):
  *
- * Справжня пошта — через сервіс Resend (resend.com). У .env.local або в
- * налаштуваннях хостингу задайте:
- *   RESEND_API_KEY=re_...
- *   MAIL_FROM="Family Camping <hello@ваш-домен.ua>"
+ * 1. Gmail (без власного домену): скринька магазину + «пароль додатка» Google
+ *      SMTP_USER=familycamping.shop@gmail.com
+ *      SMTP_PASS=пароль додатка з 16 літер
+ *    Необов'язково: SMTP_HOST / SMTP_PORT (інший поштовий сервер; типово Gmail),
+ *    MAIL_FROM="Family Camping <адреса>" (типово — «Family Camping» + SMTP_USER).
+ *
+ * 2. Resend (resend.com) — коли з'явиться власний домен:
+ *      RESEND_API_KEY=re_...
+ *      MAIL_FROM="Family Camping <hello@ваш-домен.ua>"
+ *
  * Без них сайт працює як і раніше, просто без листів (лише сповіщення на сайті).
  *
  * Для розробки й тестів: MAIL_TRANSPORT=log — листи не надсилаються, а
@@ -19,12 +25,39 @@ import { dataDir } from "./db";
 
 export type Mail = { to: string; subject: string; text: string; href?: string };
 
-type Transport = "resend" | "log" | null;
+type Transport = "smtp" | "resend" | "log" | null;
 
 function transport(): Transport {
   if (process.env.MAIL_TRANSPORT === "log") return "log";
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) return "smtp";
   if (process.env.RESEND_API_KEY && process.env.MAIL_FROM) return "resend";
   return null;
+}
+
+/** Відправник: MAIL_FROM або «Family Camping <SMTP_USER>» */
+const sender = () => process.env.MAIL_FROM || `"${SITE_NAME}" <${process.env.SMTP_USER}>`;
+
+/* Одне SMTP-з'єднання на екземпляр сервера (Gmail обмежує кількість підключень) */
+const g = globalThis as { __fcSmtp?: Promise<import("nodemailer").Transporter> };
+
+function smtp() {
+  g.__fcSmtp ??= import("nodemailer").then((nodemailer) => {
+    const port = Number(process.env.SMTP_PORT || 465);
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port,
+      secure: port === 465,
+      // Кілька листів одразу (напр. «товар з'явився» підписникам) — через 2 з'єднання, а не десяток
+      pool: true,
+      maxConnections: 2,
+      // Пароль додатка Google часто копіюють із пробілами («abcd efgh …») — прибираємо їх
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS?.replace(/\s+/g, "") },
+      connectionTimeout: 10_000,
+      socketTimeout: 15_000,
+    });
+  });
+  g.__fcSmtp.catch(() => (g.__fcSmtp = undefined));
+  return g.__fcSmtp;
 }
 
 /** Чи надсилаються листи взагалі */
@@ -72,6 +105,11 @@ export async function sendMail(mail: Mail): Promise<boolean> {
       await appendOutbox(mail);
       return true;
     }
+    const text = mail.href ? `${mail.text}\n\n${absoluteUrl(mail.href)}` : mail.text;
+    if (t === "smtp") {
+      await (await smtp()).sendMail({ from: sender(), to: mail.to, subject: mail.subject, text, html: html(mail) });
+      return true;
+    }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -79,7 +117,7 @@ export async function sendMail(mail: Mail): Promise<boolean> {
         from: process.env.MAIL_FROM,
         to: [mail.to],
         subject: mail.subject,
-        text: mail.href ? `${mail.text}\n\n${absoluteUrl(mail.href)}` : mail.text,
+        text,
         html: html(mail),
       }),
     });

@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   // Драйвери бази завантажуються з node_modules як є (PGlite містить WASM і файли даних)
-  serverExternalPackages: ["pg", "@electric-sql/pglite"],
+  serverExternalPackages: ["pg", "@electric-sql/pglite", "nodemailer"],
   // Міграції читаються вбудованою базою під час роботи — додаємо їх до серверних функцій
   outputFileTracingIncludes: { "/**": ["./supabase/migrations/*.sql"] },
   partialPrefetching: true,
