@@ -41,7 +41,7 @@ describe("посилання на поточну сторінку (прокру�
     expect(isSamePageLink("/catalog", "/catalog/tents")).toBe(false);
     expect(isSamePageLink("/#about", "/")).toBe(false);
     expect(isSamePageLink("#contacts", "/")).toBe(false);
-    expect(isSamePageLink("tel:+380800330121", "/")).toBe(false);
+    expect(isSamePageLink("tel:+380982326575", "/")).toBe(false);
   });
 });
 

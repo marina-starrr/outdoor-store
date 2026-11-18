@@ -13,6 +13,7 @@ import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import RecentlyViewed from "./RecentlyViewed";
 import { Breadcrumbs, ProductCard } from "./catalog-ui";
+import { contacts } from "./data";
 import { SELLER } from "../lib/seller";
 import { PAYMENT_DAYS } from "../lib/order-status";
 import { CartItem, EmptyCart, FreeShippingBar, TrashIcon } from "./cart-ui";
@@ -532,7 +533,7 @@ export default function CartPage() {
                   <ul className="mt-4 grid gap-3 px-2 text-sm text-[#3d5d70]">
                     <li className="flex items-center gap-3"><Icon name="shield" className="h-5 w-5 text-[#067eb7]" /> Гарантія якості на все спорядження</li>
                     <li className="flex items-center gap-3"><Icon name="return" className="h-5 w-5 text-[#067eb7]" /> Обмін і повернення протягом 14 днів</li>
-                    <li className="flex items-center gap-3"><Icon name="headset" className="h-5 w-5 text-[#067eb7]" /> Допомога з вибором: 0 800 330 121</li>
+                    <li className="flex items-center gap-3"><Icon name="headset" className="h-5 w-5 text-[#067eb7]" /> Допомога з вибором: {contacts.phone}</li>
                   </ul>
                 </aside>
               </div>

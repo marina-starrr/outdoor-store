@@ -24,7 +24,7 @@ export default function Home() {
             logo: absoluteUrl("/family-camping-lake.webp"),
             description: SITE_DESCRIPTION,
             email: contacts.email,
-            telephone: "+380800330121",
+            telephone: contacts.phoneIntl,
             areaServed: "UA",
           },
           {

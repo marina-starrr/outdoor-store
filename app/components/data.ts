@@ -29,10 +29,12 @@ export const navLinks = [
 
 /** Контакти магазину (онлайн-магазин без фізичної адреси) */
 export const contacts = {
-  phone: "0 800 330 121",
-  phoneHref: "tel:+380800330121",
-  email: "hello@outdoor.ua",
-  emailHref: "mailto:hello@outdoor.ua",
+  phone: "098 232 65 75",
+  /** Міжнародний формат — для посилань tel: і мікророзмітки */
+  phoneIntl: "+380982326575",
+  phoneHref: "tel:+380982326575",
+  email: "familycamping.ua@gmail.com",
+  emailHref: "mailto:familycamping.ua@gmail.com",
   schedule: "Замовлення на сайті приймаємо цілодобово",
 };
 

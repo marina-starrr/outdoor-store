@@ -11,11 +11,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contacts" },
   title: "Контакти",
   description:
-    "Зв'яжіться з Family Camping: безкоштовна лінія 0 800 330 121, email hello@outdoor.ua. Замовлення на сайті приймаємо цілодобово.",
+    `Зв'яжіться з Family Camping: телефон ${contacts.phone}, email ${contacts.email}. Замовлення на сайті приймаємо цілодобово.`,
 };
 
 const channels: { icon: IconName; title: string; value: string; href?: string; note: string }[] = [
-  { icon: "phone", title: "Телефон", value: contacts.phone, href: contacts.phoneHref, note: "Безкоштовно з усіх номерів України" },
+  { icon: "phone", title: "Телефон", value: contacts.phone, href: contacts.phoneHref, note: "Дзвінки за тарифами вашого оператора" },
   { icon: "mail", title: "Email", value: contacts.email, href: contacts.emailHref, note: "Відповідаємо в робочий час" },
   { icon: "clock", title: "Замовлення на сайті", value: "Цілодобово, 24/7", note: "Підтверджуємо в робочий час" },
 ];
