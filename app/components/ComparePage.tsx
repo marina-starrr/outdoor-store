@@ -12,6 +12,7 @@ import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
 import { categoryBySlug, formatPrice, plural, type CategorySlug, type Product } from "./catalog-data";
 import { productUrl } from "./product-details";
+import { resizeImage } from "./photo";
 
 type Row = {
   label: string;
@@ -259,7 +260,7 @@ function ProductHead({ product, onRemove }: { product: Product; onRemove: () => 
         <Icon name="close" className="h-4 w-4" />
       </button>
       <Link href={productUrl(product)} className="block aspect-[4/3] overflow-hidden rounded-2xl bg-sky-50">
-        <img src={product.image} alt="" className="h-full w-full object-cover" />
+        <img src={resizeImage(product.image, 480)} alt="" className="h-full w-full object-cover" />
       </Link>
       <Link href={productUrl(product)} className="mt-3 line-clamp-2 min-h-[2.6em] text-[15px] font-extrabold leading-snug transition hover:text-[#098fd0]">
         {product.name}

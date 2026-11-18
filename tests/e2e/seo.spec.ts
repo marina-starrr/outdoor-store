@@ -60,6 +60,45 @@ test.describe("SEO", () => {
     }
   });
 
+  test("заголовки безпеки: CSP, HSTS, заборона вбудовування в чужі сайти", async ({ request }) => {
+    for (const path of ["/", "/catalog/tents/np3", "/api/auth/me"]) {
+      const h = (await request.get(path)).headers();
+      expect(h["content-security-policy"]).toContain("frame-ancestors 'none'");
+      expect(h["content-security-policy"]).toContain("object-src 'none'");
+      expect(h["strict-transport-security"]).toContain("max-age=63072000");
+      expect(h["x-frame-options"]).toBe("DENY");
+      expect(h["x-content-type-options"]).toBe("nosniff");
+      expect(h["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    }
+  });
+
+  test("CSP не ламає сторінку: без порушень політики в консолі", async ({ page }) => {
+    const violations: string[] = [];
+    page.on("console", (m) => {
+      if (/Content Security Policy|Refused to/i.test(m.text())) violations.push(m.text());
+    });
+    await page.goto("/catalog/tents/np3");
+    await page.getByRole("button", { name: "Додати в кошик" }).first().click();
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+    expect(violations).toEqual([]);
+  });
+
+  test("оферта: поки немає реквізитів продавця — 404 і посилань немає", async ({ page, request }) => {
+    expect((await request.get("/offer")).status()).toBe(404);
+    await page.goto("/delivery");
+    await expect(page.locator("a[href='/offer']")).toHaveCount(0);
+    const sitemap = await (await request.get("/sitemap.xml")).text();
+    expect(sitemap).not.toContain("/offer");
+  });
+
+  test("головна: ціни «від … ₴» у категоріях — з каталогу", async ({ page }) => {
+    await page.goto("/");
+    const prices = await page.locator(".category-price").allTextContents();
+    expect(prices.length).toBe(4);
+    for (const p of prices) expect(p).toMatch(/^від \d[\d\s ]* ₴$/);
+  });
+
   test("головна: власний заголовок і мікророзмітка магазину з пошуком", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle(/Family Camping — туристичне спорядження/);

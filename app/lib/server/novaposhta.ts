@@ -1,16 +1,19 @@
 import "server-only";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import { buildIndex, cityLabel, normalizeCity, searchCities, type City, type CityIndex } from "../city-search";
 import type { DeliveryId } from "../../components/cart-logic";
-import { dataDir } from "./db";
+import { sql, tx } from "./db";
 
 /*
  * Довідник населених пунктів Нової пошти (api.novaposhta.ua).
  *
- * - Повний список міст, куди доставляє Нова пошта (~11 тис.), завантажується
- *   раз на тиждень і зберігається в теці даних (np-cities.json): пошук і
- *   виправлення одруківок працюють локально, без запиту на кожну літеру.
+ * - Повний список міст, куди доставляє Нова пошта (~11 тис.), зберігається
+ *   в базі (таблиця np_cities) і оновлюється раз на тиждень: Vercel Cron
+ *   викликає /api/cron/np-cities. Кожен екземпляр сайту читає довідник з бази
+ *   один раз (це швидко — Нову пошту на кожен запуск не питаємо), а пошук і
+ *   виправлення одруківок працюють у пам'яті, без запиту на кожну літеру.
+ * - Якщо база ще порожня (перший запуск) — довідник завантажується з Нової
+ *   пошти одразу і зберігається.
  * - Для Укрпошти, яка возить і туди, де Нової пошти немає, — додатковий
  *   живий пошук по всіх населених пунктах України (searchSettlements).
  * - API працює і без ключа; якщо Нова пошта вимагатиме ключ — задайте
@@ -19,8 +22,10 @@ import { dataDir } from "./db";
  */
 
 const API = "https://api.novaposhta.ua/v2.0/json/";
-const CACHE_FILE = () => join(dataDir(), "np-cities.json");
-const MAX_AGE = 7 * 86_400_000;
+/** Cron оновлює щотижня; якщо довідник старший — оновлюємо самі, у фоні */
+const MAX_AGE = 10 * 86_400_000;
+/** Як часто екземпляр перевіряє, чи не з'явився в базі новіший довідник */
+const RECHECK = 60 * 60_000;
 
 type NpCity = {
   Ref: string;
@@ -55,8 +60,12 @@ export function fromNp(c: NpCity): City {
 
 let index: CityIndex | null = null;
 let byRef = new Map<string, City>();
+/** Коли завантажено довідник, що зараз у пам'яті (fetched_at з бази) */
 let loadedAt = 0;
-let loading: Promise<void> | null = null;
+/** Коли екземпляр востаннє звіряв свій довідник з базою */
+let checkedAt = 0;
+let syncing: Promise<void> | null = null;
+let refreshing: Promise<unknown> | null = null;
 
 function setCities(cities: City[], at: number) {
   index = buildIndex(cities);
@@ -64,12 +73,62 @@ function setCities(cities: City[], at: number) {
   loadedAt = at;
 }
 
-async function refresh() {
+/** Зберігає довідник у базі: старий замінюється новим в одній транзакції */
+async function saveCities(cities: City[], at: number) {
+  await tx(async (q) => {
+    await q.query("delete from np_cities");
+    // Частинами — щоб не впертися в розмір одного запиту
+    for (let i = 0; i < cities.length; i += 2000) {
+      const part = cities.slice(i, i + 2000);
+      await q.query(
+        `insert into np_cities (ref, name, type, area, note)
+         select * from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])
+         on conflict (ref) do nothing`,
+        [part.map((c) => c.ref), part.map((c) => c.name), part.map((c) => c.type), part.map((c) => c.area), part.map((c) => c.note ?? null)],
+      );
+    }
+    await q.query(
+      `insert into np_cities_meta (id, fetched_at, count) values (1, $1, $2)
+       on conflict (id) do update set fetched_at = excluded.fetched_at, count = excluded.count`,
+      [new Date(at), cities.length],
+    );
+  });
+}
+
+/**
+ * Завантажує свіжий довідник з Нової пошти і зберігає в базі.
+ * Викликається з Vercel Cron (/api/cron/np-cities) і при першому запуску
+ */
+export async function refreshCities(): Promise<number> {
   const cities = (await npCall<NpCity>("getCities", {}, "Address", 60_000)).map(fromNp);
   if (cities.length < 1000) throw new Error(`Nova Poshta getCities: підозріло мало міст (${cities.length})`);
-  setCities(cities, Date.now());
-  await mkdir(dataDir(), { recursive: true });
-  await writeFile(CACHE_FILE(), JSON.stringify({ fetchedAt: loadedAt, cities }), "utf8");
+  const at = Date.now();
+  await saveCities(cities, at);
+  setCities(cities, at);
+  checkedAt = Date.now();
+  return cities.length;
+}
+
+/** Читає довідник з бази, якщо там новіший, ніж у пам'яті */
+async function syncFromDb() {
+  const [meta] = await sql("select fetched_at from np_cities_meta where id = 1");
+  checkedAt = Date.now();
+  if (!meta) return;
+  const at = new Date(meta.fetched_at).getTime();
+  if (index && at <= loadedAt) return;
+  const rows = await sql("select ref, name, type, area, note from np_cities");
+  if (!rows.length) return;
+  setCities(
+    rows.map((r) => ({ ref: r.ref, name: r.name, type: r.type, area: r.area, ...(r.note ? { note: r.note } : {}) })),
+    at,
+  );
+}
+
+function refreshInBackground() {
+  refreshing ??= refreshCities()
+    .catch((e) => console.error("[novaposhta] не вдалося оновити довідник міст", e))
+    .finally(() => (refreshing = null));
+  return refreshing;
 }
 
 /**
@@ -82,21 +141,15 @@ export async function cityIndex(): Promise<CityIndex | null> {
     if (!index) setCities(JSON.parse(await readFile(fixture, "utf8")), Date.now());
     return index;
   }
-  if (!index) {
-    try {
-      const saved = JSON.parse(await readFile(CACHE_FILE(), "utf8")) as { fetchedAt: number; cities: City[] };
-      setCities(saved.cities, saved.fetchedAt);
-    } catch {
-      /* кешу ще немає */
-    }
+  if (!index || Date.now() - checkedAt > RECHECK) {
+    syncing ??= syncFromDb()
+      .catch((e) => console.error("[novaposhta] не вдалося прочитати довідник міст з бази", e))
+      .finally(() => (syncing = null));
+    // Без жодного довідника — чекаємо; інакше звіряємось у фоні
+    if (!index) await syncing;
   }
-  if (!index || Date.now() - loadedAt > MAX_AGE) {
-    loading ??= refresh()
-      .catch((e) => console.error("[novaposhta] не вдалося оновити довідник міст", e))
-      .finally(() => (loading = null));
-    // Без жодного довідника — чекаємо на перше завантаження
-    if (!index) await loading;
-  }
+  if (!index) await refreshInBackground();
+  else if (Date.now() - loadedAt > MAX_AGE) void refreshInBackground();
   return index;
 }
 

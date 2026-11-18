@@ -32,7 +32,7 @@ import { insertOrder, orderPlacedMail, userOrders } from "../../lib/server/order
 import { newOrderText, notifyAdmin } from "../../lib/server/telegram";
 
 /** Гостьові замовлення: не більше 5 за 30 хвилин з однієї IP-адреси */
-const guestOrdersLimited = rateLimiter(5, 30 * 60_000);
+const guestOrdersLimited = rateLimiter("guest-order", 5, 30 * 60_000);
 
 /** Історія замовлень поточного користувача */
 export async function GET(req: NextRequest) {
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Ліміт рахуємо лише для замовлень, що пройшли перевірку
-  if (!user && guestOrdersLimited(clientIp(req)))
+  if (!user && (await guestOrdersLimited(clientIp(req))))
     return error("Забагато замовлень за короткий час. Спробуйте пізніше або зателефонуйте нам.", 429);
 
   const claimToken = user ? undefined : randomBytes(24).toString("base64url");

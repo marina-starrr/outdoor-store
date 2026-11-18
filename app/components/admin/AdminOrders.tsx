@@ -179,7 +179,7 @@ function Orders() {
                     <span className="flex min-w-0 items-center gap-2 text-sm font-bold">
                       <span className="truncate">{o.contact.firstName} {o.contact.lastName}</span>
                       {o.customer.guest && (
-                        <span className="shrink-0 rounded-full bg-[#eef6fb] px-2 py-0.5 text-[11px] font-extrabold text-[#527083]">Гість</span>
+                        <span className="shrink-0 rounded-full bg-[#eef6fb] px-2 py-0.5 text-xs font-extrabold text-[#527083]">Гість</span>
                       )}
                     </span>
                     <span className="block truncate text-xs text-[#527083]">{o.contact.phone} · {o.lines.reduce((s, l) => s + l.qty, 0)} шт.</span>

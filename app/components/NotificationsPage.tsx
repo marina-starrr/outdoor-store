@@ -13,6 +13,7 @@ import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
 import { formatPrice, plural } from "./catalog-data";
 import { productUrl } from "./product-details";
+import { resizeImage } from "./photo";
 
 const kinds: Record<NotificationKind, { icon: IconName; tone: string; label: string }> = {
   reply: { icon: "chat", tone: "bg-[#e1f0f9] text-[#067eb7]", label: "Відповідь" },
@@ -207,7 +208,7 @@ function StockAlerts() {
         <ul className="mt-3 grid gap-3">
           {items.map((p) => (
             <li key={p.id} className="flex items-center gap-3">
-              <img src={p.image} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" loading="lazy" />
+              <img src={resizeImage(p.image, 120)} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" loading="lazy" />
               <div className="min-w-0 flex-1">
                 <Link href={productUrl(p)} className="line-clamp-2 text-sm font-bold leading-snug hover:text-[#098fd0]">{p.name}</Link>
                 <p className="text-xs text-[#8aa5b5]">{p.inStock ? "Уже в наявності" : formatPrice(p.price)}</p>

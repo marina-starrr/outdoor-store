@@ -94,43 +94,8 @@ export function isSameOrigin(req: NextRequest) {
   }
 }
 
-/** Обмеження спроб входу: 5 невдалих спроб на 15 хвилин для email+IP */
-const attempts = new Map<string, { count: number; until: number }>();
-
-export function loginLimiter(req: NextRequest, email: string) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
-  const key = `${ip}|${email}`;
-  return {
-    blocked() {
-      const a = attempts.get(key);
-      return !!a && a.count >= 5 && a.until > Date.now();
-    },
-    fail() {
-      const a = attempts.get(key);
-      const fresh = !a || a.until < Date.now();
-      attempts.set(key, { count: fresh ? 1 : a.count + 1, until: Date.now() + 15 * 60_000 });
-    },
-    reset() {
-      attempts.delete(key);
-    },
-  };
-}
-
-/** IP клієнта (за x-forwarded-for від проксі хостингу) */
-export const clientIp = (req: NextRequest) => req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
-
-/** Ковзне вікно: не більше max подій за windowMs для одного ключа */
-export function rateLimiter(max: number, windowMs: number) {
-  const hits = new Map<string, number[]>();
-  return (key: string) => {
-    const now = Date.now();
-    const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
-    const limited = recent.length >= max;
-    if (!limited) recent.push(now);
-    hits.set(key, recent);
-    return limited;
-  };
-}
+/** Обмеження частоти — лічильники в базі, див. rate-limit.ts */
+export { clientIp, loginLimiter, rateLimiter } from "./rate-limit";
 
 /** id товарів, які зараз показуються на сайті (не приховані) */
 export async function knownProductIds(): Promise<ReadonlySet<string>> {

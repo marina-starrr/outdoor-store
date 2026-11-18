@@ -13,6 +13,7 @@ import {
   productsWord,
   type Product,
 } from "./catalog-data";
+import { CARD_SIZES, responsiveImage } from "./photo";
 
 /* ---------- Синхронізація стану з адресним рядком ---------- */
 
@@ -576,7 +577,7 @@ export function Breadcrumbs({
           <li key={item.label} className="flex items-center gap-1.5">
             {i > 0 && <Chevron />}
             {item.href ? (
-              <Link href={item.href} className="transition hover:text-[#098fd0]">
+              <Link href={item.href} className="tap-y inline-block transition hover:text-[#098fd0]">
                 {item.label}
               </Link>
             ) : (
@@ -656,9 +657,10 @@ export function ProductCard({
         className="relative block aspect-[16/10] overflow-hidden rounded-[16px] bg-sky-50"
       >
         <img
-          src={product.image}
+          {...responsiveImage(product.image, CARD_SIZES)}
           alt={product.name}
           loading="lazy"
+          decoding="async"
           className={`h-full w-full object-cover brightness-[1.05] saturate-[1.1] transition duration-700 group-hover:scale-105 ${product.inStock ? "" : "grayscale-[60%]"}`}
         />
         {badge && (
@@ -682,12 +684,12 @@ export function ProductCard({
           {showCategory ? (
             <Link
               href={`/catalog/${category.slug}`}
-              className="truncate text-[11px] font-bold uppercase tracking-[0.1em] text-[#098fd0] hover:underline"
+              className="tap-y truncate text-xs font-bold uppercase tracking-[0.1em] text-[#098fd0] hover:underline"
             >
               {category.name}
             </Link>
           ) : (
-            <p className="truncate text-[11px] font-bold uppercase tracking-[0.1em] text-[#098fd0]">
+            <p className="truncate text-xs font-bold uppercase tracking-[0.1em] text-[#098fd0]">
               {category.name}
             </p>
           )}
@@ -705,7 +707,7 @@ export function ProductCard({
         <h3 className="mt-1.5 line-clamp-2 text-[15px] font-extrabold leading-snug">
           <Link
             href={productUrl(product)}
-            className="transition hover:text-[#098fd0]"
+            className="tap-y transition hover:text-[#098fd0]"
           >
             {product.name}
           </Link>

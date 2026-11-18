@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { categories } from "./components/catalog-data";
 import { productGallery, productUrl } from "./components/product-details";
 import { getPublicCatalog } from "./lib/server/catalog";
+import { SELLER } from "./lib/seller";
 import { absoluteUrl } from "./lib/site";
 
 /**
@@ -38,7 +39,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: p.updatedAt,
       images: [productGallery(p)[0].full],
     })),
-    ...["/about", "/contacts", "/delivery", "/returns", "/privacy"].map((path) => ({
+    ...["/about", "/contacts", "/delivery", "/returns", "/privacy", ...(SELLER ? ["/offer"] : [])].map((path) => ({
       url: absoluteUrl(path),
       changeFrequency: "monthly" as const,
       priority: 0.4,

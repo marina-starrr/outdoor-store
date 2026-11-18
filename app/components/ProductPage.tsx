@@ -30,6 +30,7 @@ import {
   productUrl,
   relatedProducts,
 } from "./product-details";
+import { responsiveImage } from "./photo";
 
 
 const reviewsWord = (n: number) => plural(n, ["відгук", "відгуки", "відгуків"]);
@@ -136,7 +137,7 @@ export default function ProductPage({ product }: { product: Product }) {
             <div>
               <Link
                 href={`/catalog/${category.slug}`}
-                className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#098fd0] hover:underline"
+                className="tap-y inline-block text-xs font-extrabold uppercase tracking-[0.14em] text-[#098fd0] hover:underline"
               >
                 {category.name}
               </Link>
@@ -147,7 +148,7 @@ export default function ProductPage({ product }: { product: Product }) {
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                 <button
                   onClick={() => openTab("reviews")}
-                  className="flex items-center gap-2 text-[#527083] hover:text-[#098fd0]"
+                  className="tap-y flex items-center gap-2 text-[#527083] hover:text-[#098fd0]"
                 >
                   {reviewCount > 0 ? (
                     <>
@@ -208,7 +209,7 @@ export default function ProductPage({ product }: { product: Product }) {
               </ul>
               <button
                 onClick={() => openTab("specs")}
-                className="mt-2 text-sm font-bold text-[#098fd0] underline-offset-4 hover:underline"
+                className="mt-1 py-1.5 text-sm font-bold text-[#098fd0] underline-offset-4 hover:underline"
               >
                 Усі характеристики
               </button>
@@ -221,7 +222,7 @@ export default function ProductPage({ product }: { product: Product }) {
                 {product.inStock ? (
                   <button
                     onClick={addToCart}
-                    className="inline-flex h-14 flex-1 items-center justify-center gap-2.5 rounded-full bg-[#ffd51f] px-8 text-base font-extrabold shadow-[0_10px_26px_rgba(255,213,31,.4)] transition hover:-translate-y-0.5 hover:bg-[#ffe044] sm:flex-none sm:min-w-[260px]"
+                    className="order-last inline-flex h-14 basis-full items-center justify-center gap-2.5 whitespace-nowrap rounded-full bg-[#ffd51f] px-5 text-base font-extrabold sm:order-none sm:flex-none sm:basis-auto sm:px-8 shadow-[0_10px_26px_rgba(255,213,31,.4)] transition hover:-translate-y-0.5 hover:bg-[#ffe044] sm:min-w-[260px]"
                   >
                     Додати в кошик
                     <Icon name="cart" className="h-5 w-5" />
@@ -385,7 +386,7 @@ function Gallery({
           aria-label="Відкрити фото на весь екран"
         >
           <img
-            src={images[index].full}
+            {...responsiveImage(images[index].full, "(min-width: 1440px) 720px, (min-width: 1024px) 50vw, 100vw", [480, 640, 960, 1200])}
             alt={`${alt} — фото ${index + 1}`}
             className="h-full w-full object-cover brightness-[1.04] saturate-[1.08]"
             fetchPriority="high"
@@ -741,7 +742,7 @@ function ReviewsTab({ product }: { product: Product }) {
                   <span className="font-bold">{r.author}</span>
                   <span className="text-xs text-[#8aa5b5]">{reviewDate(r.createdAt)}</span>
                   {r.verified && (
-                    <span className="rounded-full bg-[#e7f7ee] px-2 py-0.5 text-[11px] font-bold text-[#1f9d55]">
+                    <span className="rounded-full bg-[#e7f7ee] px-2 py-0.5 text-xs font-bold text-[#1f9d55]">
                       Підтверджена покупка
                     </span>
                   )}
@@ -921,13 +922,16 @@ function Related({ product }: { product: Product }) {
         <h2 id="related-title" className="text-2xl font-extrabold tracking-[-0.03em] sm:text-3xl">
           Схожі товари
         </h2>
-        <Link href={`/catalog/${product.category}`} className="text-sm font-bold text-[#098fd0] hover:underline">
+        <Link href={`/catalog/${product.category}`} className="tap-y inline-block text-sm font-bold text-[#098fd0] hover:underline">
           Усі {categoryBySlug[product.category].name.toLowerCase()}
         </Link>
       </div>
-      <div className="grid grid-cols-1 gap-5 min-[480px]:grid-cols-2 lg:grid-cols-4">
+      {/* На телефоні — стрічка, яку гортають убік (поруч видно край наступної картки), далі — сітка */}
+      <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-3 min-[480px]:mx-0 min-[480px]:grid min-[480px]:grid-cols-2 min-[480px]:gap-5 min-[480px]:overflow-visible min-[480px]:px-0 min-[480px]:pb-0 lg:grid-cols-4">
         {items.map((p) => (
-          <ProductCard key={p.id} product={p} onAdd={() => add(p.id)} />
+          <div key={p.id} className="w-[80%] shrink-0 snap-start min-[480px]:w-auto">
+            <ProductCard product={p} onAdd={() => add(p.id)} />
+          </div>
         ))}
       </div>
     </section>

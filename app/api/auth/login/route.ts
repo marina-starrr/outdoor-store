@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const password = String(body.password ?? "");
 
   const limiter = loginLimiter(req, email);
-  if (limiter.blocked())
+  if (await limiter.blocked())
     return error("Забагато спроб входу. Спробуйте через 15 хвилин.", 429);
 
   const user = email ? await findUserByEmail(email) : null;
@@ -35,10 +35,10 @@ export async function POST(req: NextRequest) {
     ? await verifyPassword(password, user.passwordHash)
     : (await hashPassword(password), false);
   if (!user || !valid) {
-    limiter.fail();
+    await limiter.fail();
     return error(WRONG, 401);
   }
-  limiter.reset();
+  await limiter.reset();
 
   // Кошик гостя додається до кошика акаунта
   const known = await knownProductIds();

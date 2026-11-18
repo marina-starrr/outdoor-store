@@ -13,11 +13,25 @@ import { discountPercent, formatPrice } from "./catalog-data";
 import { categories, products as showcase } from "./data";
 import { productUrl } from "./product-details";
 import { CardActions } from "./catalog-ui";
+import { CARD_SIZES, responsiveImage } from "./photo";
 
 export default function Storefront() {
   const [query, setQuery] = useState("");
   const { add: addToCart } = useCart();
-  const { byId } = useCatalog();
+  const { byId, products: catalog } = useCatalog();
+
+  // «від … ₴» у картках категорій — найнижча ціна товару в наявності (з бази, як і решта цін)
+  const fromPrice = useMemo(() => {
+    const min = new Map<string, number>();
+    for (const p of catalog) {
+      if (!p.inStock) continue;
+      min.set(p.category, Math.min(min.get(p.category) ?? Infinity, p.price));
+    }
+    return (href: string) => {
+      const price = min.get(href.split("/").pop() ?? "");
+      return price === undefined ? null : `від ${formatPrice(price)}`;
+    };
+  }, [catalog]);
 
   // Вітрина: фото й підписи — свої, а назва, ціна й наявність — з каталогу (бази)
   const products = useMemo(
@@ -66,6 +80,8 @@ export default function Storefront() {
         <section className="relative isolate min-h-[680px] overflow-hidden bg-[#063e62] lg:min-h-[720px]">
           <img
             src="/family-camping-lake.webp"
+            srcSet="/family-camping-lake-640.webp 640w, /family-camping-lake.webp 1024w"
+            sizes="100vw"
             alt="Сім’я відпочиває з наметом на зеленій галявині біля лісового озера"
             className="absolute inset-0 -z-20 h-full w-full object-cover object-center brightness-[1.04] saturate-[1.08]"
             fetchPriority="high"
@@ -88,7 +104,7 @@ export default function Storefront() {
           </div>
 
           <div className="absolute bottom-0 left-0 right-0 border-t border-white/15 bg-[#067eb7]">
-            <ul className="mx-auto grid max-w-[1440px] grid-cols-3 gap-2 px-3 py-3.5 text-[11px] font-bold leading-tight text-white sm:gap-4 sm:px-5 sm:py-4 sm:text-xs lg:px-8">
+            <ul className="mx-auto grid max-w-[1440px] grid-cols-3 gap-2 px-3 py-3.5 text-xs font-bold leading-tight text-white sm:gap-4 sm:px-5 sm:py-4 sm:text-xs lg:px-8">
               {[
                 { icon: "truck" as const, label: "Швидка доставка" },
                 { icon: "shield" as const, label: "Гарантія якості" },
@@ -151,12 +167,12 @@ export default function Storefront() {
                   <span className="category-number">0{index + 1}</span>
                   <div className="category-product">
                     <span aria-hidden="true" />
-                    <img src={category.image} alt={category.alt} loading="lazy" />
+                    <img {...responsiveImage(category.image, "(min-width: 1024px) 25vw, (min-width: 640px) 45vw, 80vw")} alt={category.alt} loading="lazy" decoding="async" />
                   </div>
                   <div className="relative z-10 mt-auto">
                     <h3>{category.name}</h3>
                     <div className="mt-3 flex items-end justify-between gap-3">
-                      <span className="category-price">{category.meta}</span>
+                      <span className="category-price">{fromPrice(category.href)}</span>
                       <span className="category-arrow">
                         <Icon name="arrow" className="h-4 w-4" />
                       </span>
@@ -182,7 +198,7 @@ export default function Storefront() {
                 {query
                   ? `Результати пошуку за запитом «${query}»`
                   : "Спорядження, яке ми радимо родинам для відпочинку на природі."}
-                <Link href="/hits" className="mt-3 flex items-center gap-2 font-extrabold text-[#098fd0] hover:underline">
+                <Link href="/hits" className="mt-3 flex items-center gap-2 py-1.5 font-extrabold text-[#098fd0] hover:underline">
                   Усі хіти продажу <Icon name="arrow" className="h-4 w-4" />
                 </Link>
               </p>
@@ -199,9 +215,10 @@ export default function Storefront() {
                   <article key={product.id} className="product-card group">
                     <div className="relative aspect-[4/4.4] overflow-hidden rounded-[22px] bg-sky-50">
                       <img
-                        src={product.image}
+                        {...responsiveImage(product.image, CARD_SIZES)}
                         alt={product.alt}
                         loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover brightness-[1.08] saturate-[1.12] transition duration-700 group-hover:scale-105"
                       />
                       {product.badge && (
@@ -216,7 +233,7 @@ export default function Storefront() {
                         {product.category}
                       </p>
                       <h3 className="mt-2 text-lg font-extrabold">
-                        <Link href={product.href} className="transition hover:text-[#098fd0]">
+                        <Link href={product.href} className="tap-y transition hover:text-[#098fd0]">
                           {product.name}
                         </Link>
                       </h3>

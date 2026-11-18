@@ -3,7 +3,7 @@ import { cleanText, clientIp, error, isSameOrigin, json, rateLimiter } from "../
 import { findOrder, phoneDigits, trackingView } from "../../../lib/server/orders";
 
 /** Не більше 10 спроб за 10 хвилин з однієї IP-адреси — щоб не перебирали номери */
-const limited = rateLimiter(10, 10 * 60_000);
+const limited = rateLimiter("track", 10, 10 * 60_000);
 
 /** «Де моє замовлення?» — статус за номером і телефоном, без входу */
 export async function POST(req: NextRequest) {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const phone = phoneDigits(cleanText(body.phone, 30));
   if (!/^FC-\d{7}$/.test(number)) return error("Номер замовлення має вигляд FC-1234567");
   if (phone.length !== 12) return error("Номер телефону у форматі +380 XX XXX XX XX");
-  if (limited(clientIp(req))) return error("Забагато спроб. Спробуйте за кілька хвилин.", 429);
+  if (await limited(clientIp(req))) return error("Забагато спроб. Спробуйте за кілька хвилин.", 429);
 
   const order = (await findOrder(number))?.order;
   // Однакова відповідь, якщо номера немає або телефон не збігся

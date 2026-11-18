@@ -7,6 +7,7 @@ import { BannerStats, InfoCard, InfoTitle, Prose } from "../components/info-ui";
 import { brandsOf, categories, photoUrl } from "../components/catalog-data";
 import { getPublicCatalog } from "../lib/server/catalog";
 import { RETURN_DAYS } from "../components/cart-logic";
+import { responsiveImage } from "../components/photo";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/about" },
@@ -70,7 +71,7 @@ export default async function AboutPage() {
             </Prose>
           </div>
           <img
-            src={photoUrl("friendsFire", 900, 640)}
+            {...responsiveImage(photoUrl("friendsFire", 900, 640), "(min-width: 1024px) 45vw, 92vw", [480, 640, 900])}
             alt="Друзі відпочивають біля вогнища в кемпінгу"
             loading="lazy"
             className="h-full max-h-[380px] w-full object-cover lg:max-h-none"

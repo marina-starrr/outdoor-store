@@ -2,6 +2,7 @@ import Link from "./NavLink";
 import Icon, { type IconName } from "./Icon";
 import { BrandLogo } from "./SiteHeader";
 import { contacts } from "./data";
+import { SELLER, sellerCodeLabel, sellerTitle } from "../lib/seller";
 
 const socials: { icon: IconName; label: string }[] = [
   { icon: "instagram", label: "Instagram" },
@@ -80,14 +81,27 @@ export default function SiteFooter() {
       </div>
       <div className="bg-[#0b2c40]">
         <div className="mx-auto flex max-w-[1440px] flex-col gap-2 px-5 py-6 text-xs text-white/80 sm:flex-row sm:items-center sm:justify-between lg:px-8">
-          <span>© 2026 Спорядження для відпочинку · Онлайн-магазин</span>
+          <span>
+            © 2026 Спорядження для відпочинку · Онлайн-магазин
+            {/* Реквізити продавця — вимога Закону «Про електронну комерцію» */}
+            {SELLER && (
+              <span className="mt-1 block text-white/65" data-testid="seller">
+                {sellerTitle(SELLER)} · {sellerCodeLabel(SELLER)} {SELLER.code} · {SELLER.address}
+              </span>
+            )}
+          </span>
           <span className="flex flex-wrap gap-x-5 gap-y-2">
-            <Link href="/privacy" className="transition hover:text-white hover:underline">
+            <Link href="/privacy" className="tap-y transition hover:text-white hover:underline">
               Політика конфіденційності
             </Link>
-            <Link href="/returns" className="transition hover:text-white hover:underline">
+            <Link href="/returns" className="tap-y transition hover:text-white hover:underline">
               Умови повернення
             </Link>
+            {SELLER && (
+              <Link href="/offer" className="tap-y transition hover:text-white hover:underline">
+                Публічна оферта
+              </Link>
+            )}
           </span>
         </div>
       </div>

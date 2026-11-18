@@ -43,6 +43,7 @@ import {
 } from "./catalog-data";
 import { useCatalog } from "./Catalog";
 import { matchesSearch } from "./search";
+import { CARD_SIZES, responsiveImage } from "./photo";
 
 const PAGE_SIZE = 6;
 
@@ -429,9 +430,10 @@ function CategoryCard({ row, href }: { row: CategoryRow; href: string }) {
     >
       <div className="relative aspect-[2/1] overflow-hidden rounded-[50%_50%_16px_16px/18%_18%_16px_16px] bg-sky-50">
         <img
-          src={info.image}
+          {...responsiveImage(info.image, CARD_SIZES)}
           alt=""
           loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover brightness-[1.05] saturate-[1.1] transition duration-700 group-hover:scale-105"
         />
         {maxDiscount > 0 && (

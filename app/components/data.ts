@@ -1,6 +1,7 @@
+import { SELLER } from "../lib/seller";
+
 export type Category = {
   name: string;
-  meta: string;
   href: string;
   image: string;
   alt: string;
@@ -42,12 +43,13 @@ export const infoLinks = [
   { label: "Доставка і оплата", href: "/delivery" },
   { label: "Обмін і повернення", href: "/returns" },
   { label: "Політика конфіденційності", href: "/privacy" },
+  // Оферта — лише коли заповнено реквізити продавця (app/lib/seller.ts)
+  ...(SELLER ? [{ label: "Публічна оферта", href: "/offer" }] : []),
 ];
 
 export const categories: Category[] = [
   {
     name: "Намети",
-    meta: "від 2 490 ₴",
     href: "/catalog/tents",
     image:
       "https://images.unsplash.com/photo-1793441512351-2b385ad3e805?auto=format&fit=crop&w=700&q=90",
@@ -55,7 +57,6 @@ export const categories: Category[] = [
   },
   {
     name: "Рюкзаки",
-    meta: "від 1 290 ₴",
     href: "/catalog/backpacks",
     image:
       "https://images.unsplash.com/photo-1592388748465-8c4dca8dd703?auto=format&fit=crop&w=700&q=90",
@@ -63,7 +64,6 @@ export const categories: Category[] = [
   },
   {
     name: "Спальники",
-    meta: "від 1 590 ₴",
     href: "/catalog/sleeping-bags",
     image:
       "https://images.unsplash.com/photo-1558477280-1bfed08ea5db?auto=format&fit=crop&w=700&q=90",
@@ -71,7 +71,6 @@ export const categories: Category[] = [
   },
   {
     name: "Туристичний посуд",
-    meta: "від 390 ₴",
     href: "/catalog/cookware",
     image:
       "https://images.unsplash.com/photo-1792513688573-d6c4ab91be76?auto=format&fit=crop&w=700&q=90",

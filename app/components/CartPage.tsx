@@ -13,6 +13,7 @@ import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import RecentlyViewed from "./RecentlyViewed";
 import { Breadcrumbs, ProductCard } from "./catalog-ui";
+import { SELLER } from "../lib/seller";
 import { CartItem, EmptyCart, FreeShippingBar, TrashIcon } from "./cart-ui";
 import { ORDER_CLAIMS_STORAGE_KEY, readIds, writeIds } from "./cart-storage";
 import CityInput from "./CityInput";
@@ -495,6 +496,11 @@ export default function CartPage() {
                           />
                           <span className="text-[#3d5d70]">
                             Погоджуюсь з{" "}
+                            {SELLER && (
+                              <>
+                                <Link href="/offer" target="_blank" className="font-bold text-[#098fd0] hover:underline">публічною офертою</Link>,{" "}
+                              </>
+                            )}
                             <Link href="/delivery" target="_blank" className="font-bold text-[#098fd0] hover:underline">умовами доставки й оплати</Link>,{" "}
                             <Link href="/returns" target="_blank" className="font-bold text-[#098fd0] hover:underline">умовами повернення</Link>{" "}
                             та{" "}

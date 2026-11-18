@@ -8,6 +8,7 @@ import { useCatalog } from "./Catalog";
 import { categoryBySlug, formatPrice } from "./catalog-data";
 import { productUrl } from "./product-details";
 import { normalize, searchProducts } from "./search";
+import { resizeImage } from "./photo";
 
 const POPULAR = ["Намет", "Спальник", "Рюкзак", "Ліхтар", "Мангал", "Гамак"];
 
@@ -201,7 +202,7 @@ export default function HeaderSearch({
                     onClick={() => openOption(i)}
                     className={`flex cursor-pointer items-center gap-3 rounded-[14px] p-2 transition-colors ${active === i ? "bg-[#eef6fb]" : ""}`}
                   >
-                    <img src={p.image} alt="" className="h-12 w-16 shrink-0 rounded-[10px] object-cover" loading="lazy" />
+                    <img src={resizeImage(p.image, 160)} alt="" className="h-12 w-16 shrink-0 rounded-[10px] object-cover" loading="lazy" />
                     <span className="min-w-0 flex-1">
                       <span className="line-clamp-1 text-sm font-extrabold">
                         <Highlight text={p.name} query={result.corrected ?? q} />
@@ -213,9 +214,9 @@ export default function HeaderSearch({
                     <span className="shrink-0 text-right">
                       <span className="block text-sm font-black">{formatPrice(p.price)}</span>
                       {p.inStock ? (
-                        p.oldPrice && <span className="block text-[11px] text-slate-400 line-through">{formatPrice(p.oldPrice)}</span>
+                        p.oldPrice && <span className="block text-xs text-slate-400 line-through">{formatPrice(p.oldPrice)}</span>
                       ) : (
-                        <span className="block text-[11px] font-bold text-[#c2780a]">Очікується</span>
+                        <span className="block text-xs font-bold text-[#c2780a]">Очікується</span>
                       )}
                     </span>
                   </li>

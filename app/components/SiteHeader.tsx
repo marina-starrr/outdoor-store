@@ -2,7 +2,7 @@
 
 import Link from "./NavLink";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./Auth";
 import { useCart } from "./Cart";
 import { useLists } from "./Lists";
@@ -70,6 +70,19 @@ export default function SiteHeader({
   onSearchSubmit,
 }: SiteHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+
+  // Escape закриває мобільне меню і повертає фокус на кнопку меню
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButton.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
   const { count, openCart } = useCart();
   const { user } = useAuth();
   const { favorites, compare } = useLists();
@@ -191,6 +204,7 @@ export default function SiteHeader({
             )}
           </button>
           <button
+            ref={menuButton}
             onClick={() => setMenuOpen((open) => !open)}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#00acff] text-white xl:hidden"
             aria-label={menuOpen ? "Закрити меню" : "Відкрити меню"}

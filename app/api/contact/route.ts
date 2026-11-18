@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { MESSAGE_MAX, contactTopics } from "../../components/contact-topics";
-import { cleanText, error, getUser, isEmail, isPhone, isSameOrigin, json } from "../../lib/server/auth";
+import { cleanText, clientIp, error, getUser, isEmail, isPhone, isSameOrigin, json } from "../../lib/server/auth";
 import { contactRateLimited, saveMessage } from "../../lib/server/messages";
 import { newMessageText, notifyAdmin } from "../../lib/server/telegram";
 
@@ -24,8 +24,7 @@ export async function POST(req: NextRequest) {
   if (phone && phone.replace(/\D/g, "").length > 3 && !isPhone(phone)) return error("Перевірте номер телефону");
   if (message.length < 10) return error("Опишіть питання трохи детальніше (від 10 символів)");
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
-  if (contactRateLimited(ip)) return error("Забагато звернень. Спробуйте за кілька хвилин.", 429);
+  if (await contactRateLimited(clientIp(req))) return error("Забагато звернень. Спробуйте за кілька хвилин.", 429);
 
   const user = await getUser(req);
   const saved = await saveMessage({

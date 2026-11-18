@@ -19,6 +19,31 @@ test.describe("мобільна версія (390px)", () => {
     await expect(page).toHaveURL("/delivery");
   });
 
+  test("Escape закриває мобільне меню і повертає фокус на кнопку", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Відкрити меню" }).click();
+    const menuLink = page.locator("header nav").getByRole("link", { name: "Доставка і оплата" });
+    await expect(menuLink).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menuLink).toBeHidden();
+    await expect(page.getByRole("button", { name: "Відкрити меню" })).toBeFocused();
+  });
+
+  test("на товарі «Додати в кошик» в один рядок, «Схожі товари» гортаються вбік", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto("/catalog/tents/np3");
+    const add = page.getByRole("button", { name: "Додати в кошик" }).first();
+    const box = (await add.boundingBox())!;
+    expect(box.height).toBeLessThanOrEqual(60);
+    const cards = page.locator("section[aria-labelledby=related-title] article");
+    await cards.first().scrollIntoViewIfNeeded();
+    const [a, b] = [(await cards.nth(0).boundingBox())!, (await cards.nth(1).boundingBox())!];
+    // Картки поруч (стрічка), а не одна під одною
+    expect(Math.abs(a.y - b.y)).toBeLessThan(2);
+    expect(b.x).toBeGreaterThan(a.x);
+    await expectNoHorizontalScroll(page);
+  });
+
   test("у шапці видно назву сайту", async ({ page }) => {
     await page.goto("/");
     const logo = page.locator("header").getByRole("link", { name: "На головну" });

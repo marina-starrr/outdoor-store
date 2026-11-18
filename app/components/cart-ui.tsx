@@ -7,6 +7,7 @@ import Icon from "./Icon";
 import { FREE_SHIPPING_FROM, MAX_QTY, maxQtyFor, type ResolvedLine } from "./cart-logic";
 import { categoryBySlug, formatPrice } from "./catalog-data";
 import { productUrl } from "./product-details";
+import { resizeImage } from "./photo";
 
 export function QtyStepper({
   value,
@@ -91,13 +92,13 @@ export function CartItem({
         aria-hidden="true"
         className={`shrink-0 overflow-hidden rounded-[14px] bg-sky-50 ${wide ? "h-24 w-32 sm:h-28 sm:w-40" : "h-20 w-24"}`}
       >
-        <img src={product.image} alt="" className="h-full w-full object-cover" />
+        <img src={resizeImage(product.image, 240)} alt="" className="h-full w-full object-cover" />
       </Link>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#098fd0]">
+            <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#098fd0]">
               {categoryBySlug[product.category].name}
             </p>
             <Link
@@ -127,13 +128,13 @@ export function CartItem({
             max={Math.max(1, maxQtyFor(product))}
           />
           {product.stock <= 5 && (
-            <span className="w-full text-[11px] font-bold text-[#c27c00]">
+            <span className="w-full text-xs font-bold text-[#c27c00]">
               {product.stock > 0 ? `Залишилось ${product.stock} шт.` : "Закінчився — приберіть з кошика"}
             </span>
           )}
           <div className="text-right">
             {qty > 1 && (
-              <p className="text-[11px] text-[#8aa5b5]">
+              <p className="text-xs text-[#8aa5b5]">
                 {formatPrice(product.price)} × {qty}
               </p>
             )}

@@ -123,7 +123,7 @@ function Reviews() {
                 </span>
                 <b>{r.author}</b>
                 <span className="text-xs text-[#527083]">{r.email} · {shortDate(r.createdAt)}</span>
-                {r.verified && <span className="rounded-full bg-[#e7f7ee] px-2 py-0.5 text-[11px] font-bold text-[#1f9d55]">Підтверджена покупка</span>}
+                {r.verified && <span className="rounded-full bg-[#e7f7ee] px-2 py-0.5 text-xs font-bold text-[#1f9d55]">Підтверджена покупка</span>}
                 <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-extrabold ${statusInfo[r.status][1]}`}>{statusInfo[r.status][0]}</span>
               </div>
               <p className="mt-1 text-sm">

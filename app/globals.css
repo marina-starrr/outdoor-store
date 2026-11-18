@@ -87,7 +87,7 @@
 
   .eyebrow {
     color: #087caf;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.16em;
     text-transform: uppercase;
@@ -101,7 +101,7 @@
 
   .category-heading > div > p {
     color: #067eb7;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -303,13 +303,25 @@
 
   .footer-links {
     display: grid;
-    gap: 0.9rem;
+    /* Відступ між пунктами — переважно padding посилань: більша зона дотику пальцем */
+    gap: 0.1rem;
     color: #527083;
     font-size: 0.875rem;
   }
 
-  .footer-links a {
+  .footer-links a,
+  .footer-links > span {
+    padding-block: 0.4rem;
     transition: color 160ms ease;
+  }
+
+  /*
+   * Більша зона дотику для дрібних текстових посилань (≥ 32 px заввишки)
+   * без зміни верстки: відступ усередині компенсується від’ємним зовні
+   */
+  .tap-y {
+    padding-block: 0.5rem;
+    margin-block: -0.5rem;
   }
 
   .footer-links a:hover {

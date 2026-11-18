@@ -6,7 +6,7 @@ import { REVIEW_MAX, REVIEW_MIN, approvedReviews, hasBought, ownReview, reviewAu
 import { newReviewText, notifyAdmin } from "../../../../lib/server/telegram";
 
 /** Не більше 10 відгуків на годину з одного акаунта */
-const limited = rateLimiter(10, 60 * 60_000);
+const limited = rateLimiter("review", 10, 60 * 60_000);
 
 /**
  * Відгуки товару: схвалені + стан для поточного покупця
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/products/[i
   const text = cleanText(body.text, REVIEW_MAX);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return error("Поставте оцінку від 1 до 5");
   if (text.length < REVIEW_MIN) return error(`Відгук має містити щонайменше ${REVIEW_MIN} символів`);
-  if (limited(user.id)) return error("Забагато відгуків за короткий час. Спробуйте пізніше.", 429);
+  if (await limited(user.id)) return error("Забагато відгуків за короткий час. Спробуйте пізніше.", 429);
 
   // Один відгук на товар: повторний замінює попередній і знову йде на модерацію
   const [row] = await sql(

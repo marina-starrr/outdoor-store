@@ -22,6 +22,7 @@ import {
 } from "./catalog-data";
 import { productUrl } from "./product-details";
 import { useCatalog } from "./Catalog";
+import { resizeImage, responsiveImage } from "./photo";
 
 /** Справжній схвалений відгук (див. lib/server/reviews.ts) */
 export type Testimonial = {
@@ -258,7 +259,7 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
                       href={productUrl(product)}
                       className="flex items-center gap-3 rounded-2xl bg-white/[0.07] p-3 transition hover:bg-white/[0.12]"
                     >
-                      <img src={product.image} alt="" className="h-16 w-20 shrink-0 rounded-xl object-cover" loading="lazy" />
+                      <img src={resizeImage(product.image, 160)} alt="" className="h-16 w-20 shrink-0 rounded-xl object-cover" loading="lazy" />
                       <span className="min-w-0">
                         <span className="line-clamp-2 text-sm font-bold leading-snug">{product.name}</span>
                         <span className="mt-0.5 block text-xs text-white/60">
@@ -335,7 +336,7 @@ function TopCard({ product, place, onAdd }: { product: Product; place: number; o
     <article className="product-card group relative flex flex-col !rounded-[26px] !p-2.5">
       <div className="relative">
         <Link href={productUrl(product)} tabIndex={-1} aria-hidden="true" className="block aspect-[16/10] overflow-hidden rounded-[20px] bg-sky-50">
-          <img src={product.image} alt={product.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+          <img {...responsiveImage(product.image, "(min-width: 768px) 31vw, 92vw")} alt={product.name} decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
         </Link>
         <span className={`absolute left-3 top-3 grid h-12 w-12 place-items-center rounded-full text-lg font-black shadow-lg ${placeStyles[place - 1]}`}>
           {place}
@@ -344,7 +345,7 @@ function TopCard({ product, place, onAdd }: { product: Product; place: number; o
       </div>
       <div className="flex flex-1 flex-col px-3 pb-2 pt-4">
         <p className="flex items-center justify-between gap-2 text-xs">
-          <Link href={`/catalog/${product.category}`} className="font-bold uppercase tracking-[0.1em] text-[#098fd0] hover:underline">
+          <Link href={`/catalog/${product.category}`} className="tap-y font-bold uppercase tracking-[0.1em] text-[#098fd0] hover:underline">
             {categoryBySlug[product.category].name}
           </Link>
           {product.reviews > 0 && (
@@ -354,7 +355,7 @@ function TopCard({ product, place, onAdd }: { product: Product; place: number; o
           )}
         </p>
         <h3 className="mt-2 text-lg font-extrabold leading-snug">
-          <Link href={productUrl(product)} className="transition hover:text-[#098fd0]">
+          <Link href={productUrl(product)} className="tap-y transition hover:text-[#098fd0]">
             {product.name}
           </Link>
         </h3>
