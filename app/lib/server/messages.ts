@@ -1,6 +1,5 @@
 import "server-only";
 import { db, iso, opt, type Queryable, type Row, type StoredMessage } from "./db";
-import { rateLimiter } from "./rate-limit";
 
 /*
  * Звернення з форми «Контакти» зберігаються в базі (таблиці messages і
@@ -61,5 +60,3 @@ export async function findMessage(id: string, q: Queryable = db) {
 
 export const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
-/** Не більше 3 звернень за 10 хвилин з однієї IP-адреси */
-export const contactRateLimited = rateLimiter("contact", 3, 10 * 60_000);

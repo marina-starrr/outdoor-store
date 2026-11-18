@@ -13,16 +13,27 @@ export type AdminSummary = {
   orders: { total: number; byStatus: Record<string, number> };
   revenue: { total: number; last30: number; count30: number };
   products: { total: number; visible: number; outOfStock: number; lowStock: { id: string; name: string; stock: number; category: string }[] };
-  messages: { unread: number };
+  messages: { unread: number; total: number };
+  /** Розмов у чаті з непрочитаними повідомленнями покупців */
+  chats: { waiting: number };
   reviews: { pending: number };
   customers: number;
 };
 
-const nav: { href: string; label: string; icon: IconName; badge?: (s: AdminSummary) => number }[] = [
+const nav: {
+  href: string;
+  label: string;
+  icon: IconName;
+  badge?: (s: AdminSummary) => number;
+  /** Показувати пункт лише за умови (напр. архів, поки в ньому щось є) */
+  show?: (s: AdminSummary) => boolean;
+}[] = [
   { href: "/admin", label: "Огляд", icon: "compare" },
   { href: "/admin/products", label: "Товари", icon: "tent", badge: (s) => s.products.outOfStock },
   { href: "/admin/orders", label: "Замовлення", icon: "package", badge: (s) => s.orders.byStatus.new ?? 0 },
-  { href: "/admin/messages", label: "Звернення", icon: "chat", badge: (s) => s.messages.unread },
+  { href: "/admin/chats", label: "Чат", icon: "chat", badge: (s) => s.chats?.waiting ?? 0 },
+  // Архів звернень з колишньої форми «Контакти» — показується, лише поки в ньому щось є
+  { href: "/admin/messages", label: "Звернення", icon: "mail", badge: (s) => s.messages.unread, show: (s) => s.messages.total > 0 },
   { href: "/admin/reviews", label: "Відгуки", icon: "star", badge: (s) => s.reviews.pending },
 ];
 
@@ -118,7 +129,7 @@ function AdminFrame({
       <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-5 py-6 lg:grid-cols-[230px_minmax(0,1fr)] lg:px-8">
         <nav aria-label="Розділи адмін-панелі" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
           <ul className="flex gap-1.5 overflow-x-auto rounded-[20px] bg-white p-2 shadow-[0_10px_30px_rgba(79,93,101,.08)] lg:grid">
-            {nav.map((item) => {
+            {nav.filter((item) => !item.show || (summary ? item.show(summary) : false) || pathname.startsWith(item.href)).map((item) => {
               const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
               const badge = summary && item.badge ? item.badge(summary) : 0;
               return (
@@ -133,7 +144,7 @@ function AdminFrame({
                     <Icon name={item.icon} className={`h-5 w-5 ${active ? "text-[#ffd51f]" : "text-[#067eb7]"}`} />
                     {item.label}
                     {badge > 0 && (
-                      <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-[#ffd51f] px-1.5 text-[11px] font-black text-[#082c45]">
+                      <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-[#ffd51f] px-1.5 text-xs font-black text-[#082c45]">
                         {badge}
                       </span>
                     )}

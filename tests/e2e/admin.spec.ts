@@ -256,24 +256,6 @@ test("замовлення покупця: бронювання при підт�
   await customer.close();
 });
 
-test("звернення з форми контактів", async ({ page }) => {
-  await page.goto("/contacts");
-  await page.locator("#field-c-name").fill("Ірина");
-  await page.locator("#field-c-email").fill("iryna@example.com");
-  await page.locator("#field-c-message").fill("Підкажіть, який ліхтар взяти в похід?");
-  await page.getByRole("button", { name: "Надіслати повідомлення" }).click();
-  await expect(page.getByRole("status")).toContainText("Дякуємо, Ірина!");
-
-  await admin.goto("/admin/messages");
-  const card = admin.getByTestId("admin-messages").locator("li", { hasText: "Ірина" });
-  await expect(card).toContainText("Підкажіть, який ліхтар");
-  await card.getByRole("button", { name: "Позначити опрацьованим" }).click();
-  // Зникає з «Нових» (інші тести можуть паралельно надсилати свої звернення)
-  await expect(card).toHaveCount(0);
-  await admin.getByRole("button", { name: /^Опрацьовані/ }).click();
-  await expect(admin.getByTestId("admin-messages").locator("li", { hasText: "Ірина" })).toContainText("Повернути в нові");
-});
-
 test("прихований товар зникає з сайту (404)", async ({ page, request }) => {
   await admin.goto("/admin/products");
   await admin.getByTestId("admin-products").locator("li", { hasText: PRODUCT.name }).getByRole("button", { name: "Приховати" }).click();

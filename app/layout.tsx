@@ -5,6 +5,7 @@ import { AuthProvider } from "./components/Auth";
 import { CatalogProvider } from "./components/Catalog";
 import { CartProvider } from "./components/Cart";
 import CartDrawer from "./components/CartDrawer";
+import ChatWidget from "./components/ChatWidget";
 import { ListsProvider } from "./components/Lists";
 import { NotificationsProvider } from "./components/Notifications";
 import { getPublicCatalog } from "./lib/server/catalog";
@@ -50,6 +51,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   {/* Читає адресу сторінки (usePathname) — для маршрутів з параметрами потрібна межа Suspense */}
                   <Suspense fallback={null}>
                     <CartDrawer />
+                  </Suspense>
+                  {/* Чат з консультантом на кожній сторінці (крім адмін-панелі) */}
+                  <Suspense fallback={null}>
+                    <ChatWidget />
                   </Suspense>
                 </ListsProvider>
               </CartProvider>

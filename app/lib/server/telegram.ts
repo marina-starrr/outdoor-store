@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { deliveryOptions, paymentTitle, shippingLabel, deliveryWhere } from "../../components/cart-logic";
 import { formatPrice } from "../../components/catalog-data";
 import { absoluteUrl } from "../site";
-import { dataDir, type StoredMessage, type StoredOrder, type StoredReview } from "./db";
+import { dataDir, type StoredOrder, type StoredReview } from "./db";
 
 /*
- * Сповіщення адміністратору в Telegram — про нові замовлення та звернення.
+ * Сповіщення адміністратору в Telegram — про нові замовлення, відгуки й повідомлення в чаті.
  *
  * Налаштування (.env.local або змінні хостингу):
  *   TELEGRAM_BOT_TOKEN=123456:ABC...   — токен бота від @BotFather
@@ -101,14 +101,17 @@ export function newReviewText(r: StoredReview) {
   ].join("\n");
 }
 
-/** Текст про нове звернення з форми «Контакти» */
-export function newMessageText(m: StoredMessage) {
+/** Нове повідомлення в чаті від покупця */
+export function chatMessageText(chat: { id: string; name: string; phone?: string; email?: string }, text: string, productName?: string) {
+  const contacts = [chat.phone, chat.email].filter(Boolean).join(", ");
   return [
-    `✉️ Нове звернення: ${m.topic}`,
-    `${m.name} · ${m.email}${m.phone ? ` · ${m.phone}` : ""}${m.order ? ` · замовлення ${m.order}` : ""}`,
+    `💬 Чат: ${chat.name || "Покупець"}${contacts ? ` (${contacts})` : ""}`,
+    productName ? `Про товар: ${productName}` : null,
     "",
-    m.message.length > 600 ? `${m.message.slice(0, 600)}…` : m.message,
+    text.length > 500 ? `${text.slice(0, 500)}…` : text,
     "",
-    absoluteUrl("/admin/messages"),
-  ].join("\n");
+    absoluteUrl(`/admin/chats?id=${chat.id}`),
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
 }

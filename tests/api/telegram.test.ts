@@ -1,7 +1,7 @@
 ﻿import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import * as contact from "../../app/api/contact/route";
+import * as chat from "../../app/api/chat/route";
 import * as orders from "../../app/api/orders/route";
 import { call } from "./helpers";
 
@@ -53,24 +53,25 @@ describe("сповіщення адміністратору в Telegram", () => 
     expect(sent().length).toBe(before);
   });
 
-  it("нове звернення з форми «Контакти»", async () => {
-    const r = await call(contact.POST, {
+  it("нове повідомлення в чаті — з контактами, товаром і посиланням на розмову", async () => {
+    const r = await call(chat.POST, {
       ip: "10.50.0.3",
-      body: { topic: "advice", name: "Петро", email: "petro@example.com", message: "Який намет обрати для чотирьох?" },
+      body: { name: "Петро", email: "petro@example.com", text: "Який намет обрати для чотирьох?", productId: "np3" },
     });
     expect(r.status).toBe(200);
     const text = sent().at(-1)!.text;
-    expect(text).toContain("Нове звернення");
-    expect(text).toContain("Петро · petro@example.com");
+    expect(text).toContain("💬 Чат: Петро (petro@example.com)");
+    expect(text).toContain("Про товар: Намет Nature Peak 3");
     expect(text).toContain("Який намет обрати для чотирьох?");
+    expect(text).toMatch(/\/admin\/chats\?id=[0-9a-f-]{36}/);
   });
 
   it("без налаштувань нічого не ламається", async () => {
     delete process.env.TELEGRAM_TRANSPORT;
     const before = sent().length;
-    const r = await call(contact.POST, {
+    const r = await call(chat.POST, {
       ip: "10.50.0.4",
-      body: { topic: "advice", name: "Петро", email: "petro@example.com", message: "Питання без Telegram-бота" },
+      body: { name: "Петро", email: "petro2@example.com", text: "Питання без Telegram-бота" },
     });
     expect(r.status).toBe(200);
     expect(sent().length).toBe(before);

@@ -61,3 +61,12 @@ export async function dbDump() {
   );
   return parts.join("\n");
 }
+
+/**
+ * Звернення з колишньої форми «Контакти» (форму замінив чат; старі звернення
+ * лишаються в адмінці, на них можна відповісти)
+ */
+export async function seedContactMessage(m: { name: string; email: string; phone?: string; message: string; userId?: string }) {
+  const { saveMessage } = await import("../../app/lib/server/messages");
+  return saveMessage({ topic: "Допомога з вибором", ...m });
+}

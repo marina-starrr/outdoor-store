@@ -211,7 +211,7 @@ export default function OfferContent({ seller }: { seller: Seller }) {
       <Section id="disputes">
         <p>
           Спори вирішуються шляхом переговорів. Претензію можна надіслати на <a href={contacts.emailHref}>{contacts.email}</a>{" "}
-          або через <Link href="/contacts">форму зворотного зв’язку</Link>. Якщо згоди не досягнуто, спір розглядається
+          або в <Link href="/contacts">чаті з консультантом</Link>. Якщо згоди не досягнуто, спір розглядається
           судом відповідно до законодавства України. Покупець також може звернутися до Держпродспоживслужби.
         </p>
       </Section>

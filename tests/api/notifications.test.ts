@@ -6,12 +6,11 @@ import * as messages from "../../app/api/admin/messages/route";
 import * as ordersItem from "../../app/api/admin/orders/[number]/route";
 import * as productItem from "../../app/api/admin/products/[id]/route";
 import * as register from "../../app/api/auth/register/route";
-import * as contact from "../../app/api/contact/route";
 import * as favorites from "../../app/api/favorites/route";
 import * as notifications from "../../app/api/notifications/route";
 import * as orders from "../../app/api/orders/route";
 import * as stockAlerts from "../../app/api/stock-alerts/route";
-import { call, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
+import { call, dbQuery, markEmailVerified, seedContactMessage, sessionCookie, uniqueEmail } from "./helpers";
 
 const ADMIN_EMAIL = "owner-notify@example.com";
 process.env.ADMIN_EMAILS = ADMIN_EMAIL;
@@ -164,12 +163,11 @@ describe("статус замовлення", () => {
 });
 
 describe("відповідь на звернення", () => {
-  const send = async (cookie: string | undefined, email: string, ip: string) => {
-    await call(contact.POST, {
-      cookie,
-      ip,
-      body: { topic: "advice", name: "Оксана", email, phone: "+380 ", message: "Який намет обрати для родини?" },
-    });
+  const send = async (cookie: string | undefined, email: string, _ip: string) => {
+    void _ip;
+    // Автор — покупець з акаунтом, якщо звернення надіслано після входу
+    const [owner] = cookie ? await dbQuery("select id from users where email = $1", [email.toLowerCase()]) : [];
+    await seedContactMessage({ name: "Оксана", email, message: "Який намет обрати для родини?", userId: owner?.id });
     const list = (await call(messages.GET, { method: "GET", cookie: admin })).data.messages;
     return list[0] as { id: string; hasAccount: boolean };
   };

@@ -9,9 +9,8 @@ import * as summary from "../../app/api/admin/summary/route";
 import * as me from "../../app/api/auth/me/route";
 import * as register from "../../app/api/auth/register/route";
 import * as cart from "../../app/api/cart/route";
-import * as contact from "../../app/api/contact/route";
 import * as orders from "../../app/api/orders/route";
-import { call, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
+import { call, markEmailVerified, seedContactMessage, sessionCookie, uniqueEmail } from "./helpers";
 
 const ADMIN_EMAIL = "owner@example.com";
 process.env.ADMIN_EMAILS = `someone-else@example.com, ${ADMIN_EMAIL.toUpperCase()}`;
@@ -200,7 +199,7 @@ describe("склад і замовлення", () => {
 
 describe("звернення і зведення", () => {
   it("звернення з форми контактів з'являються в адмін-панелі й позначаються опрацьованими", async () => {
-    await call(contact.POST, { body: { topic: "advice", name: "Ірина", email: "iryna@example.com", message: "Допоможіть обрати спальник" }, ip: "9.9.9.9" });
+    await seedContactMessage({ name: "Ірина", email: "iryna@example.com", message: "Допоможіть обрати спальник" });
     const list = await call(messages.GET, { method: "GET", cookie: admin });
     const m = list.data.messages[0];
     expect(m).toMatchObject({ name: "Ірина", topic: "Допомога з вибором" });

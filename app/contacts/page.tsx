@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import ContactForm from "../components/ContactForm";
+import ChatButton from "../components/ChatButton";
 import Icon, { type IconName } from "../components/Icon";
 import InfoLayout from "../components/InfoLayout";
 import { Faq, InfoCard, InfoTitle } from "../components/info-ui";
@@ -62,11 +62,23 @@ export default function ContactsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
         <InfoCard>
-          <InfoTitle icon="chat" eyebrow="Зворотний зв’язок">Напишіть нам</InfoTitle>
-          <p className="mb-6 mt-3 text-[15px] text-[#3d5d70]">
-            Заповніть форму — менеджер відповість на email або передзвонить, якщо залишите номер.
+          <InfoTitle icon="chat" eyebrow="Чат з консультантом">Напишіть нам</InfoTitle>
+          <p className="mt-3 text-[15px] leading-relaxed text-[#3d5d70]">
+            Найшвидше — у чаті: допоможемо обрати намет чи спальник, підкажемо щодо доставки, оплати або повернення.
+            Реєстрація не потрібна. Уся переписка зберігається — повернутися до неї можна з будь-якої сторінки
+            сайту через кнопку чату в правому нижньому куті.
           </p>
-          <ContactForm />
+          <ul className="mt-4 space-y-2 text-sm text-[#3d5d70]">
+            {["Відповідаємо в робочий час, зазвичай протягом години", "Якщо закриєте сайт — продублюємо відповідь на email", "Можна запитати про конкретний товар прямо з його сторінки"].map((t) => (
+              <li key={t} className="flex gap-2">
+                <span className="text-[#1f9d55]">✓</span>
+                {t}
+              </li>
+            ))}
+          </ul>
+          <ChatButton className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-[#ffd51f] px-7 py-4 text-base font-extrabold text-[#082c45] shadow-[0_10px_26px_rgba(255,213,31,.4)] transition hover:-translate-y-0.5 hover:bg-[#ffe044]">
+            Відкрити чат
+          </ChatButton>
         </InfoCard>
 
         <div className="grid gap-6">

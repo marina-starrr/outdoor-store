@@ -11,6 +11,7 @@ import { useNotifications } from "./Notifications";
 import RecentlyViewed, { useTrackView } from "./RecentlyViewed";
 import { RETURN_DAYS, SHIPPING_BY_CARRIER, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
 import { ShippingNote } from "./cart-ui";
+import ChatButton from "./ChatButton";
 import { useCatalog } from "./Catalog";
 import Icon from "./Icon";
 import SiteFooter from "./SiteFooter";
@@ -269,6 +270,12 @@ export default function ProductPage({ product }: { product: Product }) {
                   <ShippingNote />
                 </div>
               )}
+              <ChatButton
+                productId={product.id}
+                className="tap-y mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#098fd0] hover:underline"
+              >
+                Є питання? Запитати про цей товар
+              </ChatButton>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Perk icon="truck" title="Швидка доставка" text="по всій Україні" />

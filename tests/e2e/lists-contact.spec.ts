@@ -32,27 +32,7 @@ test.describe("порівняння", () => {
   });
 });
 
-test.describe("форма контактів", () => {
-  test("перевірка полів і успішне надсилання", async ({ page }) => {
-    await page.goto("/contacts");
-    await page.getByRole("button", { name: "Надіслати повідомлення" }).click();
-    await expect(page.getByText("Вкажіть ім'я")).toBeVisible();
-    await expect(page.getByText("Перевірте email")).toBeVisible();
-    await expect(page.locator("#field-c-name")).toBeFocused();
-
-    await expect(page.locator("#field-c-order")).toHaveCount(0);
-    await page.getByText("Питання щодо замовлення", { exact: true }).click();
-    await expect(page.locator("#field-c-order")).toBeVisible();
-
-    await page.locator("#field-c-name").fill("Оксана");
-    await page.locator("#field-c-email").fill("oksana@example.com");
-    await page.locator("#field-c-order").fill("fc-1234567");
-    await expect(page.locator("#field-c-order")).toHaveValue("FC-1234567");
-    await page.locator("#field-c-message").fill("Коли відправите моє замовлення?");
-    await page.getByRole("button", { name: "Надіслати повідомлення" }).click();
-    await expect(page.getByRole("status")).toContainText("Дякуємо, Оксана!");
-  });
-
+test.describe("контакти", () => {
   test("графік — цілодобово, адреси немає", async ({ page }) => {
     await page.goto("/contacts");
     await expect(page.getByText("Цілодобово, 24/7")).toBeVisible();
