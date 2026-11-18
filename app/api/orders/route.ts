@@ -28,6 +28,7 @@ import { tx, type StoredOrder } from "../../lib/server/db";
 import { setCart } from "../../lib/server/lists";
 import { sendMail } from "../../lib/server/mail";
 import { checkCity } from "../../lib/server/novaposhta";
+import { expireUnpaidOrders } from "../../lib/server/order-flow";
 import { insertOrder, orderPlacedMail, userOrders } from "../../lib/server/orders";
 import { newOrderText, notifyAdmin } from "../../lib/server/telegram";
 
@@ -38,6 +39,8 @@ const guestOrdersLimited = rateLimiter("guest-order", 5, 30 * 60_000);
 export async function GET(req: NextRequest) {
   const user = await getUser(req);
   if (!user) return error("Потрібно увійти", 401);
+  // Покупець одразу бачить, що неоплачене вчасно замовлення скасовано
+  await expireUnpaidOrders();
   return json({ orders: await userOrders(user.id) });
 }
 
@@ -109,19 +112,13 @@ export async function POST(req: NextRequest) {
   const claimToken = user ? undefined : randomBytes(24).toString("base64url");
   let order: StoredOrder;
   try {
-    // Перевірка залишків і списання — в одній транзакції: списання з умовою
-    // stock >= qty атомарне, тож два покупці не куплять одну й ту саму останню одиницю
+    // Товар лише перевіряється — списується (бронюється) він, коли адміністратор
+    // підтверджує замовлення (див. order-flow.ts)
     order = await tx(async (q) => {
-      // Однаковий порядок блокування рядків у всіх транзакціях — без взаємних блокувань
-      for (const l of [...lines].sort((a, b) => a.id.localeCompare(b.id))) {
-        const [taken] = await q.query(
-          "update products set stock = stock - $2 where id = $1 and not hidden and stock >= $2 returning id",
-          [l.id, l.qty],
-        );
-        if (taken) continue;
+      for (const l of lines) {
         const [p] = await q.query("select stock, hidden from products where id = $1", [l.id]);
         const stock = p && !p.hidden ? Number(p.stock) : 0;
-        // Помилка відкочує всю транзакцію — уже списані рядки повертаються
+        if (stock >= l.qty) continue;
         throw new StockError(
           stock > 0
             ? `«${l.product.name}»: на складі залишилось лише ${stock} шт. Зменште кількість у кошику.`
@@ -160,7 +157,7 @@ export async function POST(req: NextRequest) {
     throw e;
   }
 
-  // Залишки змінились — оновлюємо сторінки каталогу
+  // Змінилась кількість продажів у каталозі — оновлюємо сторінки
   invalidateCatalog();
   const mailTo = contact.email || user?.email;
   await Promise.all([

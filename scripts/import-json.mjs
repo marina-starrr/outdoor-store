@@ -173,8 +173,10 @@ try {
       const inserted = await q(
         `insert into orders (number, user_id, claim_hash, created_at, updated_at, status, subtotal, promo, promo_discount,
            shipping, total, delivery_method, delivery_city, delivery_city_ref, delivery_branch, delivery_address,
-           payment, first_name, last_name, phone, email, comment, no_call)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+           payment, first_name, last_name, phone, email, comment, no_call, stock_reserved, confirmed_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
+           -- У файловій базі товар списувався одразу при оформленні; підтвердженим — 3 дні на оплату від імпорту
+           $6 <> 'cancelled', case when $6 = 'confirmed' then now() end)
          on conflict (number) do nothing returning number`,
         [o.number, o.userId, o.claimHash ?? null, ts(o.createdAt), ts(o.updatedAt), o.status, o.subtotal, o.promo ?? null,
           o.promoDiscount ?? 0, o.shipping ?? 0, o.total, d.method, d.city ?? null, d.cityRef ?? null, d.branch ?? null,

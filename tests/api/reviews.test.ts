@@ -44,12 +44,12 @@ beforeAll(async () => {
       lines: [{ id: PRODUCT, qty: 2 }],
       contact: { firstName: "Олена", lastName: "Коваль", phone: "+380 50 111 22 33" },
       delivery: { method: "np-branch", city: "Київ", branch: "1" },
-      payment: "cod",
+      payment: "invoice",
       agreed: true,
     },
   });
   const number = r.data.order.number;
-  for (const status of ["confirmed", "shipped"])
+  for (const status of ["confirmed", "paid", "shipped"])
     await call(withParams(ordersItem.PATCH, { number }), { method: "PATCH", cookie: admin, body: { status } });
 });
 
@@ -148,7 +148,7 @@ describe("продажі в каталозі", () => {
           lines: [{ id: "li-head", qty: 3 }],
           contact: { firstName: "Ігор", lastName: "Тест", phone: "+380 50 111 22 33" },
           delivery: { method: "np-branch", city: "Київ", branch: "1" },
-          payment: "cod",
+          payment: "invoice",
           agreed: true,
         },
       })).data.order.number as string;

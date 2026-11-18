@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Icon from "../Icon";
 import { deliveryOptions, paymentTitle } from "../cart-logic";
 import { formatPrice } from "../catalog-data";
-import { nextStatuses, orderStatusInfo, type OrderStatusId } from "../../lib/order-status";
+import { PAYMENT_DAYS, nextStatusesFor, orderStatusInfo, paymentDue, type OrderStatusId } from "../../lib/order-status";
 import AdminShell, { LoadError, Panel } from "./AdminShell";
 import { StatusPill } from "./AdminDashboard";
 import { adminFetch, shortDate, useAdminData, type ApiError } from "./api";
@@ -14,6 +14,8 @@ export type AdminOrder = {
   number: string;
   createdAt: string;
   updatedAt?: string;
+  confirmedAt?: string;
+  paidAt?: string;
   status: OrderStatusId;
   lines: { id: string; name: string; price: number; qty: number }[];
   subtotal: number;
@@ -33,7 +35,8 @@ export type AdminOrder = {
 /** Підписи кнопок переходу статусу */
 const actionLabel: Record<OrderStatusId, string> = {
   new: "",
-  confirmed: "Підтвердити",
+  confirmed: "Підтвердити й забронювати",
+  paid: "Оплату отримано",
   shipped: "Відправлено",
   done: "Виконано",
   cancelled: "Скасувати",
@@ -100,8 +103,10 @@ function Orders() {
       setData((d) => d && { orders: d.orders.map((o) => (o.number === number ? { ...o, ...order } : o)) });
       setNotice(
         status === "cancelled"
-          ? `Замовлення ${number} скасовано, товари повернено на склад`
-          : `Замовлення ${number}: ${orderStatusInfo[status].label.toLowerCase()}`,
+          ? `Замовлення ${number} скасовано, заброньовані товари повернено на склад`
+          : status === "confirmed"
+            ? `Замовлення ${number} підтверджено: товар заброньовано на ${PAYMENT_DAYS} дні, покупцю надіслано реквізити`
+            : `Замовлення ${number}: ${orderStatusInfo[status].label.toLowerCase()}`,
       );
     } catch (e) {
       setNotice((e as ApiError).message);
@@ -113,7 +118,7 @@ function Orders() {
 
   if (error) return <LoadError message={error} onRetry={reload} />;
 
-  const filters: Filter[] = ["all", "new", "confirmed", "shipped", "done", "cancelled"];
+  const filters: Filter[] = ["all", "new", "confirmed", "paid", "shipped", "done", "cancelled"];
 
   return (
     <div className="grid gap-4">
@@ -217,16 +222,24 @@ function Orders() {
                         {o.noCall && <span className="mt-1 block text-xs font-bold text-[#c27c00]">Просить не телефонувати</span>}
                       </Info>
                       <Info label="Доставка">{delivery}{where && <><br />{where}</>}</Info>
-                      <Info label="Оплата">{paymentTitle(o.payment)}</Info>
+                      <Info label="Оплата">
+                        {paymentTitle(o.payment)}
+                        {o.status === "confirmed" && o.confirmedAt && o.payment === "invoice" && (
+                          <span className="mt-1 block text-xs font-bold text-[#c27c00]">
+                            Чекаємо оплату до {shortDate(paymentDue(o.confirmedAt))}, далі — автоскасування
+                          </span>
+                        )}
+                        {o.paidAt && <span className="mt-1 block text-xs font-bold text-[#1f9d55]">Оплачено {shortDate(o.paidAt)}</span>}
+                      </Info>
                       {o.comment && <Info label="Коментар">{o.comment}</Info>}
 
-                      {nextStatuses[o.status].length > 0 && (
+                      {nextStatusesFor(o.status, o.payment).length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-2">
-                          {nextStatuses[o.status].map((s) =>
+                          {nextStatusesFor(o.status, o.payment).map((s) =>
                             s === "cancelled" ? (
                               confirmCancel === o.number ? (
                                 <span key={s} className="flex items-center gap-2 rounded-full bg-[#fdecec] px-3 py-1.5 text-xs">
-                                  Скасувати й повернути товари на склад?
+                                  {o.status === "new" ? "Скасувати замовлення?" : "Скасувати й повернути товари на склад?"}
                                   <button onClick={() => changeStatus(o.number, s)} disabled={busy === o.number} className="font-extrabold text-[#c53035] hover:underline">Так</button>
                                   <button onClick={() => setConfirmCancel(null)} className="font-extrabold text-[#264e65] hover:underline">Ні</button>
                                 </span>

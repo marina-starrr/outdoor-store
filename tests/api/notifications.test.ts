@@ -140,7 +140,7 @@ describe("статус замовлення", () => {
         lines: [{ id: "ch3", qty: 1 }],
         contact: { firstName: "Оксана", lastName: "Тест", phone: "+380 50 111 22 33" },
         delivery: { method: "np-branch", city: "Київ", branch: "1" },
-        payment: "cod",
+        payment: "invoice",
         agreed: true,
       },
     });
@@ -149,12 +149,16 @@ describe("статус замовлення", () => {
       call(withParams(ordersItem.PATCH, { number }), { method: "PATCH", cookie: admin, body: { status } });
 
     await setStatus("confirmed");
+    await setStatus("paid");
     await setStatus("shipped");
     const d = await inbox(customer);
-    expect(d.notifications.slice(0, 2).map((n: { kind: string; title: string }) => [n.kind, n.title])).toEqual([
-      ["order", `Замовлення ${number}: відправлене`],
-      ["order", `Замовлення ${number}: підтверджене`],
+    expect(d.notifications.slice(0, 3).map((n: { kind: string; title: string }) => [n.kind, n.title])).toEqual([
+      ["order", `Замовлення ${number}: відправлено`],
+      ["order", `Замовлення ${number}: оплачено`],
+      ["order", `Замовлення ${number}: очікує оплату`],
     ]);
+    // Підтвердження: товар заброньовано, сума і строк оплати
+    expect(d.notifications[2].text).toMatch(/заброньовано за вами\. Оплатіть .+ до \d+\s\S+ —/);
     expect(d.notifications[0].href).toBe("/account");
   });
 });

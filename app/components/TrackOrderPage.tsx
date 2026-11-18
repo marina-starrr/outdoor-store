@@ -10,12 +10,14 @@ import { Breadcrumbs } from "./catalog-ui";
 import { deliveryOptions, paymentTitle } from "./cart-logic";
 import { formatPrice } from "./catalog-data";
 import { Field, FormError, SubmitButton, formatPhone, inputCls } from "./form-ui";
-import { orderStatusInfo, type OrderStatusId } from "../lib/order-status";
+import { orderStatusInfo, orderSteps, type OrderStatusId } from "../lib/order-status";
+import OrderPayment from "./OrderPayment";
 
 type TrackedOrder = {
   number: string;
   createdAt: string;
   updatedAt?: string;
+  confirmedAt?: string;
   status: OrderStatusId;
   lines: { id: string; name: string; price: number; qty: number }[];
   shipping: number;
@@ -25,8 +27,8 @@ type TrackedOrder = {
   payment: string;
 };
 
-/** Етапи для шкали прогресу (скасоване показується окремо) */
-const steps: OrderStatusId[] = ["new", "confirmed", "shipped", "done"];
+/** Етапи для шкали прогресу (скасоване показується окремо); накладений платіж — без етапу «Оплачено» */
+const stepsFor = (payment: string) => orderSteps.filter((s) => s !== "paid" || payment !== "cod");
 
 const date = (iso: string) =>
   new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" });
@@ -109,6 +111,7 @@ export default function TrackOrderPage() {
 
 function OrderStatus({ order, onBack }: { order: TrackedOrder; onBack: () => void }) {
   const cancelled = order.status === "cancelled";
+  const steps = stepsFor(order.payment);
   const reached = steps.indexOf(order.status);
   const delivery = deliveryOptions.find((d) => d.id === order.delivery.method)?.title;
   return (
@@ -119,7 +122,7 @@ function OrderStatus({ order, onBack }: { order: TrackedOrder; onBack: () => voi
           <p className="text-sm text-[#527083]">від {date(order.createdAt)}</p>
         </div>
         <span className={`rounded-full px-3 py-1 text-sm font-extrabold ${orderStatusInfo[order.status].tone}`}>
-          {orderStatusInfo[order.status].label}
+          {orderStatusInfo[order.status].customer}
         </span>
       </div>
 
@@ -128,16 +131,31 @@ function OrderStatus({ order, onBack }: { order: TrackedOrder; onBack: () => voi
           Замовлення скасовано. Якщо це помилка — <Link href="/contacts" className="font-bold underline">напишіть нам</Link>.
         </p>
       ) : (
-        <ol className="mt-6 grid grid-cols-4 gap-2" aria-label="Етапи замовлення">
+        <ol className={`mt-6 grid gap-1.5 sm:gap-2 ${steps.length === 5 ? "grid-cols-5" : "grid-cols-4"}`} aria-label="Етапи замовлення">
           {steps.map((s, i) => (
             <li key={s} className="text-center" aria-current={i === reached ? "step" : undefined}>
               <span className={`block h-2 rounded-full ${i <= reached ? "bg-[#ffd51f]" : "bg-[#e3edf3]"}`} />
-              <span className={`mt-2 block text-xs font-bold sm:text-sm ${i <= reached ? "text-[#082c45]" : "text-[#8aa5b5]"}`}>
-                {orderStatusInfo[s].label}
+              {/* На телефоні п’ять підписів не вміщуються — там лише поточний етап під шкалою */}
+              <span className={`mt-2 hidden text-sm font-bold sm:block ${i <= reached ? "text-[#082c45]" : "text-[#8aa5b5]"}`}>
+                {orderStatusInfo[s].step}
               </span>
             </li>
           ))}
         </ol>
+      )}
+      {!cancelled && reached >= 0 && (
+        <p className="mt-2 text-sm font-bold sm:hidden">
+          Етап {reached + 1} з {steps.length}: {orderStatusInfo[order.status].step.toLowerCase()}
+          {reached + 1 < steps.length && (
+            <span className="font-medium text-[#8aa5b5]"> · далі — {orderStatusInfo[steps[reached + 1]].step.toLowerCase()}</span>
+          )}
+        </p>
+      )}
+
+      {order.status === "confirmed" && order.payment === "invoice" && (
+        <div className="mt-6">
+          <OrderPayment order={order} />
+        </div>
       )}
 
       <ul className="mt-6 divide-y divide-[#e3edf3] rounded-[20px] border border-[#e3edf3] text-sm">
@@ -159,7 +177,7 @@ function OrderStatus({ order, onBack }: { order: TrackedOrder; onBack: () => voi
         )}
         <li className="flex justify-between gap-4 bg-[#f6fafd] px-5 py-4">
           <span className="font-bold">Разом · {paymentTitle(order.payment)}</span>
-          <span className="text-lg font-black">{formatPrice(order.total)}</span>
+          <span className="shrink-0 whitespace-nowrap text-lg font-black">{formatPrice(order.total)}</span>
         </li>
       </ul>
 

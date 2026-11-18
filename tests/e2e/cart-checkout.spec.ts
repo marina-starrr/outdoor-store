@@ -174,7 +174,8 @@ test("гість: статус замовлення на сторінці «Де
   await page.getByRole("button", { name: "Перевірити статус" }).click();
   const card = page.getByTestId("tracked-order");
   await expect(card).toContainText(`Замовлення ${number}`);
-  await expect(card).toContainText("Нове");
+  // Для покупця — словами, що відбувається: менеджер ще не підтвердив
+  await expect(card).toContainText("Очікує підтвердження");
   await expect(card).toContainText("Nature Peak 3");
 });
 

@@ -103,7 +103,12 @@ describe("склад і кошик", () => {
 describe("статуси замовлень", () => {
   it("дозволені переходи", () => {
     expect(canTransition("new", "confirmed")).toBe(true);
-    expect(canTransition("confirmed", "shipped")).toBe(true);
+    expect(canTransition("confirmed", "paid")).toBe(true);
+    expect(canTransition("paid", "shipped")).toBe(true);
+    expect(canTransition("paid", "cancelled")).toBe(true);
+    // Без оплати не відправляємо; старі замовлення з накладеним платежем — можна
+    expect(canTransition("confirmed", "shipped")).toBe(false);
+    expect(canTransition("confirmed", "shipped", "cod")).toBe(true);
     expect(canTransition("shipped", "done")).toBe(true);
     expect(canTransition("new", "cancelled")).toBe(true);
   });

@@ -21,7 +21,7 @@ async function customerOrder(request: APIRequestContext, productId: string, qty:
       lines: [{ id: productId, qty }],
       contact: { firstName: "Олег", lastName: "Покупець", phone: "+380 67 123 45 67" },
       delivery: { method: "np-branch", city: "Полтава", branch: "3" },
-      payment: "cod",
+      payment: "invoice",
       agreed: true,
     },
   });
@@ -209,7 +209,7 @@ test("редагування у формі: стара ціна, опис", asyn
   await expect(page.getByText("−23%").first()).toBeVisible();
 });
 
-test("замовлення покупця: статуси й повернення на склад при скасуванні", async ({ browser }) => {
+test("замовлення покупця: бронювання при підтвердженні, оплата, повернення на склад при скасуванні", async ({ browser }) => {
   const id = productUrl.split("/").pop()!;
   const customer = await browser.newContext();
   const { status, body } = await customerOrder(customer.request, id, 3);
@@ -221,16 +221,29 @@ test("замовлення покупця: статуси й поверненн�
   await expect(order).toContainText("Нове");
   await order.getByRole("button", { name: new RegExp(number) }).click();
   await expect(order).toContainText("Полтава");
-  await order.getByRole("button", { name: "Підтвердити" }).click();
-  await expect(order).toContainText("Підтверджене");
 
-  // Покупець бачить статус
+  // Нове замовлення товар ще не бронює
+  const stockInput = () => admin.getByLabel(`Залишок ${PRODUCT.name}`, { exact: true });
+  const products = await (await admin.request.get("/api/admin/products")).json();
+  expect(products.products.find((p: { id: string }) => p.id === id).stock).toBe(4);
+
+  await order.getByRole("button", { name: "Підтвердити й забронювати" }).click();
+  await expect(order).toContainText("Чекає оплату");
+  await expect(order).toContainText("Чекаємо оплату до");
+  await expect(admin.getByText(/підтверджено: товар заброньовано/)).toBeVisible();
+
+  // Покупець бачить статус і що треба оплатити
   const history = await (await customer.request.get("/api/orders")).json();
   expect(history.orders[0]).toMatchObject({ number, status: "confirmed" });
+  const customerPage = await customer.newPage();
+  await customerPage.goto("/account");
+  await expect(customerPage.getByText("Очікує оплату").first()).toBeVisible();
+  await expect(customerPage.getByTestId("order-payment").first()).toContainText("Оплатіть");
+  await expect(customerPage.getByTestId("order-payment").first()).toContainText(`Оплата замовлення ${number}`);
 
-  // Залишок списано (4 − 3)
+  // Підтвердження забронювало товар (4 − 3)
   await admin.goto("/admin/products");
-  await expect(admin.getByLabel(`Залишок ${PRODUCT.name}`, { exact: true })).toHaveValue("1");
+  await expect(stockInput()).toHaveValue("1");
 
   // Скасування з підтвердженням повертає товар на склад
   await admin.goto(`/admin/orders?q=${number}`);

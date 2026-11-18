@@ -14,6 +14,7 @@ import SiteHeader from "./SiteHeader";
 import RecentlyViewed from "./RecentlyViewed";
 import { Breadcrumbs, ProductCard } from "./catalog-ui";
 import { SELLER } from "../lib/seller";
+import { PAYMENT_DAYS } from "../lib/order-status";
 import { CartItem, EmptyCart, FreeShippingBar, TrashIcon } from "./cart-ui";
 import { ORDER_CLAIMS_STORAGE_KEY, readIds, writeIds } from "./cart-storage";
 import CityInput from "./CityInput";
@@ -581,7 +582,8 @@ function OrderSuccess({ order }: { order: PlacedOrder }) {
         {order.noCall
           ? "Ми повідомимо, щойно відправимо посилку."
           : `Менеджер зв’яжеться з вами за номером ${order.phone}, щоб підтвердити замовлення.`}
-        {order.payment === "invoice" && " Реквізити для оплати надішлемо після підтвердження."}
+        {order.payment === "invoice" &&
+          ` Після підтвердження товар буде заброньовано за вами — реквізити для оплати надішлемо на email, оплатити потрібно протягом ${PAYMENT_DAYS} днів.`}
       </p>
 
       <ul className="mt-8 divide-y divide-[#e3edf3] rounded-[20px] border border-[#e3edf3] text-left">

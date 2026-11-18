@@ -89,7 +89,8 @@ describe("cartTotals", () => {
 
 describe("оплата", () => {
   it("покупцям доступні лише способи, які справді працюють", () => {
-    expect(paymentOptions.map((p) => p.id)).toEqual(["cod", "invoice"]);
+    // Лише оплата на рахунок: накладеним платежем не відправляємо
+    expect(paymentOptions.map((p) => p.id)).toEqual(["invoice"]);
   });
 
   it("назви вимкнених способів лишаються для старих замовлень", () => {

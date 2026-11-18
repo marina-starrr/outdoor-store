@@ -63,8 +63,9 @@ type PaymentOption = { id: PaymentId; title: string; text: string; minTotal?: nu
  * (LiqPay / WayForPay / monobank) — показувати оплату, яку ніхто не приймає, не можна
  */
 export const allPaymentOptions: PaymentOption[] = [
-  { id: "cod", title: "Накладений платіж", text: "Оплата при отриманні у відділенні, комісія перевізника", enabled: true },
-  { id: "invoice", title: "Оплата на рахунок", text: "Після підтвердження замовлення надішлемо реквізити для оплати", enabled: true },
+  // Накладений платіж вимкнено: товар відправляємо лише після оплати на рахунок
+  { id: "cod", title: "Накладений платіж", text: "Оплата при отриманні у відділенні, комісія перевізника", enabled: false },
+  { id: "invoice", title: "Оплата на рахунок", text: "Після підтвердження замовлення надішлемо реквізити; оплатити потрібно протягом 3 днів", enabled: true },
   { id: "card", title: "Карткою онлайн", text: "Visa, Mastercard, Apple Pay, Google Pay", enabled: false },
   { id: "parts", title: "Оплата частинами", text: "До 6 платежів без переплат", minTotal: 3000, enabled: false },
 ];

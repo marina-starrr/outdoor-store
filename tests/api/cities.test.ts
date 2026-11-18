@@ -16,7 +16,7 @@ const order = (delivery: Record<string, string>) =>
       lines: [{ id: "np3", qty: 1 }],
       contact: { firstName: "Ірина", lastName: "Місто", phone: "+380 50 222 33 44", email: "city@example.com" },
       delivery: { method: "np-branch", branch: "5", ...delivery },
-      payment: "cod",
+      payment: "invoice",
       agreed: true,
     },
   });

@@ -1,7 +1,8 @@
 import "server-only";
 import { formatPrice, type Product } from "../../components/catalog-data";
 import { productUrl } from "../../components/product-details";
-import { orderStatusInfo, type OrderStatusId } from "../order-status";
+import { PAYMENT_DAYS, orderStatusInfo, paymentDue, type OrderStatusId } from "../order-status";
+import { paymentDetailsText } from "../payment";
 import { db, notificationFromRow, userFromRow, type NotificationKind, type Queryable, type StoredNotification, type StoredOrder, type StoredUser } from "./db";
 import type { Mail } from "./mail";
 
@@ -87,33 +88,69 @@ export async function productEvents(q: Queryable, product: Product, before: Prod
   }
 }
 
-const statusText: Partial<Record<OrderStatusId, string>> = {
-  confirmed: "підтверджено — готуємо до відправлення",
-  shipped: "відправлено. Скоро посилка буде у вибраному відділенні чи за адресою",
-  done: "виконано. Дякуємо за покупку — гарного відпочинку!",
-  cancelled: "скасовано. Якщо це помилка — напишіть нам",
-};
+/** Що сталося із замовленням — продовження фрази «Ваше замовлення FC-… …» */
+function statusText(order: StoredOrder, status: OrderStatusId, reason?: "unpaid"): string | null {
+  switch (status) {
+    case "confirmed":
+      return `підтверджено, товар заброньовано за вами. Оплатіть ${formatPrice(order.total)} до ${formatDue(order)} — після оплати відправимо посилку`;
+    case "paid":
+      return "оплачено, дякуємо! Готуємо посилку до відправлення";
+    case "shipped":
+      return "відправлено. Скоро посилка буде у вибраному відділенні чи за адресою";
+    case "done":
+      return "виконано. Дякуємо за покупку — гарного відпочинку!";
+    case "cancelled":
+      return reason === "unpaid"
+        ? `скасовано, бо оплата не надійшла протягом ${PAYMENT_DAYS} днів. Якщо ви вже оплатили — напишіть нам`
+        : "скасовано. Якщо це помилка — напишіть нам";
+    default:
+      return null;
+  }
+}
 
-/** Зміна статусу замовлення → його власнику */
-export async function orderEvent(q: Queryable, user: Recipient, number: string, status: OrderStatusId, mails: Mail[]) {
-  const text = statusText[status];
+const formatDue = (order: StoredOrder) =>
+  new Date(paymentDue(order.confirmedAt ?? new Date().toISOString())).toLocaleDateString("uk-UA", {
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/Kyiv",
+  });
+
+/** У листі про підтвердження — ще й реквізити для оплати */
+const mailExtra = (order: StoredOrder, status: OrderStatusId) =>
+  status === "confirmed" ? `
+
+${paymentDetailsText(order)}` : "";
+
+/** Зміна статусу замовлення → його власнику (сповіщення на сайті й лист) */
+export async function orderEvent(
+  q: Queryable,
+  user: Recipient,
+  order: StoredOrder,
+  status: OrderStatusId,
+  mails: Mail[],
+  reason?: "unpaid",
+) {
+  const text = statusText(order, status, reason);
   if (!text) return;
+  const before = mails.length;
   await notifyUser(q, user, {
     kind: "order",
-    title: `Замовлення ${number}: ${orderStatusInfo[status].label.toLowerCase()}`,
-    text: `Ваше замовлення ${number} ${text}.`,
+    title: `Замовлення ${order.number}: ${orderStatusInfo[status].customer.toLowerCase()}`,
+    text: `Ваше замовлення ${order.number} ${text}.`,
     href: "/account",
   }, mails);
+  // Лист (якщо покупець їх не вимкнув) — із реквізитами
+  if (mails.length > before) mails[mails.length - 1].text += mailExtra(order, status);
 }
 
 /** Зміна статусу замовлення гостя → лист на email із замовлення */
-export function guestOrderEvent(order: StoredOrder, status: OrderStatusId, mails: Mail[]) {
-  const text = statusText[status];
+export function guestOrderEvent(order: StoredOrder, status: OrderStatusId, mails: Mail[], reason?: "unpaid") {
+  const text = statusText(order, status, reason);
   if (!text || !order.contact.email) return;
   mails.push({
     to: order.contact.email,
-    subject: `Замовлення ${order.number}: ${orderStatusInfo[status].label.toLowerCase()}`,
-    text: `Ваше замовлення ${order.number} ${text}.`,
+    subject: `Замовлення ${order.number}: ${orderStatusInfo[status].customer.toLowerCase()}`,
+    text: `Ваше замовлення ${order.number} ${text}.${mailExtra(order, status)}`,
     href: `/orders/track?number=${encodeURIComponent(order.number)}`,
   });
 }

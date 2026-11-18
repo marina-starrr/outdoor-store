@@ -16,7 +16,7 @@ import type { DeliveryId, PaymentId } from "../../components/cart-logic";
  * Увесь доступ — через sql() (окремий запит) і tx() (транзакція).
  */
 
-export const ORDER_STATUSES = ["new", "confirmed", "shipped", "done", "cancelled"] as const;
+export const ORDER_STATUSES = ["new", "confirmed", "paid", "shipped", "done", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export type OrderDelivery = { method: DeliveryId; city?: string; cityRef?: string; branch?: string; address?: string };
@@ -27,6 +27,10 @@ export type StoredOrder = {
   status: OrderStatus;
   /** Коли адміністратор востаннє змінив статус */
   updatedAt?: string;
+  /** Коли підтверджено (товар заброньовано) — від цього рахується строк оплати */
+  confirmedAt?: string;
+  /** Коли адміністратор позначив оплату */
+  paidAt?: string;
   lines: { id: string; name: string; price: number; qty: number }[];
   subtotal: number;
   promo?: string;

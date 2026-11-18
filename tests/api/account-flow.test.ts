@@ -24,7 +24,7 @@ const validOrder = (lines: { id: string; qty: number }[]) => ({
   lines,
   contact: { firstName: "Тарас", lastName: "Шевченко", phone: "+380 50 111 22 33", email: "" },
   delivery: { method: "np-branch", city: "Львів", branch: "12" },
-  payment: "cod",
+  payment: "invoice",
   agreed: true,
 });
 

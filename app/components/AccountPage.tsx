@@ -12,13 +12,16 @@ import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { Breadcrumbs } from "./catalog-ui";
 import { deliveryOptions, paymentTitle } from "./cart-logic";
+import OrderPayment from "./OrderPayment";
+import { orderStatusInfo, type OrderStatusId } from "../lib/order-status";
 import { formatPrice, productsWord } from "./catalog-data";
 import { Field, FormError, PasswordInput, SubmitButton, formatPhone, inputCls, isPhoneComplete } from "./form-ui";
 
 type Order = {
   number: string;
   createdAt: string;
-  status: "new" | "confirmed" | "shipped" | "done" | "cancelled";
+  status: OrderStatusId;
+  confirmedAt?: string;
   lines: { id: string; name: string; price: number; qty: number }[];
   total: number;
   shipping: number;
@@ -27,13 +30,6 @@ type Order = {
   payment: string;
 };
 
-const statusLabel: Record<Order["status"], [string, string]> = {
-  new: ["Прийнято", "bg-[#eaf6fd] text-[#067eb7]"],
-  confirmed: ["Підтверджено", "bg-[#fff4c2] text-[#8a6100]"],
-  shipped: ["Відправлено", "bg-[#efe9fd] text-[#6941c6]"],
-  done: ["Отримано", "bg-[#e7f7ee] text-[#1f9d55]"],
-  cancelled: ["Скасовано", "bg-[#fdecec] text-[#c53035]"],
-};
 
 const months = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
 const formatDate = (iso: string) => {
@@ -273,7 +269,8 @@ function Orders() {
       ) : (
         <ul className="grid gap-4">
           {orders.map((order) => {
-            const [label, cls] = statusLabel[order.status];
+            // Ті самі статуси, що й в адмінці, — словами для покупця
+            const { customer: label, tone: cls } = orderStatusInfo[order.status];
             // «Самовивіз» — для замовлень, оформлених до того, як його прибрали
             const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? "Самовивіз";
             const payment = paymentTitle(order.payment);
@@ -295,6 +292,11 @@ function Orders() {
                     </li>
                   ))}
                 </ul>
+                {order.status === "confirmed" && order.payment === "invoice" && (
+                  <div className="mt-4">
+                    <OrderPayment order={order} />
+                  </div>
+                )}
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-[#e3edf3] pt-4">
                   <p className="text-xs leading-relaxed text-[#527083]">
                     {delivery}{where && ` · ${where}`}

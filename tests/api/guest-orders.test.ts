@@ -26,7 +26,7 @@ const guestOrder = (over: Record<string, unknown> = {}) => ({
   lines: [{ id: product.id, qty: 1 }],
   contact: { firstName: "Галина", lastName: "Гостьова", phone: PHONE, email: "galyna@example.com" },
   delivery: { method: "np-branch", city: "Полтава", branch: "3" },
-  payment: "cod",
+  payment: "invoice",
   agreed: true,
   ...over,
 });

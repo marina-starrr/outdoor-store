@@ -145,7 +145,7 @@ describe("склад і замовлення", () => {
     lines: [{ id: productId, qty }],
     contact: { firstName: "Покупець", lastName: "Тестовий", phone: "+380 50 111 22 33" },
     delivery: { method: "np-branch", city: "Київ", branch: "1" },
-    payment: "cod",
+    payment: "invoice",
     agreed: true,
   });
   const stockOf = async () =>
@@ -162,13 +162,11 @@ describe("склад і замовлення", () => {
     expect(r.data.error).toMatch(/залишилось лише 2/);
   });
 
-  it("замовлення списує залишок", async () => {
+  it("оформлення лише перевіряє залишок — товар бронюється при підтвердженні", async () => {
     const r = await call(orders.POST, { cookie: customer, body: order(2) });
     expect(r.status).toBe(200);
     orderNumber = r.data.order.number;
-    expect(await stockOf()).toBe(0);
-    // Товар закінчився — наступне замовлення відхиляється
-    expect((await call(orders.POST, { cookie: customer, body: order(1) })).status).toBe(400);
+    expect(await stockOf()).toBe(2);
   });
 
   it("адміністратор бачить замовлення з даними покупця", async () => {
@@ -183,6 +181,8 @@ describe("склад і замовлення", () => {
     expect((await set("done")).status).toBe(409); // через крок
     expect((await set("bogus")).status).toBe(400);
     expect((await set("confirmed")).data.order.status).toBe("confirmed");
+    // Підтвердження забронювало товар
+    expect(await stockOf()).toBe(0);
     // Покупець бачить новий статус у профілі
     const history = await call(orders.GET, { method: "GET", cookie: customer });
     expect(history.data.orders.find((o: { number: string }) => o.number === orderNumber).status).toBe("confirmed");
