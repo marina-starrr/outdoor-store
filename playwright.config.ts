@@ -51,6 +51,9 @@ export default defineConfig({
       FC_DATA_DIR: E2E_DATA_DIR,
       // Службовий маршрут /api/test/verify-email (лише з тимчасовою базою)
       FC_E2E: "1",
+      // Сервер читає .env.local (там справжній токен бота) — у тестах нічого
+      // не надсилаємо в Telegram: повідомлення пишуться у файл тимчасової теки
+      TELEGRAM_TRANSPORT: "log",
       ADMIN_EMAILS: `${E2E_ADMIN_EMAIL},${E2E_HELPER_ADMIN_EMAIL}`,
       // Довідник міст — локальний файл, без запитів до Нової пошти
       NP_CITIES_FIXTURE: join(process.cwd(), "tests", "fixtures", "np-cities.json"),

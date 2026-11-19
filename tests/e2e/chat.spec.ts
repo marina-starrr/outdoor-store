@@ -77,3 +77,16 @@ test("в адмін-панелі кнопки чату немає", async ({ pag
   await page.goto("/admin");
   await expect(page.getByRole("button", { name: /^Чат з консультантом/ })).toHaveCount(0);
 });
+
+test("«Де моє замовлення?»: іконка в шапці і кнопка в чаті", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Де моє замовлення?" }).first().click();
+  await expect(page).toHaveURL("/orders/track");
+
+  await page.goto("/catalog");
+  await page.getByRole("button", { name: /^Чат з консультантом/ }).click();
+  const chat = page.getByRole("dialog", { name: "Чат з консультантом" });
+  await chat.getByRole("link", { name: "Де моє замовлення?" }).click();
+  await expect(page).toHaveURL("/orders/track");
+  await expect(chat).toBeHidden();
+});

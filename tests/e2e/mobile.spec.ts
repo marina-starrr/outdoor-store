@@ -19,6 +19,13 @@ test.describe("мобільна версія (390px)", () => {
     await expect(page).toHaveURL("/delivery");
   });
 
+  test("«Де моє замовлення?» — у мобільному меню (у шапці на телефоні місця немає)", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Відкрити меню" }).click();
+    await page.locator("header nav").getByRole("link", { name: "Де моє замовлення?" }).click();
+    await expect(page).toHaveURL("/orders/track");
+  });
+
   test("Escape закриває мобільне меню і повертає фокус на кнопку", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Відкрити меню" }).click();

@@ -178,6 +178,15 @@ export default function SiteHeader({
               className="hidden sm:grid"
             />
           )}
+          {/* «Де моє замовлення?» — статус за номером і телефоном. На вузькому телефоні місця немає — там пункт у меню */}
+          <HeaderIconLink
+            href="/orders/track"
+            icon="package"
+            count={0}
+            label="Де моє замовлення?"
+            active={pathname === "/orders/track"}
+            className="hidden sm:grid"
+          />
           <HeaderIconLink
             href="/favorites"
             icon="heart"
@@ -232,6 +241,7 @@ export default function SiteHeader({
               ))}
               <div className="my-2 h-px bg-sky-100" />
               {[
+                { href: "/orders/track", label: "Де моє замовлення?", icon: "package" as const, count: 0 },
                 ...(user ? [{ href: "/notifications", label: "Сповіщення", icon: "bell" as const, count: unread }] : []),
                 { href: "/favorites", label: "Обране", icon: "heart" as const, count: favorites.length },
                 { href: "/compare", label: "Порівняння", icon: "compare" as const, count: compare.length },

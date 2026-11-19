@@ -244,6 +244,15 @@ export default function ChatWidget() {
               Вітаємо{user?.firstName ? `, ${user.firstName}` : ""}! 👋 Підкажемо з вибором спорядження, доставкою чи
               замовленням. Напишіть своє питання.
             </Bubble>
+            {/* Найчастіше питають про статус — його можна перевірити самому, без очікування відповіді */}
+            <Link
+              href={user ? "/account" : "/orders/track"}
+              onClick={() => { setOpen(false); setLinkClosed(true); }}
+              className="ml-1 inline-flex items-center gap-2 rounded-full border border-[#cfe3ef] bg-white px-4 py-2 text-sm font-bold text-[#067eb7] transition hover:bg-[#eef6fb]"
+            >
+              <Icon name="package" className="h-4 w-4" />
+              Де моє замовлення?
+            </Link>
             {messages.map((m) => {
               const p = m.productId ? byId.get(m.productId) : undefined;
               return (
