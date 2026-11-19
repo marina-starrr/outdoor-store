@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import Icon from "../Icon";
 import { SortSelect } from "../catalog-ui";
 import { categories, categoryBySlug, formatPrice, LOW_STOCK, type Product } from "../catalog-data";
+import { resizeImage } from "../photo";
 import { productUrl } from "../product-details";
 import { matchesSearch } from "../search";
 import AdminShell, { LoadError } from "./AdminShell";
@@ -170,7 +171,7 @@ function ProductRow({
   const stockTone = p.stock === 0 ? "text-[#c53035]" : p.stock <= LOW_STOCK ? "text-[#c27c00]" : "text-[#1f9d55]";
   return (
     <li className={`grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5 lg:grid-cols-[64px_minmax(0,1fr)_200px_150px_auto] ${p.hidden ? "bg-[#f7fafc]" : ""}`} data-testid={`admin-product-${p.id}`}>
-      <img src={p.image} alt="" className={`h-12 w-16 rounded-[10px] object-cover ${p.hidden ? "opacity-40 grayscale" : ""}`} loading="lazy" />
+      <img src={resizeImage(p.image, 160)} alt="" className={`h-12 w-16 rounded-[10px] object-cover ${p.hidden ? "opacity-40 grayscale" : ""}`} loading="lazy" />
       <div className="min-w-0">
         <button onClick={onEdit} className="line-clamp-1 text-left text-sm font-extrabold hover:text-[#098fd0]">{p.name}</button>
         <p className="truncate text-xs text-[#527083]">

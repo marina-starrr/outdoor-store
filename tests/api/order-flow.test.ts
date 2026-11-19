@@ -102,10 +102,13 @@ describe("підтвердження, оплата, відправлення", (
     expect(mail.to).toBe(EMAIL);
     expect(mail.subject).toBe(`Замовлення ${number}: очікує оплату`);
     expect(mail.text).toMatch(/товар заброньовано за вами/);
-    // Поки IBAN продавця не заповнено — реквізити надішле менеджер
-    expect(mail.text).toContain(`Реквізити для оплати надішлемо листом на ${EMAIL}`);
-    expect(mail.text).toContain("Реквізити для оплати менеджер надішле окремим листом");
-    expect(mail.text).toContain(`«Оплата замовлення ${number}»`);
+    // Реквізити отримувача (PAYEE) — прямо в листі
+    expect(mail.text).toContain(`Реквізити для оплати — у листі на ${EMAIL} і на сторінці замовлення`);
+    expect(mail.text).toContain("Отримувач: ФОП Денісов Олександр Васильович");
+    expect(mail.text).toContain("РНОКПП: 3008816430");
+    expect(mail.text).toContain("IBAN: UA753003350000000260062496754");
+    expect(mail.text).toContain(`Призначення платежу: Оплата замовлення ${number}`);
+    expect(mail.text).not.toContain("менеджер надішле");
 
     // Сторінка відстеження показує строк оплати
     const t = await call(track.POST, { body: { number, phone: PHONE }, ip: "10.91.0.1" });

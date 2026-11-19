@@ -24,8 +24,23 @@ export type Seller = {
 
 export const SELLER: Seller | null = null;
 
+/** Реквізити для «Оплати на рахунок» — показуються покупцю після підтвердження замовлення */
+export type Payee = Pick<Seller, "kind" | "name" | "code" | "iban" | "bank">;
+
+/**
+ * Отримувач платежів. Діє вже зараз, ще до повних реквізитів продавця (SELLER):
+ * для оферти й футера закон вимагає ще й адресу, а для оплати вона не потрібна.
+ * Коли SELLER заповнено — береться він.
+ */
+export const PAYEE: Payee | null = SELLER ?? {
+  kind: "fop",
+  name: "Денісов Олександр Васильович",
+  code: "3008816430",
+  iban: "UA753003350000000260062496754",
+};
+
 /** «ФОП Іваненко Ірина Петрівна» або назва ТОВ */
-export const sellerTitle = (s: Seller) => (s.kind === "fop" ? `ФОП ${s.name}` : s.name);
+export const sellerTitle = (s: Pick<Seller, "kind" | "name">) => (s.kind === "fop" ? `ФОП ${s.name}` : s.name);
 
 /** Підпис коду: РНОКПП для ФОП, ЄДРПОУ для ТОВ */
 export const sellerCodeLabel = (s: Seller) => (s.kind === "fop" ? "РНОКПП" : "Код ЄДРПОУ");

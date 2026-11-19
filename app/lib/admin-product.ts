@@ -17,6 +17,7 @@ export type ProductInput = {
   capacity?: number | null;
   photo: PhotoKey;
   customImage?: string;
+  images: string[];
   description?: string;
   hit?: boolean;
   isNew?: boolean;
@@ -51,6 +52,11 @@ export function slugify(s: string) {
 
 export const isValidId = (id: string) => /^[a-z0-9][a-z0-9-]{1,39}$/.test(id);
 
+/** Скільки власних фото можна додати до товару */
+export const MAX_IMAGES = 8;
+/** Адреса завантаженого фото: Supabase Storage (https) або локальна копія для розробки */
+const isImageUrl = (s: string) => /^(https:\/\/[^\s"'<>]+|\/api\/uploads\/[a-z0-9-]+\.(webp|jpg))$/i.test(s);
+
 /** Перевіряє повний набір полів товару. Повертає дані або помилки за полями */
 export function validateProduct(body: Record<string, unknown>): { data?: ProductInput; errors: ProductErrors } {
   const errors: ProductErrors = {};
@@ -75,6 +81,9 @@ export function validateProduct(body: Record<string, unknown>): { data?: Product
     errors.capacity = "Місткість — від 1 до 20 осіб";
   if (!isPhotoKey(body.photo)) errors.photo = "Оберіть фото";
   if (customImage && !/^https:\/\/[^\s"'<>]+$/i.test(customImage)) errors.customImage = "Посилання на фото має починатися з https://";
+  const images = [...new Set((Array.isArray(body.images) ? body.images : []).map((s) => str(s, 500)).filter(Boolean))];
+  if (images.length > MAX_IMAGES) errors.images = `Не більше ${MAX_IMAGES} фото`;
+  else if (!images.every(isImageUrl)) errors.images = "Невірна адреса фото — завантажте його ще раз";
   if (specs.length < 2) errors.specs = "Короткий опис під назвою, напр. «3 місця · 3,1 кг»";
 
   const rawAttrs = Array.isArray(body.attrs) ? body.attrs : [];
@@ -101,6 +110,7 @@ export function validateProduct(body: Record<string, unknown>): { data?: Product
       capacity: Number.isNaN(capacity) ? null : capacity,
       photo: body.photo as PhotoKey,
       customImage: customImage || undefined,
+      images,
       description: description || undefined,
       hit: body.hit === true,
       isNew: body.isNew === true,
@@ -135,6 +145,8 @@ export function applyProductInput(target: Partial<Product>, d: ProductInput): vo
   else delete target.capacity;
   if (d.customImage) target.customImage = d.customImage;
   else delete target.customImage;
+  if (d.images.length) target.images = d.images;
+  else delete target.images;
   if (d.description) target.description = d.description;
   else delete target.description;
 }

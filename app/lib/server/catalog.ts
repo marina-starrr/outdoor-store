@@ -15,7 +15,9 @@ import { approvedReviews, type PublicReview } from "./reviews";
 export const CATALOG_TAG = "catalog";
 
 const PRODUCT_COLUMNS =
-  "id, name, category, brand, price, old_price, hit, is_new, stock, hidden, description, custom_image, popularity, specs, capacity, image, photo, attrs, updated_at";
+  "id, name, category, brand, price, old_price, hit, is_new, stock, hidden, description, custom_image, popularity, specs, capacity, image, photo, attrs, updated_at, images";
+
+const JSONB_COLUMNS = new Set(["attrs", "images"]);
 
 /** Рядок таблиці products → товар (без рейтингу й продажів) */
 export const productFromRow = (r: Row): Product =>
@@ -36,6 +38,7 @@ export const productFromRow = (r: Row): Product =>
     hidden: r.hidden || undefined,
     description: opt(r.description),
     customImage: opt(r.custom_image),
+    images: Array.isArray(r.images) && r.images.length ? r.images : undefined,
     updatedAt: isoOpt(r.updated_at),
     popularity: num(r.popularity),
     specs: r.specs,
@@ -65,9 +68,10 @@ const productParams = (p: Product) => [
   p.photo,
   jsonb(p.attrs ?? []),
   p.updatedAt ?? null,
+  jsonb(p.images ?? []),
 ];
 
-const VALUES = "$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19";
+const VALUES = "$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20::jsonb";
 
 /** Новий товар (id уже перевірено на унікальність) */
 export async function insertProduct(q: Queryable, p: Product) {
@@ -78,7 +82,7 @@ export async function insertProduct(q: Queryable, p: Product) {
 export async function updateProduct(q: Queryable, p: Product) {
   const sets = PRODUCT_COLUMNS.split(", ")
     .slice(1)
-    .map((c, i) => `${c} = $${i + 2}${c === "attrs" ? "::jsonb" : ""}`)
+    .map((c, i) => `${c} = $${i + 2}${JSONB_COLUMNS.has(c) ? "::jsonb" : ""}`)
     .join(", ");
   await q.query(`update products set ${sets} where id = $1`, productParams(p));
 }

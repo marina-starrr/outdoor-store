@@ -389,14 +389,18 @@ function Gallery({
             {badge}
           </span>
         )}
-        <GalleryArrow side="left" onClick={() => go(-1)} />
-        <GalleryArrow side="right" onClick={() => go(1)} />
-        <span className="absolute bottom-4 right-4 rounded-full bg-[#082c45]/60 px-3 py-1 text-xs font-bold text-white backdrop-blur">
-          {index + 1} / {images.length}
-        </span>
+        {images.length > 1 && (
+          <>
+            <GalleryArrow side="left" onClick={() => go(-1)} />
+            <GalleryArrow side="right" onClick={() => go(1)} />
+            <span className="absolute bottom-4 right-4 rounded-full bg-[#082c45]/60 px-3 py-1 text-xs font-bold text-white backdrop-blur">
+              {index + 1} / {images.length}
+            </span>
+          </>
+        )}
       </div>
 
-      <div className="mt-3 grid grid-cols-4 gap-3">
+      <div className={`mt-3 grid grid-cols-4 gap-3 ${images.length > 1 ? "" : "hidden"}`}>
         {images.map((image, i) => (
           <button
             key={image.thumb}
@@ -425,8 +429,12 @@ function Gallery({
           >
             <Icon name="close" className="h-5 w-5" />
           </button>
-          <GalleryArrow side="left" onClick={() => go(-1)} always />
-          <GalleryArrow side="right" onClick={() => go(1)} always />
+          {images.length > 1 && (
+            <>
+              <GalleryArrow side="left" onClick={() => go(-1)} always />
+              <GalleryArrow side="right" onClick={() => go(1)} always />
+            </>
+          )}
         </div>
       )}
     </div>

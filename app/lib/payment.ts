@@ -1,10 +1,10 @@
 import { formatPrice } from "../components/catalog-data";
-import { SELLER, sellerTitle } from "./seller";
+import { PAYEE, sellerTitle } from "./seller";
 
 /*
  * Реквізити для оплати замовлення на рахунок — для листа, сторінки
- * відстеження й профілю покупця. Поки IBAN продавця не заповнено
- * (app/lib/seller.ts), реквізитів немає — їх надсилає менеджер.
+ * відстеження й профілю покупця. Беруться з PAYEE (app/lib/seller.ts);
+ * без IBAN реквізитів немає — їх надсилає менеджер.
  */
 
 export type PaymentDetails = {
@@ -20,13 +20,13 @@ export type PaymentDetails = {
 export const paymentPurpose = (number: string) => `Оплата замовлення ${number}`;
 
 export function paymentDetails(order: { number: string; total: number }): PaymentDetails | null {
-  if (!SELLER?.iban) return null;
+  if (!PAYEE?.iban) return null;
   return {
-    recipient: sellerTitle(SELLER),
-    codeLabel: SELLER.kind === "fop" ? "РНОКПП" : "ЄДРПОУ",
-    code: SELLER.code,
-    iban: SELLER.iban,
-    bank: SELLER.bank,
+    recipient: sellerTitle(PAYEE),
+    codeLabel: PAYEE.kind === "fop" ? "РНОКПП" : "ЄДРПОУ",
+    code: PAYEE.code,
+    iban: PAYEE.iban,
+    bank: PAYEE.bank,
     amount: order.total,
     purpose: paymentPurpose(order.number),
   };

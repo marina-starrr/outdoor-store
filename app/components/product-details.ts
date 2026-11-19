@@ -4,6 +4,7 @@ import {
   type CategorySlug,
   type Product,
 } from "./catalog-data";
+import { resizeImage } from "./photo";
 
 /* ---------- Адреси ---------- */
 
@@ -17,6 +18,8 @@ export const findProduct = (list: Product[], category: string, id: string) =>
 /* ---------- Галерея ---------- */
 
 export function productGallery(p: Product) {
+  // Справжні фото товару — без стокових з бібліотеки, щоб не вводити покупця в оману
+  if (p.images?.length) return p.images.map((src) => ({ full: src, thumb: resizeImage(src, 240) }));
   const keys = [p.photo, ...categoryPhotos[p.category].filter((k) => k !== p.photo)];
   const library = keys.map((key) => ({
     full: photoUrl(key, 1200, 800),

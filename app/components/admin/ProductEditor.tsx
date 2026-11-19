@@ -14,8 +14,10 @@ import {
   type Product,
 } from "../catalog-data";
 import { inputCls } from "../form-ui";
-import { validateProduct, type ProductErrors } from "../../lib/admin-product";
+import { MAX_IMAGES, validateProduct, type ProductErrors } from "../../lib/admin-product";
+import { resizeImage } from "../photo";
 import { adminFetch, type ApiError } from "./api";
+import { uploadProductPhoto } from "./photo-upload";
 
 type Form = {
   id: string;
@@ -29,6 +31,7 @@ type Form = {
   capacity: string;
   photo: PhotoKey;
   customImage: string;
+  images: string[];
   description: string;
   hit: boolean;
   isNew: boolean;
@@ -48,6 +51,7 @@ const toForm = (p?: Product): Form => ({
   capacity: p?.capacity ? String(p.capacity) : "",
   photo: p?.photo ?? categoryPhotos.tents[0],
   customImage: p?.customImage ?? "",
+  images: p?.images ?? [],
   description: p?.description ?? "",
   hit: !!p?.hit,
   isNew: p ? !!p.isNew : true,
@@ -193,7 +197,18 @@ export default function ProductEditor({
 
           <Section title="Фото">
             <div className="sm:col-span-2">
-              <img src={preview} alt="Прев'ю" className="aspect-[16/9] w-full rounded-[16px] object-cover" />
+              <PhotoManager
+                images={form.images}
+                error={errors.images}
+                update={(fn) => {
+                  setForm((f) => ({ ...f, images: fn(f.images) }));
+                  setErrors((e) => ({ ...e, images: undefined }));
+                }}
+              />
+            </div>
+            <div className="sm:col-span-2 border-t border-[#e3edf3] pt-4">
+              <p className="text-sm font-bold">{form.images.length ? "Бібліотека (не показується, поки є власні фото)" : "Поки власних фото немає — фото з бібліотеки"}</p>
+              {!form.images.length && <img src={preview} alt="Прев'ю" className="mt-3 aspect-[16/9] w-full rounded-[16px] object-cover" />}
               <p className="mb-2 mt-4 text-sm font-bold">Бібліотека фото</p>
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-6" role="radiogroup" aria-label="Фото з бібліотеки">
                 {photoChoices.map((k) => (
@@ -256,6 +271,114 @@ export default function ProductEditor({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Власні фото товару: завантаження з телефона чи комп'ютера, порядок, видалення */
+function PhotoManager({
+  images,
+  error,
+  update,
+}: {
+  images: string[];
+  error?: string;
+  update: (fn: (prev: string[]) => string[]) => void;
+}) {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    adminFetch<{ enabled: boolean }>("/api/admin/uploads")
+      .then((d) => setEnabled(d.enabled))
+      .catch(() => setEnabled(false));
+  }, []);
+
+  const free = MAX_IMAGES - images.length;
+
+  const onFiles = async (list: FileList | null) => {
+    const files = Array.from(list ?? []).slice(0, free);
+    if (inputRef.current) inputRef.current.value = "";
+    if (!files.length) return;
+    setUploadError("");
+    const failed: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      setProgress({ done: i, total: files.length });
+      try {
+        const url = await uploadProductPhoto(files[i]);
+        update((prev) => (prev.length < MAX_IMAGES ? [...prev, url] : prev));
+      } catch (e) {
+        failed.push((e as Error).message);
+      }
+    }
+    setProgress(null);
+    if (failed.length) setUploadError(failed.join(" "));
+  };
+
+  const move = (i: number) => update((prev) => [prev[i], ...prev.filter((_, j) => j !== i)]);
+  const remove = (i: number) => update((prev) => prev.filter((_, j) => j !== i));
+
+  return (
+    <div>
+      <p className="text-sm font-bold">Власні фото товару</p>
+      <p className="mt-1 text-xs text-[#8aa5b5]">
+        До {MAX_IMAGES} фото, перше — головне (у каталозі й першим у галереї). Фото з телефона зменшуються автоматично.
+      </p>
+      <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Власні фото">
+        {images.map((src, i) => (
+          <li key={src} className="relative overflow-hidden rounded-[14px] bg-[#eef6fb]">
+            <img src={resizeImage(src, 400)} alt={`Фото ${i + 1}`} className="aspect-[4/3] w-full object-cover" />
+            {i === 0 && <span className="absolute left-2 top-2 rounded-full bg-[#ffd51f] px-2.5 py-1 text-xs font-black">Головне</span>}
+            <div className="absolute bottom-2 right-2 flex gap-1.5">
+              {i > 0 && (
+                <button type="button" onClick={() => move(i)} aria-label={`Зробити фото ${i + 1} головним`} title="Зробити головним" className="grid h-9 w-9 place-items-center rounded-full bg-white/95 text-[#264e65] shadow transition hover:text-[#098fd0]">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+                    <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" />
+                  </svg>
+                </button>
+              )}
+              <button type="button" onClick={() => remove(i)} aria-label={`Видалити фото ${i + 1}`} title="Видалити" className="grid h-9 w-9 place-items-center rounded-full bg-white/95 text-[#264e65] shadow transition hover:text-[#e5484d]">
+                <Icon name="close" className="h-4 w-4" />
+              </button>
+            </div>
+          </li>
+        ))}
+        {free > 0 && enabled !== false && (
+          <li>
+            <label className={`flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[14px] border-2 border-dashed border-[#d5e5ef] px-2 text-center text-sm font-bold text-[#527083] transition hover:border-[#098fd0] hover:text-[#098fd0] focus-within:ring-4 focus-within:ring-sky-200 ${progress || enabled === null ? "pointer-events-none opacity-60" : ""}`}>
+              {progress ? (
+                <>
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+                  <span role="status">Завантажуємо {progress.done + 1} з {progress.total}…</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl leading-none" aria-hidden="true">+</span>
+                  Додати фото
+                </>
+              )}
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={!!progress || enabled === null}
+                onChange={(e) => onFiles(e.target.files)}
+                className="sr-only"
+                aria-label="Додати фото товару"
+              />
+            </label>
+          </li>
+        )}
+      </ul>
+      {enabled === false && (
+        <p className="mt-3 rounded-xl bg-[#fff7d6] px-3 py-2 text-sm text-[#6b5800]">
+          Завантаження фото ще не налаштоване на сервері (потрібні ключі Supabase у Vercel). Поки можна вставити посилання на фото нижче.
+        </p>
+      )}
+      {(uploadError || error) && <p role="alert" className="mt-2 text-sm font-semibold text-[#e5484d]">{uploadError || error}</p>}
     </div>
   );
 }

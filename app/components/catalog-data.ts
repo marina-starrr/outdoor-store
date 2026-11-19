@@ -46,6 +46,8 @@ export type Product = {
   description?: string;
   /** Власне фото (https-посилання) замість фото з бібліотеки */
   customImage?: string;
+  /** Фото, завантажені в адмін-панелі (перше — головне). Якщо є — показуються лише вони */
+  images?: string[];
   /** Остання зміна в адмін-панелі (ISO) — для sitemap */
   updatedAt?: string;
   /** Порядок у сортуванні «Популярні» — менше значення = вище */
@@ -356,7 +358,7 @@ export const isCategorySlug = (v: unknown): v is CategorySlug => typeof v === "s
 export function withDerived(p: Product): Product {
   return {
     ...p,
-    image: p.customImage || img(p.photo),
+    image: p.images?.[0] || p.customImage || img(p.photo),
     inStock: p.stock > 0,
   };
 }
