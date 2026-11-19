@@ -47,6 +47,32 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 `yarn test` — модульні та API-тести, `yarn test:e2e` — у браузері (Playwright), `yarn test:all` — усе разом.
 
+## Резервні копії бази
+
+Тариф Supabase Free копій не робить, тому їх робить GitHub Actions
+([.github/workflows/db-backup.yml](.github/workflows/db-backup.yml)): щодня о 01:30 UTC
+`pg_dump` схеми `public`, шифрування AES-256 паролем `BACKUP_PASSPHRASE`, зберігання 30 днів
+як артефакт запуску (Actions → «Резервна копія бази» → запуск → Artifacts). Якщо копія не вдалася —
+повідомлення в Telegram. Запустити вручну: Actions → «Резервна копія бази» → Run workflow.
+
+Секрети репозиторію (Settings → Secrets and variables → Actions): `DATABASE_URL` — рядок
+**Session pooler** із Supabase (Connect → Session pooler, порт 5432, з паролем бази),
+`BACKUP_PASSPHRASE` — від 16 символів, зберігається окремо (без нього копію не відкрити),
+`TELEGRAM_BOT_TOKEN` і `TELEGRAM_CHAT_ID` — ті самі, що у Vercel.
+
+GitHub вимикає розклад, якщо в репозиторії 60 днів не було комітів (попереджає листом) —
+тоді треба натиснути «Enable workflow» в Actions.
+
+Відновлення (потрібні `gpg` і клієнт PostgreSQL 17, напр. Docker-образ `postgres:17`):
+
+```sh
+gpg --decrypt family-camping-db-2026-11-20.dump.gpg > db.dump
+# у порожню базу (новий проєкт Supabase або локальний Postgres):
+pg_restore --no-owner --no-privileges --dbname "$DATABASE_URL" db.dump
+# поверх існуючої бази — замінює таблиці public даними з копії:
+pg_restore --clean --if-exists --no-owner --no-privileges --dbname "$DATABASE_URL" db.dump
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

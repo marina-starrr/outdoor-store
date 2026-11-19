@@ -1,0 +1,85 @@
+# Щоденна резервна копія бази Supabase (тариф Free копій не робить).
+#
+# Копія — pg_dump схеми public (усі дані магазину), зашифрована паролем
+# BACKUP_PASSPHRASE і збережена як артефакт запуску на 30 днів.
+# Без пароля файл не відкрити — навіть якщо репозиторій публічний.
+#
+# Секрети репозиторію (Settings → Secrets and variables → Actions):
+#   DATABASE_URL       — рядок Session pooler із Supabase (Connect → Session pooler)
+#   BACKUP_PASSPHRASE  — довгий пароль для шифрування; зберегти окремо, без нього копію не відновити
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID — необов'язково: повідомлення, якщо копія не вдалася
+#
+# Відновлення — див. README, розділ «Резервні копії бази».
+
+name: Резервна копія бази
+
+on:
+  schedule:
+    - cron: "30 1 * * *" # щодня о 01:30 UTC (03:30–04:30 за Києвом)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Перевірити секрети
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::Немає секрету DATABASE_URL"; exit 1; fi
+          if [ ${#BACKUP_PASSPHRASE} -lt 16 ]; then echo "::error::BACKUP_PASSPHRASE відсутній або коротший за 16 символів"; exit 1; fi
+
+      - name: Зняти копію (pg_dump 17)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          mkdir -p backup
+          docker run --rm -e DATABASE_URL -v "$PWD/backup:/backup" postgres:17 \
+            sh -c 'pg_dump "$DATABASE_URL" --schema=public --no-owner --no-privileges --format=custom --file=/backup/db.dump'
+          # Перевірка: файл читається і в ньому є таблиці
+          tables=$(docker run --rm -v "$PWD/backup:/backup" postgres:17 pg_restore --list /backup/db.dump | grep -c ' TABLE DATA ' || true)
+          echo "Таблиць з даними: $tables"
+          if [ "$tables" -lt 1 ]; then echo "::error::Копія порожня"; exit 1; fi
+          ls -lh backup/db.dump
+
+      - name: Зашифрувати
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          name="family-camping-db-$(date -u +%Y-%m-%d)"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 --output "backup/$name.dump.gpg" backup/db.dump
+          shred -u backup/db.dump
+
+      - name: Зберегти на 30 днів
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: backup/${{ env.NAME }}.dump.gpg
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Повідомити в Telegram про помилку
+        if: failure()
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHATS: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -z "$TOKEN" ] || [ -z "$CHATS" ] && exit 0
+          for chat in $(echo "$CHATS" | tr ',' ' '); do
+            curl -sS -o /dev/null "https://api.telegram.org/bot$TOKEN/sendMessage" \
+              --data-urlencode "chat_id=$chat" \
+              --data-urlencode "text=⚠️ Резервна копія бази не вдалася. Подробиці: $RUN_URL"
+          done
