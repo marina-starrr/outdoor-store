@@ -2,7 +2,7 @@ import "server-only";
 import { formatPrice, type Product } from "../../components/catalog-data";
 import { productUrl } from "../../components/product-details";
 import { PAYMENT_DAYS, orderStatusInfo, paymentDue, type CancelReason, type OrderStatusId } from "../order-status";
-import { paymentDetailsText } from "../payment";
+import { paymentDetails, paymentDetailsText } from "../payment";
 import { db, notificationFromRow, userFromRow, type NotificationKind, type Queryable, type StoredNotification, type StoredOrder, type StoredUser } from "./db";
 import type { Mail } from "./mail";
 
@@ -89,10 +89,15 @@ export async function productEvents(q: Queryable, product: Product, before: Prod
 }
 
 /** Що сталося із замовленням — продовження фрази «Ваше замовлення FC-… …» */
-function statusText(order: StoredOrder, status: OrderStatusId, reason?: CancelReason): string | null {
+function statusText(order: StoredOrder, status: OrderStatusId, reason?: CancelReason, email?: string): string | null {
   switch (status) {
-    case "confirmed":
-      return `підтверджено, товар заброньовано за вами. Оплатіть ${formatPrice(order.total)} до ${formatDue(order)} — після оплати відправимо посилку`;
+    case "confirmed": {
+      const to = email ? `на ${email}` : "на ваш email";
+      const where = paymentDetails(order)
+        ? `Реквізити для оплати — у листі ${to} і на сторінці замовлення`
+        : `Реквізити для оплати надішлемо листом ${to}`;
+      return `підтверджено, товар заброньовано за вами. Оплатіть ${formatPrice(order.total)} до ${formatDue(order)} — після оплати відправимо посилку. ${where}`;
+    }
     case "paid":
       return "оплачено, дякуємо! Готуємо посилку до відправлення";
     case "shipped":
@@ -131,7 +136,7 @@ export async function orderEvent(
   mails: Mail[],
   reason?: CancelReason,
 ) {
-  const text = statusText(order, status, reason);
+  const text = statusText(order, status, reason, order.contact.email || user.email);
   if (!text) return;
   const before = mails.length;
   await notifyUser(q, user, {
@@ -146,7 +151,7 @@ export async function orderEvent(
 
 /** Зміна статусу замовлення гостя → лист на email із замовлення */
 export function guestOrderEvent(order: StoredOrder, status: OrderStatusId, mails: Mail[], reason?: CancelReason) {
-  const text = statusText(order, status, reason);
+  const text = statusText(order, status, reason, order.contact.email);
   if (!text || !order.contact.email) return;
   mails.push({
     to: order.contact.email,

@@ -36,7 +36,7 @@ export function paymentDetails(order: { number: string; total: number }): Paymen
 export function paymentDetailsText(order: { number: string; total: number }): string {
   const d = paymentDetails(order);
   if (!d)
-    return `Реквізити для оплати надішле менеджер. У призначенні платежу вкажіть: «${paymentPurpose(order.number)}».`;
+    return `Реквізити для оплати менеджер надішле окремим листом на цю адресу. У призначенні платежу вкажіть: «${paymentPurpose(order.number)}».`;
   return [
     "Реквізити для оплати:",
     `Отримувач: ${d.recipient}`,

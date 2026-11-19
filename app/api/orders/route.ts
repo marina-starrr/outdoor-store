@@ -27,7 +27,7 @@ import { invalidateCatalog, loadCatalog } from "../../lib/server/catalog";
 import { tx, type StoredOrder } from "../../lib/server/db";
 import { setCart } from "../../lib/server/lists";
 import { sendMail } from "../../lib/server/mail";
-import { checkCity, cityWarehouses, findWarehouse, searchStreets } from "../../lib/server/novaposhta";
+import { checkCity, cityStreets, cityWarehouses, findWarehouse } from "../../lib/server/novaposhta";
 import { expireUnpaidOrders } from "../../lib/server/order-flow";
 import { insertOrder, orderPlacedMail, userOrders } from "../../lib/server/orders";
 import { newOrderText, notifyAdmin } from "../../lib/server/telegram";
@@ -125,10 +125,8 @@ export async function POST(req: NextRequest) {
       if (street.length < 2) return fieldError("street", "Вкажіть вулицю");
       // Вулицю обрано зі списку — перевіряємо, що вона справді в цьому місті
       if (npCity && streetRef) {
-        // «вул. Соборності (Жовтнева)» → шукаємо за першим словом назви, без типу вулиці
-        const name = street.replace(/^\S+\.?\s+/, "").split(/[\s(]/)[0];
-        const found = await searchStreets(npCity, name, 50);
-        if (found && !found.some((s) => s.ref === streetRef)) return fieldError("street", "Оберіть вулицю зі списку");
+        const all = await cityStreets(npCity);
+        if (all && !all.some((s) => s.ref === streetRef)) return fieldError("street", "Оберіть вулицю зі списку");
       }
       if (!house) return fieldError("house", "Вкажіть номер будинку");
       delivery.street = street;

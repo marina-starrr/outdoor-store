@@ -61,9 +61,23 @@ describe("відділення Нової пошти в місті", () => {
 });
 
 describe("вулиці для кур'єра", () => {
+  const find = async (q: string) =>
+    (await get(streets.GET, `/api/streets?cityRef=ref-poltava&q=${encodeURIComponent(q)}`)).data.items.map((x: { label: string }) => x.label);
+
   it("підказки за початком назви", async () => {
     const r = await get(streets.GET, `/api/streets?cityRef=ref-poltava&q=${encodeURIComponent("Собор")}`);
-    expect(r.data).toEqual({ available: true, items: [{ ref: "street-sobornosti", label: "вул. Соборності" }] });
+    expect(r.data).toEqual({ available: true, items: [{ ref: "street-sobornosti", label: "вул. Соборності (Жовтнева)" }] });
+  });
+
+  it("знаходить і з «вул.», «проспект», за ім'ям чи старою назвою, латинськими літерами", async () => {
+    expect(await find("вул. Собор")).toEqual(["вул. Соборності (Жовтнева)"]);
+    expect(await find("вулиця Садова")).toEqual(["вул. Садова"]);
+    expect(await find("проспект Миру")).toEqual(["просп. Миру"]);
+    // У довіднику — «Мазепи Івана»
+    expect(await find("Івана Мазепи")).toEqual(["вул. Мазепи Івана (Калініна)"]);
+    expect(await find("Iвана")).toEqual(["вул. Мазепи Івана (Калініна)"]);
+    expect(await find("Жовтнева")).toEqual(["вул. Соборності (Жовтнева)"]);
+    expect(await find("вул")).toEqual([]);
   });
 });
 
@@ -95,9 +109,15 @@ describe("доставка в замовленні", () => {
   });
 
   it("кур'єр — вулиця, будинок і квартира складаються в адресу", async () => {
-    const r = await order({ method: "np-courier", street: "вул. Соборності", streetRef: "street-sobornosti", house: "5А", flat: "12" });
+    const r = await order({ method: "np-courier", street: "вул. Соборності (Жовтнева)", streetRef: "street-sobornosti", house: "5А", flat: "12" });
     expect(r.status).toBe(200);
-    expect(r.data.order.delivery).toMatchObject({ address: "вул. Соборності, буд. 5А, кв. 12", street: "вул. Соборності", house: "5А", flat: "12" });
+    expect(r.data.order.delivery).toMatchObject({ address: "вул. Соборності (Жовтнева), буд. 5А, кв. 12", house: "5А", flat: "12" });
+  });
+
+  it("кур'єр — вулиця, якої немає в довіднику, приймається як написали", async () => {
+    const r = await order({ method: "np-courier", street: "вул. Новозбудована", house: "1" });
+    expect(r.status).toBe(200);
+    expect(r.data.order.delivery.address).toBe("вул. Новозбудована, буд. 1");
   });
 
   it("кур'єр — без будинку або з вулицею не з цього міста — помилка під полем", async () => {

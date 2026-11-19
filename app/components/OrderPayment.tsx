@@ -10,7 +10,15 @@ import { paymentDue } from "../lib/order-status";
  * реквізити (з кнопками «Копіювати»). Поки IBAN продавця не заповнено —
  * повідомлення, що реквізити надішле менеджер
  */
-export default function OrderPayment({ order }: { order: { number: string; total: number; confirmedAt?: string } }) {
+export default function OrderPayment({
+  order,
+  email,
+}: {
+  order: { number: string; total: number; confirmedAt?: string };
+  /** Куди надіслано реквізити (у профілі — email покупця; на «Де моє замовлення?» невідомий) */
+  email?: string;
+}) {
+  const to = email ? <b>{email}</b> : "email, вказаний при оформленні";
   const details = paymentDetails(order);
   const due = order.confirmedAt
     ? new Date(paymentDue(order.confirmedAt)).toLocaleString("uk-UA", {
@@ -33,6 +41,8 @@ export default function OrderPayment({ order }: { order: { number: string; total
         автоматично.
       </p>
       {details ? (
+        <>
+        <p className="mt-1">Ці ж реквізити ми надіслали листом на {to}.</p>
         <dl className="mt-4 grid gap-2">
           <Row label="Отримувач" value={details.recipient} />
           <Row label={details.codeLabel} value={details.code} copy />
@@ -41,9 +51,11 @@ export default function OrderPayment({ order }: { order: { number: string; total
           <Row label="Сума" value={String(details.amount)} display={formatPrice(details.amount)} copy />
           <Row label="Призначення" value={details.purpose} copy />
         </dl>
+        </>
       ) : (
         <p className="mt-3 rounded-xl bg-white px-4 py-3">
-          Реквізити для оплати надішле менеджер. У призначенні платежу вкажіть: <b>«{paymentPurpose(order.number)}»</b>.
+          Реквізити для оплати надішлемо листом на {to} — перевірте також папку «Спам». У призначенні платежу вкажіть:{" "}
+          <b>«{paymentPurpose(order.number)}»</b>.
         </p>
       )}
     </div>

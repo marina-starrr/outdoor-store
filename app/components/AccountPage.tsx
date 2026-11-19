@@ -23,6 +23,7 @@ type Order = {
   createdAt: string;
   status: OrderStatusId;
   confirmedAt?: string;
+  contact?: { email?: string };
   lines: { id: string; name: string; price: number; qty: number }[];
   total: number;
   shipping: number;
@@ -227,7 +228,7 @@ function Panel({ title, children, aside }: { title: string; children: ReactNode;
 function Orders() {
   const { add, openCart } = useCart();
   // Після перенесення гостьових замовлень в акаунт список перечитується
-  const { ordersVersion } = useAuth();
+  const { ordersVersion, user } = useAuth();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -295,7 +296,7 @@ function Orders() {
                 </ul>
                 {order.status === "confirmed" && order.payment === "invoice" && (
                   <div className="mt-4">
-                    <OrderPayment order={order} />
+                    <OrderPayment order={order} email={order.contact?.email || user?.email} />
                   </div>
                 )}
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-[#e3edf3] pt-4">

@@ -354,32 +354,89 @@ export function filterWarehouses(list: Warehouse[], query: string, limit = 100) 
 
 export type Street = { ref: string; label: string };
 
-const streetsCache = new Map<string, { at: number; list: Street[] }>();
+/*
+ * Пошук Нової пошти (getStreet) знаходить вулицю лише за початком назви в її
+ * записі: «вул. Шевченка», «Івана Мазепи» (у довіднику — «Мазепи Івана»),
+ * стара назва «Жовтнева» чи друге слово «Сотні» — не знаходяться. Тому
+ * завантажуємо всі вулиці міста (Полтава — ~1 тис.) і шукаємо самі:
+ * за будь-яким словом назви, без «вул.», «просп.» тощо, і за старою назвою в дужках.
+ */
 
-/** Вулиці міста за початком назви; null — Нова пошта не відповіла */
-export async function searchStreets(cityRef: string, query: string, limit = 20): Promise<Street[] | null> {
-  const q = query.trim().slice(0, 60);
-  if (process.env.NP_CITIES_FIXTURE) {
-    const streets = [{ ref: "street-sobornosti", label: "вул. Соборності" }, { ref: "street-sadova", label: "вул. Садова" }];
-    return streets.filter((s) => s.label.toLowerCase().includes(q.toLowerCase()));
+/** Слова-типи вулиць, які люди вводять, але в назві їх немає */
+const STREET_TYPE_WORDS = new Set(
+  "вул вулиця вулиці просп проспект пров провулок бульв бульвар пл площа майдан узвіз шосе наб набережна туп тупик проїзд пр алея лінія мкр мікрорайон ст спуск в'їзд".split(" "),
+);
+
+const latinLookalikes: Record<string, string> = { a: "а", b: "в", c: "с", e: "е", h: "н", i: "і", k: "к", m: "м", o: "о", p: "р", t: "т", x: "х", y: "у" };
+
+/** Слова для порівняння: нижній регістр, однакові апострофи, латинські «двійники» → кирилиця */
+export function streetWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[’'ʼ`´]/g, "'")
+    .replace(/[a-z]/g, (ch) => latinLookalikes[ch] ?? ch)
+    .split(/[^\p{L}\p{N}']+/u)
+    .filter(Boolean);
+}
+
+/** Вулиці, у назві яких кожне введене слово є початком якогось слова; спершу — збіг з початку назви */
+export function filterStreets(list: Street[], query: string, limit = 20): Street[] {
+  const words = streetWords(query).filter((w) => !STREET_TYPE_WORDS.has(w.replace(/\.$/, "")));
+  if (!words.length || words.join("").length < 2) return [];
+  const scored: { s: Street; rank: number }[] = [];
+  for (const s of list) {
+    const own = streetWords(s.label).filter((w) => !STREET_TYPE_WORDS.has(w));
+    if (!words.every((w) => own.some((o) => o.startsWith(w)))) continue;
+    scored.push({ s, rank: own[0]?.startsWith(words[0]) ? 0 : 1 });
   }
-  if (q.length < 2) return [];
-  const key = `${cityRef}|${q.toLowerCase()}`;
-  const hit = streetsCache.get(key);
-  if (hit && Date.now() - hit.at < 86_400_000) return hit.list;
+  scored.sort((a, b) => a.rank - b.rank || a.s.label.localeCompare(b.s.label, "uk"));
+  return scored.slice(0, limit).map((x) => x.s);
+}
+
+const testStreets: Street[] = [
+  { ref: "street-sobornosti", label: "вул. Соборності (Жовтнева)" },
+  { ref: "street-sadova", label: "вул. Садова" },
+  { ref: "street-mazepy", label: "вул. Мазепи Івана (Калініна)" },
+  { ref: "street-myru", label: "просп. Миру" },
+];
+
+const STREETS_TTL = 24 * 3_600_000;
+const streetsCache = new Map<string, { at: number; list: Promise<Street[] | null> }>();
+
+async function loadStreets(cityRef: string): Promise<Street[] | null> {
   try {
-    const data = await npCall<{ Ref: string; Description: string; StreetsType: string }>(
-      "getStreet",
-      { CityRef: cityRef, FindByString: q, Limit: String(limit) },
-      "Address",
-      5000,
-    );
-    const list = data.map((s) => ({ ref: s.Ref, label: `${s.StreetsType} ${s.Description}`.trim() }));
-    if (streetsCache.size > 2000) streetsCache.clear();
-    streetsCache.set(key, { at: Date.now(), list });
-    return list;
+    const all: Street[] = [];
+    for (let page = 1; page <= 40; page++) {
+      const part = await npCall<{ Ref: string; Description: string; StreetsType: string }>(
+        "getStreet",
+        { CityRef: cityRef, FindByString: "", Page: String(page), Limit: "500" },
+        "Address",
+        15_000,
+      );
+      all.push(...part.map((x) => ({ ref: x.Ref, label: `${x.StreetsType} ${x.Description}`.trim() })));
+      if (part.length < 500) break;
+    }
+    return all;
   } catch (e) {
     console.error("[novaposhta] getStreet", e);
     return null;
   }
+}
+
+/** Усі вулиці міста з довідника Нової пошти; null — Нова пошта не відповіла */
+export async function cityStreets(cityRef: string): Promise<Street[] | null> {
+  if (process.env.NP_CITIES_FIXTURE) return testStreets;
+  const hit = streetsCache.get(cityRef);
+  if (hit && Date.now() - hit.at < STREETS_TTL) return hit.list;
+  const list = loadStreets(cityRef);
+  streetsCache.set(cityRef, { at: Date.now(), list });
+  list.then((l) => l === null && streetsCache.delete(cityRef));
+  if (streetsCache.size > 300) streetsCache.delete(streetsCache.keys().next().value!);
+  return list;
+}
+
+/** Вулиці міста за введеним текстом; null — довідник недоступний */
+export async function searchStreets(cityRef: string, query: string, limit = 20): Promise<Street[] | null> {
+  const list = await cityStreets(cityRef);
+  return list ? filterStreets(list, query.slice(0, 60), limit) : null;
 }

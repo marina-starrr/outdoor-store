@@ -47,6 +47,8 @@ test("відділення: увесь список міста, пошук за 
 
   await submit(page);
   await expect(page.locator("h1")).toHaveText("Дякуємо, Олена!");
+  // Покупець знає, що реквізити прийдуть листом після підтвердження
+  await expect(page.getByTestId("payment-email-note")).toContainText("прийде лист із реквізитами для оплати");
 });
 
 test("без міста відділення обрати не можна; інше місто скидає обране відділення", async ({ page }) => {
@@ -73,8 +75,8 @@ test("кур'єр: вулиця зі списку, будинок і кварт�
 
   const street = page.locator("#field-street");
   await street.fill("Собор");
-  await page.getByRole("option", { name: "вул. Соборності" }).click();
-  await expect(street).toHaveValue("вул. Соборності");
+  await page.getByRole("option", { name: "вул. Соборності (Жовтнева)" }).click();
+  await expect(street).toHaveValue("вул. Соборності (Жовтнева)");
   await page.locator("#field-house").fill("5А");
   await page.locator("#field-flat").fill("12");
   await page.getByRole("button", { name: "Підтвердити замовлення" }).click();

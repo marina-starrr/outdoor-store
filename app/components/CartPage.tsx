@@ -267,7 +267,7 @@ export default function CartPage() {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       phone: form.phone,
-      email: form.email.trim(),
+      email: form.email.trim() || user?.email || "",
       delivery,
       payment: effectivePayment,
       noCall: form.noCall,
@@ -462,7 +462,7 @@ export default function CartPage() {
                               disabled={!form.city.trim()}
                               disabledText="Спершу оберіть місто"
                               placeholder="Почніть вводити, напр. Соборна"
-                              emptyText="Не знайшли таку вулицю — перевірте назву"
+                              emptyText="Немає в довіднику Нової пошти — можна залишити як написали, кур'єр знайде"
                               error={errors.street}
                               onChange={(text, ref) => {
                                 setForm((f) => ({ ...f, street: text, streetRef: ref }));
@@ -674,9 +674,14 @@ function OrderSuccess({ order }: { order: PlacedOrder }) {
         {order.noCall
           ? "Ми повідомимо, щойно відправимо посилку."
           : `Менеджер зв’яжеться з вами за номером ${order.phone}, щоб підтвердити замовлення.`}
-        {order.payment === "invoice" &&
-          ` Після підтвердження товар буде заброньовано за вами — реквізити для оплати надішлемо на email, оплатити потрібно протягом ${PAYMENT_DAYS} днів.`}
       </p>
+      {order.payment === "invoice" && (
+        <p data-testid="payment-email-note" className="mx-auto mt-4 max-w-md rounded-2xl bg-[#fffbe6] px-5 py-4 text-sm leading-relaxed text-[#3d5d70]">
+          <b className="text-[#082c45]">Як оплатити:</b> щойно менеджер підтвердить замовлення, товар буде заброньовано
+          за вами, а на {order.email ? <b className="text-[#082c45]">{order.email}</b> : "ваш email"} прийде лист із
+          реквізитами для оплати. Оплатити потрібно протягом {PAYMENT_DAYS} днів.
+        </p>
+      )}
 
       <ul className="mt-8 divide-y divide-[#e3edf3] rounded-[20px] border border-[#e3edf3] text-left">
         {order.lines.map((line) => (

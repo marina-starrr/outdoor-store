@@ -81,10 +81,12 @@ const runImport = async (...args: string[]) => {
   return execFileSync(process.execPath, ["scripts/import-json.mjs", ...args, file], { env: process.env, encoding: "utf8" });
 };
 
+// База на диску (команда — окремий процес) створюється кілька секунд, а під навантаженням
+// (усі тести паралельно) — довше: окремий запас часу, щоб не впиратись у типовий ліміт
 beforeAll(async () => {
   writeFileSync(file, JSON.stringify(await oldDb()));
   await loadCatalog(); // база вже існує з початковим каталогом — як після першого відкриття сайту
-});
+}, 60_000);
 
 describe("yarn db:import — перенесення з db.json", () => {
   it("без --apply лише показує, що буде перенесено", async () => {
