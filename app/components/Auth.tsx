@@ -35,6 +35,8 @@ export type AuthUser = {
   emailVerified?: boolean;
   /** Має доступ до адмін-панелі */
   isAdmin?: boolean;
+  /** Власник магазину (ADMIN_EMAILS) — додає й прибирає адміністраторів */
+  isOwner?: boolean;
   /** Адреса адміністратора, але email ще не підтверджено */
   adminPending?: boolean;
 };

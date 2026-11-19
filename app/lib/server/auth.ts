@@ -127,11 +127,20 @@ export function isAdminEmail(email: string) {
   return list.includes(email.toLowerCase());
 }
 
+/** Має права адміністратора (ще без перевірки email): власник з ADMIN_EMAILS або доданий власником */
+const hasAdminRole = (u: Pick<StoredUser, "email" | "grantedAdmin">) => isAdminEmail(u.email) || u.grantedAdmin;
+
 /**
- * Адміністратор — email у ADMIN_EMAILS І підтверджений власником скриньки.
- * Без підтвердження будь-хто міг би першим зареєструватися з адресою власника
+ * Адміністратор — власник (email у ADMIN_EMAILS) або доданий ним з адмін-панелі,
+ * І email підтверджений власником скриньки. Без підтвердження будь-хто міг би
+ * першим зареєструватися з чужою адресою й отримати адмінку
  */
-export function isAdmin(u: Pick<StoredUser, "email" | "emailVerifiedAt">) {
+export function isAdmin(u: Pick<StoredUser, "email" | "emailVerifiedAt" | "grantedAdmin">) {
+  return hasAdminRole(u) && !!u.emailVerifiedAt;
+}
+
+/** Власник: лише він додає й прибирає інших адміністраторів */
+export function isOwner(u: Pick<StoredUser, "email" | "emailVerifiedAt">) {
   return isAdminEmail(u.email) && !!u.emailVerifiedAt;
 }
 
@@ -156,8 +165,9 @@ export function publicUser(u: StoredUser) {
     createdAt: u.createdAt,
     emailVerified: !!u.emailVerifiedAt,
     isAdmin: isAdmin(u),
+    isOwner: isOwner(u),
     /** Адреса адміністратора, але ще не підтверджена — адмінка попросить підтвердити */
-    adminPending: isAdminEmail(u.email) && !u.emailVerifiedAt,
+    adminPending: hasAdminRole(u) && !u.emailVerifiedAt,
   };
 }
 

@@ -47,7 +47,13 @@ export async function POST(req: NextRequest) {
       [email, firstName, lastName, phone, passwordHash],
     );
     if (!row) return null;
-    const user = userFromRow(row);
+    // Власник запросив цю адресу в адміністратори — права з'являться після підтвердження email
+    const [invited] = await q.query(
+      `with invite as (delete from admin_invites where email = $2 returning 1)
+       update users set is_admin = true where id = $1 and exists (select 1 from invite) returning *`,
+      [row.id, email],
+    );
+    const user = userFromRow(invited ?? row);
     await setCart(user.id, cart, q);
     await setFavorites(user.id, favorites, q);
     return { user, token: await issueVerification(user.id, q) };

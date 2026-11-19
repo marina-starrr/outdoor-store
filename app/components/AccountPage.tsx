@@ -10,6 +10,7 @@ import Icon, { type IconName } from "./Icon";
 import { useNotifications } from "./Notifications";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
+import { useResendVerification } from "./useResendVerification";
 import { Breadcrumbs } from "./catalog-ui";
 import { deliveryOptions, paymentTitle, deliveryWhere } from "./cart-logic";
 import OrderPayment from "./OrderPayment";
@@ -145,6 +146,8 @@ function Dashboard({ user }: { user: AuthUser }) {
         </div>
       </div>
 
+      {!user.emailVerified && <VerifyEmailReminder email={user.email} />}
+
       <div className="mt-8 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
         <aside className="grid gap-4 lg:sticky lg:top-28">
           <nav className="grid gap-1 rounded-[22px] bg-white p-2 shadow-[0_18px_52px_rgba(79,93,101,.08)]" aria-label="Розділи профілю">
@@ -208,6 +211,37 @@ function Dashboard({ user }: { user: AuthUser }) {
         </div>
       </div>
     </>
+  );
+}
+
+/** М'яке нагадування: користуватися акаунтом можна й без підтвердження */
+function VerifyEmailReminder({ email }: { email: string }) {
+  const { state, message, resend } = useResendVerification();
+  return (
+    <section aria-label="Підтвердження email" className="mt-6 flex flex-col gap-4 rounded-[22px] border border-[#ffe58a] bg-[#fffbe6] p-5 sm:flex-row sm:items-center">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#ffd51f] text-[#082c45]">
+        <Icon name="mail" className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-extrabold">Підтвердьте email</p>
+        <p className="mt-0.5 text-sm text-[#527083]">
+          Ми надіслали посилання на <b className="break-all text-[#082c45]">{email}</b>. Так ми знатимемо, що листи про замовлення до вас доходять.
+        </p>
+        <div role="status" className="text-sm">
+          {state === "sent" && <p className="mt-1.5 font-semibold text-[#1f7a45]">Лист надіслано — перевірте пошту і папку «Спам».</p>}
+          {state === "error" && <p className="mt-1.5 font-semibold text-[#c53035]">{message}</p>}
+          {state === "no-mail" && <p className="mt-1.5 text-[#527083]">Надсилання листів тимчасово недоступне — спробуйте пізніше.</p>}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={resend}
+        disabled={state === "pending" || state === "sent"}
+        className="shrink-0 rounded-full bg-[#082c45] px-5 py-3 text-sm font-extrabold text-white transition hover:bg-[#0b3a5a] disabled:opacity-60"
+      >
+        {state === "pending" ? "Надсилаємо…" : state === "sent" ? "Надіслано" : "Надіслати лист ще раз"}
+      </button>
+    </section>
   );
 }
 

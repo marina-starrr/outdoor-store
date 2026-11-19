@@ -72,6 +72,8 @@ export type StoredUser = {
   lastDelivery?: OrderDelivery;
   /** Дублювати сповіщення на email */
   emailNotifications: boolean;
+  /** Адміністратор, якого додав власник (власник — з ADMIN_EMAILS) */
+  grantedAdmin: boolean;
 };
 
 export type NotificationKind = "reply" | "stock" | "order" | "price";
@@ -309,6 +311,7 @@ export const userFromRow = (r: Row): StoredUser => ({
   emailVerifiedAt: isoOpt(r.email_verified_at),
   lastDelivery: opt(r.last_delivery),
   emailNotifications: r.email_notifications !== false,
+  grantedAdmin: r.is_admin === true,
 });
 
 export const notificationFromRow = (r: Row): StoredNotification => ({

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useAuth } from "../Auth";
 import AuthForms from "../AuthForms";
 import Icon, { type IconName } from "../Icon";
 import { BrandLogo } from "../SiteHeader";
+import { useResendVerification } from "../useResendVerification";
 import { useAdminData } from "./api";
 
 export type AdminSummary = {
@@ -35,10 +36,11 @@ const nav: {
   // Архів звернень з колишньої форми «Контакти» — показується, лише поки в ньому щось є
   { href: "/admin/messages", label: "Звернення", icon: "mail", badge: (s) => s.messages.unread, show: (s) => s.messages.total > 0 },
   { href: "/admin/reviews", label: "Відгуки", icon: "star", badge: (s) => s.reviews.pending },
+  { href: "/admin/team", label: "Адміністратори", icon: "shield" },
 ];
 
 /**
- * Каркас адмін-панелі. Доступ: лише користувачі з email у ADMIN_EMAILS.
+ * Каркас адмін-панелі. Доступ: власник (ADMIN_EMAILS) і додані ним адміністратори з підтвердженим email.
  * Перевірка також виконується на сервері в кожному запиті до /api/admin/*.
  */
 export default function AdminShell({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
@@ -169,23 +171,7 @@ function AdminFrame({
 
 /** Адреса є в ADMIN_EMAILS, але ще не підтверджена — без цього доступу немає */
 function ConfirmAdminEmail({ email }: { email: string }) {
-  const [state, setState] = useState<"idle" | "pending" | "sent" | "no-mail" | "error">("idle");
-  const [message, setMessage] = useState("");
-
-  const resend = async () => {
-    setState("pending");
-    try {
-      const res = await fetch("/api/auth/verify-email/resend", { method: "POST" });
-      const data = await res.json();
-      if (data.error) {
-        setMessage(data.error);
-        setState("error");
-      } else setState(data.mailEnabled === false ? "no-mail" : "sent");
-    } catch {
-      setMessage("Немає з'єднання з сервером.");
-      setState("error");
-    }
-  };
+  const { state, message, resend } = useResendVerification();
 
   return (
     <>
@@ -210,7 +196,7 @@ function ConfirmAdminEmail({ email }: { email: string }) {
         {state === "error" && <p className="text-[#c53035]">{message}</p>}
         {state === "no-mail" && (
           <p className="text-left text-[#527083]">
-            Надсилання пошти ще не налаштоване (RESEND_API_KEY). Підтвердьте адресу на сервері командою:
+            Надсилання пошти ще не налаштоване (SMTP_USER і SMTP_PASS у Vercel). Підтвердьте адресу на сервері командою:
             <code className="mt-2 block rounded-xl bg-[#f3f6f9] px-3 py-2 font-mono text-xs text-[#082c45]">yarn admin:verify {email}</code>
           </p>
         )}
