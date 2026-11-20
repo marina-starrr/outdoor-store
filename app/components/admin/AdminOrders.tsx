@@ -17,7 +17,7 @@ export type AdminOrder = {
   confirmedAt?: string;
   paidAt?: string;
   status: OrderStatusId;
-  lines: { id: string; name: string; price: number; qty: number }[];
+  lines: { id: string; name: string; price: number; qty: number; onRequest?: boolean }[];
   subtotal: number;
   promo?: string;
   promoDiscount: number;
@@ -201,11 +201,21 @@ function Orders() {
                       <ul className="mt-2 divide-y divide-[#e3edf3] text-sm">
                         {o.lines.map((l) => (
                           <li key={l.id} className="flex justify-between gap-3 py-2">
-                            <span>{l.name} <span className="text-[#8aa5b5]">× {l.qty}</span></span>
+                            <span>
+                              {l.name} <span className="text-[#8aa5b5]">× {l.qty}</span>
+                              {l.onRequest && (
+                                <span className="ml-2 whitespace-nowrap rounded-full bg-[#fff4c2] px-2 py-0.5 text-xs font-bold text-[#8a6100]">під замовлення</span>
+                              )}
+                            </span>
                             <b>{formatPrice(l.price * l.qty)}</b>
                           </li>
                         ))}
                       </ul>
+                      {o.status === "new" && o.lines.some((l) => l.onRequest) && (
+                        <p className="mt-2 rounded-xl bg-[#fff7d6] px-3 py-2 text-xs font-semibold text-[#6b5800]">
+                          Є товари під замовлення — уточніть кількість у постачальника, перш ніж підтвердити.
+                        </p>
+                      )}
                       <dl className="mt-2 space-y-1 text-sm text-[#527083]">
                         {o.promoDiscount > 0 && <div className="flex justify-between"><dt>Промокод {o.promo}</dt><dd>−{formatPrice(o.promoDiscount)}</dd></div>}
                         <div className="flex justify-between"><dt>Доставка</dt><dd>{shippingLabel(o.shipping, formatPrice)}</dd></div>

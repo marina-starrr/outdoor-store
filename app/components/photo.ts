@@ -13,6 +13,9 @@ const QUALITY = 70;
  * Фото, завантажені в адмін-панелі, зберігаються у двох розмірах:
  * «…-1600.webp» (адреса в базі) і «…-800.webp» поруч — для карток і телефонів.
  */
+/** Заглушка «Фото скоро» — товар постачальника без жодного фото (замість чужого стокового) */
+export const PLACEHOLDER_PHOTO = "/photo-soon.svg";
+
 export const UPLOAD_FULL = 1600;
 export const UPLOAD_SMALL = 800;
 const OWN = new RegExp(`-${UPLOAD_FULL}\\.(webp|jpg)$`);

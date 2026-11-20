@@ -125,8 +125,10 @@ describe("постачальники в адмін-панелі", () => {
 
     const r = await sync(s.id);
     expect(r.status).toBe(200);
-    expect(r.data.result).toEqual({ created: 2, updated: 0, outOfStock: 0, skippedNoPhoto: 1, skippedUnmapped: 1, skippedNotInStock: 1 });
-    expect(r.data.supplier.products).toBe(2);
+    expect(r.data.result).toEqual({ created: 3, updated: 0, outOfStock: 0, noPhoto: 1, skippedUnmapped: 1, skippedNotInStock: 1 });
+    expect(r.data.supplier.products).toBe(3);
+    // Без фото — заглушка «Фото скоро», а не чуже стокове фото
+    expect((await bySku("RA7001")).images).toEqual(["/photo-soon.svg"]);
     expect(r.data.supplier.lastSyncOk).toBe(true);
 
     const chair = (await loadCatalog()).find((p) => p.name.startsWith("Крісло складане Ranger Tourist"))!;
@@ -171,6 +173,43 @@ describe("постачальники в адмін-панелі", () => {
 
     // Повторне оновлення без змін — нічого не робить
     expect((await sync(s.id)).data.result).toMatchObject({ created: 0, updated: 0, outOfStock: 0 });
+  });
+
+  it("заглушку замінюють фото, щойно постачальник їх додав; власні фото власника не чіпаються", async () => {
+    const s = await create([{ id: "PH1", price: 100, stock: 3, cat: "7", pics: 0 }, { id: "PH2", price: 100, stock: 3, cat: "7", pics: 0 }]);
+    await sync(s.id);
+    // Власниця сама завантажила фото для PH2
+    await dbQuery("update products set images = $2::jsonb where supplier_sku = $1", ["PH2", JSON.stringify(["/api/uploads/own-photo-1600.webp"])]);
+    serveFeed(yml([{ id: "PH1", price: 100, stock: 3, cat: "7", pics: 2 }, { id: "PH2", price: 100, stock: 3, cat: "7", pics: 2 }]));
+    expect((await sync(s.id)).data.supplier.lastSyncMessage).toContain("з'явились фото — 1");
+    const ph1 = await bySku("PH1");
+    expect(ph1.images).toEqual(["https://supplier.example/img/PH1-0.jpeg", "https://supplier.example/img/PH1-1.jpeg"]);
+    expect(ph1.image).toBe("https://supplier.example/img/PH1-0.jpeg");
+    expect((await bySku("PH2")).images).toEqual(["/api/uploads/own-photo-1600.webp"]);
+  });
+
+  it("правило Ranger: чужий бренд і залишок 1 — «під замовлення» (лише коли увімкнено)", async () => {
+    const offers: Offer[] = [
+      { id: "KI1", price: 2900, stock: 1, cat: "18", vendor: "Kirasa" },
+      { id: "RA1", price: 500, stock: 1, cat: "18", vendor: "Ranger" },
+      { id: "KI2", price: 300, stock: 5, cat: "18", vendor: "Kirasa" },
+    ];
+    const s = await create(offers);
+    expect(s).toMatchObject({ otherBrandsOnRequest: false });
+    await sync(s.id);
+    expect((await bySku("KI1")).on_request).toBe(false);
+
+    const r = await call(withId(supplierItem.PATCH, { id: s.id }), { method: "PATCH", cookie: admin, body: { otherBrandsOnRequest: true } });
+    expect(r.data.supplier.otherBrandsOnRequest).toBe(true);
+    await sync(s.id);
+    expect((await bySku("KI1")).on_request).toBe(true); // чужий бренд, 1 шт.
+    expect((await bySku("RA1")).on_request).toBe(false); // свій бренд — 1 шт. справді одна
+    expect((await bySku("KI2")).on_request).toBe(false); // реальний залишок 5
+
+    // Постачальник показав точну кількість — позначка знімається
+    serveFeed(yml([{ ...offers[0], stock: 4 }, offers[1], offers[2]]));
+    await sync(s.id);
+    expect((await bySku("KI1"))).toMatchObject({ on_request: false, stock: 4 });
   });
 
   it("товар знову в наявності — сповіщення підписникам", async () => {

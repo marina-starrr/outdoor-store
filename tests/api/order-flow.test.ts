@@ -257,3 +257,55 @@ describe("покупець скасовує замовлення сам", () => 
     expect((await dbQuery("select status from orders where number = $1", [n]))[0].status).toBe("paid");
   });
 });
+
+describe("товар «під замовлення»", () => {
+  const OTHER = "ch3";
+  const onRequest = (v: boolean) => dbQuery("update products set on_request = $2 where id = $1", [PRODUCT, v]);
+  const otherStock = async () => Number((await dbQuery("select stock from products where id = $1", [OTHER]))[0].stock);
+
+  it("можна оформити більше, ніж залишок; склад не списується й не повертається", async () => {
+    await setStock(1);
+    await onRequest(true);
+    const r = await place({ lines: [{ id: PRODUCT, qty: 5 }] });
+    expect(r.status).toBe(200);
+    expect(r.data.order.lines[0]).toMatchObject({ id: PRODUCT, qty: 5, onRequest: true });
+    const number = r.data.order.number;
+    const [item] = await dbQuery("select on_request from order_items where order_number = $1", [number]);
+    expect(item.on_request).toBe(true);
+
+    // Підтвердження не падає через «не вистачає» і не чіпає залишок
+    expect((await setStatus(number, "confirmed")).status).toBe(200);
+    expect(await stock()).toBe(1);
+    expect((await setStatus(number, "cancelled")).status).toBe(200);
+    expect(await stock()).toBe(1);
+    await onRequest(false);
+  });
+
+  it("у змішаному замовленні звичайний товар бронюється, «під замовлення» — ні", async () => {
+    await setStock(1);
+    await onRequest(true);
+    await dbQuery("update products set stock = 10 where id = $1", [OTHER]);
+    const r = await place({ lines: [{ id: PRODUCT, qty: 3 }, { id: OTHER, qty: 2 }] });
+    expect(r.status).toBe(200);
+    expect(r.data.order.lines.find((l: { id: string }) => l.id === OTHER).onRequest).toBeUndefined();
+    await setStatus(r.data.order.number, "confirmed");
+    expect(await stock()).toBe(1);
+    expect(await otherStock()).toBe(8);
+    await onRequest(false);
+  });
+
+  it("без позначки — як і раніше, не більше залишку", async () => {
+    await setStock(1);
+    const r = await place({ lines: [{ id: PRODUCT, qty: 3 }] });
+    expect(r.status).toBe(409);
+  });
+
+  it("закінчився (0) — навіть «під замовлення» не оформлюється", async () => {
+    await setStock(0);
+    await onRequest(true);
+    const r = await place({ lines: [{ id: PRODUCT, qty: 1 }] });
+    expect(r.status).not.toBe(200);
+    await onRequest(false);
+    await setStock(5);
+  });
+});

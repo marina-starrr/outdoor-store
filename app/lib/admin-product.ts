@@ -1,4 +1,5 @@
 import { isCategorySlug, isPhotoKey, type CategorySlug, type PhotoKey, type Product } from "../components/catalog-data";
+import { PLACEHOLDER_PHOTO } from "../components/photo";
 
 /*
  * Перевірка даних товару з адмін-панелі. Спільна для сервера (API) і
@@ -22,6 +23,7 @@ export type ProductInput = {
   hit?: boolean;
   isNew?: boolean;
   hidden?: boolean;
+  onRequest?: boolean;
   attrs: [string, string][];
 };
 
@@ -55,7 +57,7 @@ export const isValidId = (id: string) => /^[a-z0-9][a-z0-9-]{1,39}$/.test(id);
 /** Скільки власних фото можна додати до товару */
 export const MAX_IMAGES = 8;
 /** Адреса завантаженого фото: Supabase Storage (https) або локальна копія для розробки */
-const isImageUrl = (s: string) => /^(https:\/\/[^\s"'<>]+|\/api\/uploads\/[a-z0-9-]+\.(webp|jpg))$/i.test(s);
+const isImageUrl = (s: string) => s === PLACEHOLDER_PHOTO || /^(https:\/\/[^\s"'<>]+|\/api\/uploads\/[a-z0-9-]+\.(webp|jpg))$/i.test(s);
 
 /** Перевіряє повний набір полів товару. Повертає дані або помилки за полями */
 export function validateProduct(body: Record<string, unknown>): { data?: ProductInput; errors: ProductErrors } {
@@ -115,6 +117,7 @@ export function validateProduct(body: Record<string, unknown>): { data?: Product
       hit: body.hit === true,
       isNew: body.isNew === true,
       hidden: body.hidden === true,
+      onRequest: body.onRequest === true,
       attrs,
     },
   };
@@ -134,6 +137,7 @@ export function applyProductInput(target: Partial<Product>, d: ProductInput): vo
     hit: d.hit || undefined,
     isNew: d.isNew || undefined,
     hidden: d.hidden || undefined,
+    onRequest: d.onRequest || undefined,
     // «Бренд» у характеристиках завжди відповідає полю бренду
     attrs: [["Бренд", d.brand], ...d.attrs.filter(([k]) => k !== "Бренд")],
     updatedAt: new Date().toISOString(),

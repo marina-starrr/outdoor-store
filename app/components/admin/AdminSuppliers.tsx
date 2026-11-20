@@ -16,9 +16,10 @@ type Supplier = {
   lastSyncAt?: string;
   lastSyncOk?: boolean;
   lastSyncMessage?: string;
+  otherBrandsOnRequest: boolean;
   products: number;
 };
-type SyncResult = { created: number; updated: number; outOfStock: number; skippedNoPhoto: number; skippedUnmapped: number; skippedNotInStock: number };
+type SyncResult = { created: number; updated: number; outOfStock: number; noPhoto: number; skippedUnmapped: number; skippedNotInStock: number };
 
 export default function AdminSuppliers() {
   return (
@@ -122,14 +123,27 @@ function SupplierCard({ supplier: s, onChange, onDeleted }: { supplier: Supplier
       const { result, supplier } = await adminFetch<{ result: SyncResult; supplier: Supplier }>(`/api/admin/suppliers/${s.id}/sync`, { method: "POST" });
       onChange(supplier);
       setMap(supplier.categoryMap);
-      const skipped = [
-        result.skippedUnmapped && `без категорії — ${result.skippedUnmapped}`,
-        result.skippedNoPhoto && `без фото — ${result.skippedNoPhoto}`,
-      ].filter(Boolean);
       setNotice({
         ok: true,
-        text: `Готово: додано ${result.created}, оновлено ${result.updated}, закінчилось ${result.outOfStock}.` + (skipped.length ? ` Не додано: ${skipped.join(", ")}.` : ""),
+        text:
+          `Готово: додано ${result.created}, оновлено ${result.updated}, закінчилось ${result.outOfStock}.` +
+          (result.noPhoto ? ` Без фото (із заглушкою «Фото скоро») — ${result.noPhoto}.` : "") +
+          (result.skippedUnmapped ? ` Не додано без категорії — ${result.skippedUnmapped}.` : ""),
       });
+    } catch (e) {
+      setNotice({ ok: false, text: (e as ApiError).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleOnRequest = async (value: boolean) => {
+    setBusy("save");
+    setNotice(null);
+    try {
+      const { supplier } = await adminFetch<{ supplier: Supplier }>(`/api/admin/suppliers/${s.id}`, { method: "PATCH", body: { otherBrandsOnRequest: value } });
+      onChange(supplier);
+      setNotice({ ok: true, text: "Збережено — застосується під час наступного оновлення («Оновити зараз» або щоденного)" });
     } catch (e) {
       setNotice({ ok: false, text: (e as ApiError).message });
     } finally {
@@ -174,6 +188,23 @@ function SupplierCard({ supplier: s, onChange, onDeleted }: { supplier: Supplier
       {notice && (
         <p role="status" className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${notice.ok ? "bg-[#e7f7ee] text-[#1f7a45]" : "bg-[#fdecec] text-[#c53035]"}`}>{notice.text}</p>
       )}
+
+      <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl bg-[#f7fafc] p-3.5 text-sm">
+        <input
+          type="checkbox"
+          checked={s.otherBrandsOnRequest}
+          disabled={!!busy}
+          onChange={(e) => toggleOnRequest(e.target.checked)}
+          className="mt-0.5 h-5 w-5 shrink-0 accent-[#098fd0]"
+        />
+        <span>
+          <b>Товари інших брендів із залишком «1» — під замовлення</b>
+          <span className="mt-0.5 block text-[#527083]">
+            Покупець оформлює потрібну кількість, а ви уточнюєте її в постачальника перед підтвердженням замовлення. Правило Ranger:
+            «не наш бренд і 1 шт. — можемо замовити в довільній кількості».
+          </span>
+        </span>
+      </label>
 
       <div className="mt-5 border-t border-[#e3edf3] pt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

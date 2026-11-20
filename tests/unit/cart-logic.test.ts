@@ -110,3 +110,13 @@ describe("cartRecommendations", () => {
     expect(recs[0].category).not.toBe("tents");
   });
 });
+
+describe("кількість у кошику", () => {
+  it("звичайний товар — не більше залишку; «під замовлення» — до MAX_QTY; закінчився — 0", async () => {
+    const { MAX_QTY, maxQtyFor } = await import("../../app/components/cart-logic");
+    expect(maxQtyFor({ stock: 3 })).toBe(3);
+    expect(maxQtyFor({ stock: 1, onRequest: true })).toBe(MAX_QTY);
+    expect(maxQtyFor({ stock: 0, onRequest: true })).toBe(0);
+    expect(maxQtyFor({ stock: 500 })).toBe(MAX_QTY);
+  });
+});

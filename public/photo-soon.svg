@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="Фото скоро">
+  <rect width="1200" height="900" fill="#eef6fb"/>
+  <g transform="translate(600 390)" fill="none" stroke="#9cc6de" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-130" y="-95" width="260" height="190" rx="30"/>
+    <circle cx="0" cy="0" r="52"/>
+    <path d="M-60 -95l22-38h76l22 38"/>
+  </g>
+  <text x="600" y="620" text-anchor="middle" font-family="Manrope, Arial, sans-serif" font-size="64" font-weight="800" fill="#527083">Фото скоро</text>
+</svg>

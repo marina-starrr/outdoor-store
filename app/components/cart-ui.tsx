@@ -114,7 +114,9 @@ export function CartItem({
             label={product.name}
             max={Math.max(1, maxQtyFor(product))}
           />
-          {product.stock <= 5 && (
+          {product.onRequest && product.stock > 0 ? (
+            <span className="w-full text-xs font-bold text-[#8a6100]">Під замовлення — кількість підтвердимо до оплати</span>
+          ) : product.stock <= 5 && (
             <span className="w-full text-xs font-bold text-[#c27c00]">
               {product.stock > 0 ? `Залишилось ${product.stock} шт.` : "Закінчився — приберіть з кошика"}
             </span>

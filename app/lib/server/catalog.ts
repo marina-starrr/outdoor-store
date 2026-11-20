@@ -15,7 +15,7 @@ import { approvedReviews, type PublicReview } from "./reviews";
 export const CATALOG_TAG = "catalog";
 
 const PRODUCT_COLUMNS =
-  "id, name, category, brand, price, old_price, hit, is_new, stock, hidden, description, custom_image, popularity, specs, capacity, image, photo, attrs, updated_at, images";
+  "id, name, category, brand, price, old_price, hit, is_new, stock, hidden, description, custom_image, popularity, specs, capacity, image, photo, attrs, updated_at, images, on_request";
 
 const JSONB_COLUMNS = new Set(["attrs", "images"]);
 
@@ -39,6 +39,7 @@ export const productFromRow = (r: Row): Product =>
     description: opt(r.description),
     customImage: opt(r.custom_image),
     images: Array.isArray(r.images) && r.images.length ? r.images : undefined,
+    onRequest: r.on_request || undefined,
     updatedAt: isoOpt(r.updated_at),
     popularity: num(r.popularity),
     specs: r.specs,
@@ -69,9 +70,10 @@ const productParams = (p: Product) => [
   jsonb(p.attrs ?? []),
   p.updatedAt ?? null,
   jsonb(p.images ?? []),
+  !!p.onRequest,
 ];
 
-const VALUES = "$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20::jsonb";
+const VALUES = "$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20::jsonb,$21";
 
 /** Новий товар (id уже перевірено на унікальність) */
 export async function insertProduct(q: Queryable, p: Product) {

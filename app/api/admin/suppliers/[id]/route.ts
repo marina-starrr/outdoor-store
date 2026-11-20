@@ -14,7 +14,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/supp
   if (name !== undefined && name.length < 2) return error("Вкажіть назву постачальника");
   if (feedUrl !== undefined && !/^https:\/\/[^\s"'<>]+$/i.test(feedUrl)) return error("Посилання на файл має починатися з https://");
   const categoryMap = body.categoryMap && typeof body.categoryMap === "object" ? (body.categoryMap as Record<string, string>) : undefined;
-  await updateSupplier(id, { name, feedUrl, categoryMap });
+  const otherBrandsOnRequest = typeof body.otherBrandsOnRequest === "boolean" ? body.otherBrandsOnRequest : undefined;
+  await updateSupplier(id, { name, feedUrl, categoryMap, otherBrandsOnRequest });
   return json({ supplier: await getSupplier(id) });
 }
 

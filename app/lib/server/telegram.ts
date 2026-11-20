@@ -72,7 +72,8 @@ export function newOrderText(order: StoredOrder, guest: boolean) {
   return [
     `🛒 Нове замовлення ${order.number} — ${formatPrice(order.total)}`,
     "",
-    ...order.lines.map((l) => `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}`),
+    ...order.lines.map((l) => `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}${l.onRequest ? " ⚠️ під замовлення" : ""}`),
+    order.lines.some((l) => l.onRequest) ? "⚠️ Уточніть кількість у постачальника, перш ніж підтвердити" : null,
     order.promoDiscount ? `Промокод ${order.promo}: −${formatPrice(order.promoDiscount)}` : null,
     `Доставка: ${shippingLabel(order.shipping, formatPrice).toLowerCase()}`,
     "",

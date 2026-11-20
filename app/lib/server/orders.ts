@@ -65,7 +65,7 @@ export async function loadOrders(where: string, params: unknown[] = [], q: Query
   const byOrder = new Map<string, StoredOrder["lines"]>();
   for (const i of items) {
     const list = byOrder.get(i.order_number) ?? [];
-    list.push({ id: i.product_id, name: i.name, price: num(i.price), qty: num(i.qty) });
+    list.push({ id: i.product_id, name: i.name, price: num(i.price), qty: num(i.qty), ...(i.on_request ? { onRequest: true } : {}) });
     byOrder.set(i.order_number, list);
   }
   return rows.map((r) => ({
@@ -131,10 +131,17 @@ export async function insertOrder(
     );
     if (!row) continue;
     await q.query(
-      `insert into order_items (order_number, product_id, name, price, qty, position)
-       select $1, x.id, x.name, x.price, x.qty, x.pos - 1
-       from unnest($2::text[], $3::text[], $4::numeric[], $5::int[]) with ordinality as x(id, name, price, qty, pos)`,
-      [number, order.lines.map((l) => l.id), order.lines.map((l) => l.name), order.lines.map((l) => l.price), order.lines.map((l) => l.qty)],
+      `insert into order_items (order_number, product_id, name, price, qty, position, on_request)
+       select $1, x.id, x.name, x.price, x.qty, x.pos - 1, x.on_request
+       from unnest($2::text[], $3::text[], $4::numeric[], $5::int[], $6::boolean[]) with ordinality as x(id, name, price, qty, on_request, pos)`,
+      [
+        number,
+        order.lines.map((l) => l.id),
+        order.lines.map((l) => l.name),
+        order.lines.map((l) => l.price),
+        order.lines.map((l) => l.qty),
+        order.lines.map((l) => !!l.onRequest),
+      ],
     );
     return { number, ...order };
   }

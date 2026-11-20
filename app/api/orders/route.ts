@@ -151,9 +151,15 @@ export async function POST(req: NextRequest) {
     // Товар лише перевіряється — списується (бронюється) він, коли адміністратор
     // підтверджує замовлення (див. order-flow.ts)
     order = await tx(async (q) => {
+      const onRequest = new Set<string>();
       for (const l of lines) {
-        const [p] = await q.query("select stock, hidden from products where id = $1", [l.id]);
+        const [p] = await q.query("select stock, hidden, on_request from products where id = $1", [l.id]);
         const stock = p && !p.hidden ? Number(p.stock) : 0;
+        // «Під замовлення» — кількість уточнить адміністратор у постачальника перед підтвердженням
+        if (p?.on_request && stock > 0) {
+          onRequest.add(l.id);
+          continue;
+        }
         if (stock >= l.qty) continue;
         throw new StockError(
           stock > 0
@@ -165,7 +171,7 @@ export async function POST(req: NextRequest) {
       const created: Omit<StoredOrder, "number"> = {
         createdAt: new Date().toISOString(),
         status: "new",
-        lines: lines.map((l) => ({ id: l.id, name: l.product.name, price: l.product.price, qty: l.qty })),
+        lines: lines.map((l) => ({ id: l.id, name: l.product.name, price: l.product.price, qty: l.qty, ...(onRequest.has(l.id) ? { onRequest: true } : {}) })),
         subtotal: totals.subtotal,
         promo: totals.promoDiscount ? promo : undefined,
         promoDiscount: totals.promoDiscount,

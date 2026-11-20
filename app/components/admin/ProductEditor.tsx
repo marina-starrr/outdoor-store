@@ -15,7 +15,7 @@ import {
 } from "../catalog-data";
 import { inputCls } from "../form-ui";
 import { MAX_IMAGES, validateProduct, type ProductErrors } from "../../lib/admin-product";
-import { resizeImage } from "../photo";
+import { PLACEHOLDER_PHOTO, resizeImage } from "../photo";
 import { adminFetch, type ApiError } from "./api";
 import { uploadProductPhoto } from "./photo-upload";
 
@@ -36,6 +36,7 @@ type Form = {
   hit: boolean;
   isNew: boolean;
   hidden: boolean;
+  onRequest: boolean;
   attrs: [string, string][];
 };
 
@@ -56,6 +57,7 @@ const toForm = (p?: Product): Form => ({
   hit: !!p?.hit,
   isNew: p ? !!p.isNew : true,
   hidden: !!p?.hidden,
+  onRequest: !!p?.onRequest,
   // «Бренд» додається автоматично з поля бренду
   attrs: (p?.attrs ?? []).filter(([k]) => k !== "Бренд"),
 });
@@ -209,6 +211,7 @@ export default function ProductEditor({
               <Toggle checked={form.hit} onChange={(v) => set("hit", v)}>Хіт</Toggle>
               <Toggle checked={form.isNew} onChange={(v) => set("isNew", v)}>Новинка</Toggle>
               <Toggle checked={form.hidden} onChange={(v) => set("hidden", v)}>Приховати з сайту</Toggle>
+              <Toggle checked={form.onRequest} onChange={(v) => set("onRequest", v)}>Під замовлення</Toggle>
             </div>
           </Section>
 
@@ -341,7 +344,11 @@ function PhotoManager({
       setProgress({ done: i, total: files.length });
       try {
         const url = await uploadProductPhoto(files[i]);
-        update((prev) => (prev.length < MAX_IMAGES ? [...prev, url] : prev));
+        // Справжнє фото замінює заглушку «Фото скоро»
+        update((prev) => {
+          const real = prev.filter((p) => p !== PLACEHOLDER_PHOTO);
+          return real.length < MAX_IMAGES ? [...real, url] : real;
+        });
       } catch (e) {
         failed.push((e as Error).message);
       }

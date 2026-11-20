@@ -1,6 +1,7 @@
 import "server-only";
 import { XMLParser } from "fast-xml-parser";
 import { categoryPhotos, isCategorySlug, withDerived, type CategorySlug, type Product } from "../../components/catalog-data";
+import { PLACEHOLDER_PHOTO } from "../../components/photo";
 import { MAX_IMAGES, slugify } from "../admin-product";
 import { invalidateCatalog, productFromRow } from "./catalog";
 import { db, iso, jsonb, sql, tx, type Queryable, type Row } from "./db";
@@ -43,6 +44,8 @@ export type Supplier = {
   lastSyncAt?: string;
   lastSyncOk?: boolean;
   lastSyncMessage?: string;
+  /** Товар не бренду постачальника з залишком 1 — «під замовлення» (правило Ranger) */
+  otherBrandsOnRequest: boolean;
   /** Скільки товарів від постачальника є на сайті */
   products: number;
 };
@@ -51,7 +54,8 @@ export type SyncResult = {
   created: number;
   updated: number;
   outOfStock: number;
-  skippedNoPhoto: number;
+  /** Нові товари без жодного фото — додані із заглушкою «Фото скоро» */
+  noPhoto: number;
   skippedUnmapped: number;
   /** Нові товари без наявності — не додаються */
   skippedNotInStock: number;
@@ -192,6 +196,7 @@ const supplierFromRow = (r: Row): Supplier => ({
   lastSyncAt: r.last_sync_at ? iso(r.last_sync_at) : undefined,
   lastSyncOk: r.last_sync_ok ?? undefined,
   lastSyncMessage: r.last_sync_message ?? undefined,
+  otherBrandsOnRequest: r.other_brands_on_request === true,
   products: Number(r.products ?? 0),
 });
 
@@ -218,14 +223,18 @@ export async function createSupplier(name: string, feedUrl: string): Promise<Sup
   return (await getSupplier(row.id))!;
 }
 
-export async function updateSupplier(id: string, patch: { name?: string; feedUrl?: string; categoryMap?: Record<string, string> }) {
+export async function updateSupplier(
+  id: string,
+  patch: { name?: string; feedUrl?: string; categoryMap?: Record<string, string>; otherBrandsOnRequest?: boolean },
+) {
   const map = patch.categoryMap
     ? Object.fromEntries(Object.entries(patch.categoryMap).filter(([k, v]) => k.length <= 60 && (v === "" || isCategorySlug(v))))
     : undefined;
   await sql(
     `update suppliers set name = coalesce($2, name), feed_url = coalesce($3, feed_url),
-            category_map = coalesce($4::jsonb, category_map) where id = $1`,
-    [id, patch.name ?? null, patch.feedUrl ?? null, map ? jsonb(map) : null],
+            category_map = coalesce($4::jsonb, category_map),
+            other_brands_on_request = coalesce($5, other_brands_on_request) where id = $1`,
+    [id, patch.name ?? null, patch.feedUrl ?? null, map ? jsonb(map) : null, patch.otherBrandsOnRequest ?? null],
   );
 }
 
@@ -260,7 +269,7 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
     throw e;
   }
 
-  const result: SyncResult = { created: 0, updated: 0, outOfStock: 0, skippedNoPhoto: 0, skippedUnmapped: 0, skippedNotInStock: 0 };
+  const result: SyncResult = { created: 0, updated: 0, outOfStock: 0, noPhoto: 0, skippedUnmapped: 0, skippedNotInStock: 0 };
   const mails: Mail[] = [];
 
   /*
@@ -278,20 +287,28 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
     const [{ max }] = await q.query("select coalesce(max(popularity), 0) as max from products");
     let popularity = Number(max);
     const seen = new Set<string>();
-    const changes: { id: string; price: number; stock: number }[] = [];
+    const changes: { id: string; price: number; stock: number; on_request: boolean }[] = [];
+    const photoUpdates: { id: string; images: string[]; image: string }[] = [];
     const events: { after: Product; before: Product }[] = [];
     const created: (Product & { sku: string })[] = [];
+    /** Ranger: товар не їхнього бренду з залишком «1» можна замовити в будь-якій кількості — «під замовлення» */
+    const onRequestOf = (o: FeedOffer) =>
+      supplier.otherBrandsOnRequest && o.stock === 1 && !!o.vendor && o.vendor.toLowerCase() !== supplier.name.toLowerCase();
 
     for (const o of feed.offers) {
       if (seen.has(o.sku)) continue;
       seen.add(o.sku);
       const before = existing.get(o.sku);
+      const onRequest = onRequestOf(o);
 
       if (before) {
-        // Уже на сайті — лише ціна й залишок
-        if (before.price === o.price && before.stock === o.stock) continue;
-        changes.push({ id: before.id, price: o.price, stock: o.stock });
-        const after = withDerived({ ...before, price: o.price, stock: o.stock });
+        // Заглушку «Фото скоро» замінюємо фото, щойно постачальник їх додав (власні фото власника не чіпаємо)
+        const placeholderOnly = before.images?.length === 1 && before.images[0] === PLACEHOLDER_PHOTO;
+        if (placeholderOnly && o.pictures.length) photoUpdates.push({ id: before.id, images: o.pictures, image: o.pictures[0] });
+        // Уже на сайті — лише ціна, залишок і «під замовлення»
+        if (before.price === o.price && before.stock === o.stock && !!before.onRequest === onRequest) continue;
+        changes.push({ id: before.id, price: o.price, stock: o.stock, on_request: onRequest });
+        const after = withDerived({ ...before, price: o.price, stock: o.stock, onRequest: onRequest || undefined });
         // Сповіщення: «знову в наявності» підписникам, «ціна знизилась» — тим, у кого в обраному
         if ((before.stock === 0 && o.stock > 0) || o.price < before.price) events.push({ after, before });
         if (o.stock === 0 && before.stock > 0) result.outOfStock++;
@@ -300,11 +317,12 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
       }
 
       // Новий товар
-      // Спершу наявність: «пропущено без категорії / без фото» — лише серед тих, що є в наявності
+      // Спершу наявність: «пропущено без категорії» — лише серед тих, що є в наявності
       if (o.stock <= 0) { result.skippedNotInStock++; continue; }
       const category = supplier.categoryMap[o.categoryId];
       if (!category) { result.skippedUnmapped++; continue; }
-      if (!o.pictures.length) { result.skippedNoPhoto++; continue; }
+      // Без жодного фото — нейтральна заглушка «Фото скоро», а не чуже стокове фото
+      if (!o.pictures.length) result.noPhoto++;
       created.push({
         ...withDerived({
           id: uniqueId(o.name, o.sku, taken),
@@ -317,7 +335,8 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
           inStock: true,
           stock: o.stock,
           description: o.description || undefined,
-          images: o.pictures,
+          images: o.pictures.length ? o.pictures : [PLACEHOLDER_PHOTO],
+          onRequest: onRequest || undefined,
           popularity: ++popularity,
           specs: o.vendor ? `${o.vendor} · арт. ${o.sku}` : `Арт. ${o.sku}`,
           image: "",
@@ -332,33 +351,41 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
     // Зникли з файлу — немає в наявності
     for (const [sku, p] of existing) {
       if (seen.has(sku) || p.stock === 0) continue;
-      changes.push({ id: p.id, price: p.price, stock: 0 });
+      changes.push({ id: p.id, price: p.price, stock: 0, on_request: false });
       result.outOfStock++;
     }
 
     if (changes.length)
       await q.query(
-        `update products p set price = v.price, stock = v.stock, updated_at = now(),
+        `update products p set price = v.price, stock = v.stock, on_request = v.on_request, updated_at = now(),
                 old_price = case when p.old_price <= v.price then null else p.old_price end
-         from jsonb_to_recordset($1::jsonb) as v(id text, price numeric, stock int) where p.id = v.id`,
+         from jsonb_to_recordset($1::jsonb) as v(id text, price numeric, stock int, on_request boolean) where p.id = v.id`,
         [jsonb(changes)],
+      );
+    if (photoUpdates.length)
+      await q.query(
+        `update products p set images = v.images, image = v.image, updated_at = now()
+         from jsonb_to_recordset($1::jsonb) as v(id text, images jsonb, image text) where p.id = v.id`,
+        [jsonb(photoUpdates)],
       );
     if (created.length)
       await q.query(
         `insert into products (id, name, category, brand, price, stock, description, popularity, specs, image, photo,
-                               attrs, images, updated_at, supplier_id, supplier_sku)
+                               attrs, images, on_request, updated_at, supplier_id, supplier_sku)
          select id, name, category, brand, price, stock, description, popularity, specs, image, photo,
-                attrs, images, now(), $2, sku
+                attrs, images, coalesce(on_request, false), now(), $2, sku
          from jsonb_to_recordset($1::jsonb) as x(id text, name text, category text, brand text, price numeric, stock int,
-              description text, popularity int, specs text, image text, photo text, attrs jsonb, images jsonb, sku text)`,
-        [jsonb(created.map((p) => ({ ...p, description: p.description ?? null }))), id],
+              description text, popularity int, specs text, image text, photo text, attrs jsonb, images jsonb,
+              on_request boolean, sku text)`,
+        [jsonb(created.map((p) => ({ ...p, description: p.description ?? null, on_request: !!p.onRequest }))), id],
       );
     for (const e of events) await productEvents(q, e.after, snapshot(e.before), mails);
 
     const message =
       `Додано ${result.created}, оновлено ${result.updated}, закінчилось ${result.outOfStock}` +
       (result.skippedUnmapped ? `; пропущено без категорії — ${result.skippedUnmapped}` : "") +
-      (result.skippedNoPhoto ? `; без фото — ${result.skippedNoPhoto}` : "");
+      (result.noPhoto ? `; без фото (із заглушкою) — ${result.noPhoto}` : "") +
+      (photoUpdates.length ? `; з'явились фото — ${photoUpdates.length}` : "");
     const map = Object.fromEntries(feed.categories.map((c) => [c.id, supplier.categoryMap[c.id] ?? suggestCategory(c.name)]));
     await q.query(
       `update suppliers set last_sync_at = now(), last_sync_ok = true, last_sync_message = $2,

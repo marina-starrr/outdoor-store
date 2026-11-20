@@ -6,7 +6,9 @@ export type CartLine = { id: string; qty: number };
 export type ResolvedLine = CartLine & { product: Product };
 
 /** Скільки одиниць товару можна покласти в кошик: не більше ліміту і залишку на складі */
-export const maxQtyFor = (p: Pick<Product, "stock">) => Math.max(0, Math.min(MAX_QTY, p.stock));
+/** Скільки можна покласти в кошик: залишок, а для товару «під замовлення» — до MAX_QTY */
+export const maxQtyFor = (p: Pick<Product, "stock" | "onRequest">) =>
+  p.onRequest && p.stock > 0 ? MAX_QTY : Math.max(0, Math.min(MAX_QTY, p.stock));
 
 /**
  * Додає до рядків кошика дані товару; невідомі й приховані товари

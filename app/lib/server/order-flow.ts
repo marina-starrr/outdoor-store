@@ -23,9 +23,12 @@ export type StatusChange =
 /** Списує товари замовлення; якщо чогось бракує — помилка з поясненням (транзакція відкочується) */
 class ReserveError extends Error {}
 
+/** Позиції, що списуються зі складу («під замовлення» — ні: їх кількість уточнюють у постачальника) */
+const stockLines = (order: StoredOrder) => order.lines.filter((l) => !l.onRequest).sort((a, b) => a.id.localeCompare(b.id));
+
 async function reserve(q: Queryable, order: StoredOrder) {
   // Однаковий порядок блокування рядків у всіх транзакціях — без взаємних блокувань
-  for (const l of [...order.lines].sort((a, b) => a.id.localeCompare(b.id))) {
+  for (const l of stockLines(order)) {
     const [taken] = await q.query(
       "update products set stock = stock - $2 where id = $1 and stock >= $2 returning id",
       [l.id, l.qty],
@@ -40,7 +43,7 @@ async function reserve(q: Queryable, order: StoredOrder) {
 }
 
 async function release(q: Queryable, order: StoredOrder, mails: Mail[]) {
-  for (const l of [...order.lines].sort((a, b) => a.id.localeCompare(b.id))) {
+  for (const l of stockLines(order)) {
     const [row] = await q.query(
       "update products set stock = stock + $2 where id = $1 returning *, stock - $2 as stock_before",
       [l.id, l.qty],

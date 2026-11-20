@@ -44,7 +44,8 @@ export type StoredOrder = {
   confirmedAt?: string;
   /** Коли адміністратор позначив оплату */
   paidAt?: string;
-  lines: { id: string; name: string; price: number; qty: number }[];
+  /** onRequest — позиція «під замовлення»: кількість уточнюється в постачальника, склад не списується */
+  lines: { id: string; name: string; price: number; qty: number; onRequest?: boolean }[];
   subtotal: number;
   promo?: string;
   promoDiscount: number;

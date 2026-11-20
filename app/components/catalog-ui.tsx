@@ -670,9 +670,13 @@ export function ProductCard({
             {badge}
           </span>
         )}
-        {!product.inStock && (
+        {!product.inStock ? (
           <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-[#527083]">
             Очікується
+          </span>
+        ) : product.onRequest && (
+          <span className="absolute bottom-3 left-3 rounded-full bg-[#fff4c2] px-2.5 py-1 text-xs font-bold text-[#8a6100]">
+            Під замовлення
           </span>
         )}
       </Link>

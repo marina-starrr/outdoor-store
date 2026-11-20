@@ -162,19 +162,34 @@ export default function ProductPage({ product }: { product: Product }) {
                     <span className="font-bold underline decoration-dotted underline-offset-4">Відгуків ще немає — напишіть перший</span>
                   )}
                 </button>
-                <span className="text-[#8aa5b5]">Код: {product.id.toUpperCase()}</span>
+                <span className="text-[#8aa5b5]">
+                  {/* Артикул постачальника, якщо є; інакше — код товару на сайті */}
+                  {product.attrs.find(([k]) => k === "Артикул") ? `Артикул: ${product.attrs.find(([k]) => k === "Артикул")![1]}` : `Код: ${product.id.toUpperCase()}`}
+                </span>
               </div>
 
-              <p
-                className={`mt-3 flex items-center gap-2 text-sm font-bold ${product.inStock ? "text-[#1f9d55]" : "text-[#c2780a]"}`}
-              >
-                <span className={`h-2 w-2 rounded-full ${product.inStock ? "bg-[#1f9d55]" : "bg-[#f5ad00]"}`} />
-                {!product.inStock
-                  ? "Очікується надходження"
-                  : product.stock <= LOW_STOCK
-                    ? `Залишилось лише ${product.stock} шт. · відправимо сьогодні`
-                    : "Є в наявності · відправимо сьогодні"}
-              </p>
+              {product.inStock && product.onRequest ? (
+                <div className="mt-3 rounded-2xl bg-[#fff7d6] px-4 py-3 text-sm text-[#6b5800]">
+                  <p className="flex items-center gap-2 font-bold">
+                    <span className="h-2 w-2 rounded-full bg-[#f5ad00]" />
+                    Під замовлення
+                  </p>
+                  <p className="mt-1">
+                    Оформіть потрібну кількість — ми уточнимо наявність у постачальника й підтвердимо замовлення до оплати.
+                  </p>
+                </div>
+              ) : (
+                <p
+                  className={`mt-3 flex items-center gap-2 text-sm font-bold ${product.inStock ? "text-[#1f9d55]" : "text-[#c2780a]"}`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${product.inStock ? "bg-[#1f9d55]" : "bg-[#f5ad00]"}`} />
+                  {!product.inStock
+                    ? "Очікується надходження"
+                    : product.stock <= LOW_STOCK
+                      ? `Залишилось лише ${product.stock} шт. · відправимо сьогодні`
+                      : "Є в наявності · відправимо сьогодні"}
+                </p>
+              )}
 
               <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="text-4xl font-black tracking-[-0.03em]">
