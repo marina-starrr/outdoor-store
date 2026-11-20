@@ -132,7 +132,9 @@ function Products({ editing, setEditing }: { editing: string | "new" | null; set
             Показано <b className="text-[#082c45]">{visible.length}</b> з {products.length}
           </p>
           {visible.length === 0 ? (
-            <p className="p-8 text-center text-sm text-[#527083]">Нічого не знайдено — змініть фільтри.</p>
+            <p className="p-8 text-center text-sm text-[#527083]">
+              {products.length ? "Нічого не знайдено — змініть фільтри." : "Товарів ще немає — натисніть «Додати товар»."}
+            </p>
           ) : (
             <ul className="divide-y divide-[#e3edf3]" data-testid="admin-products">
               {visible.map((p) => (
@@ -152,6 +154,11 @@ function Products({ editing, setEditing }: { editing: string | "new" | null; set
             setEditing(null);
             setNotice("");
             if (created) setQuery("");
+          }}
+          onDeleted={(id) => {
+            setData((d) => d && { products: d.products.filter((p) => p.id !== id) });
+            setEditing(null);
+            setNotice("");
           }}
         />
       )}

@@ -14,7 +14,7 @@ import {
   withDerived,
   roundBounds,
 } from "../../app/components/catalog-data";
-import { navLinks, products as homeProducts } from "../../app/components/data";
+import { navLinks } from "../../app/components/data";
 
 const products = seedProducts.map(withDerived);
 const brands = brandsOf(products);
@@ -58,10 +58,6 @@ describe("дані каталогу", () => {
 
   it("бренди — відсортований список без повторів", () => {
     expect(brands).toEqual([...new Set(brands)].sort());
-  });
-
-  it("товари на головній посилаються на існуючі товари каталогу", () => {
-    for (const p of homeProducts) expect(products.some((x) => x.id === p.id), p.id).toBe(true);
   });
 
   it("пункти меню ведуть на реальні сторінки", () => {

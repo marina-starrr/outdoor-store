@@ -1,7 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { seedProducts, selectHits, withDerived, type Product } from "../../components/catalog-data";
-import { db, isoOpt, jsonb, num, opt, sql, type Queryable, type Row } from "./db";
+import { db, isoOpt, jsonb, num, opt, seedsCatalog, sql, type Queryable, type Row } from "./db";
 import { resetProductUrls } from "./product-urls";
 import { approvedReviews, type PublicReview } from "./reviews";
 
@@ -94,14 +94,17 @@ export async function lockProduct(q: Queryable, id: string): Promise<Product | n
 }
 
 /*
- * Порожня таблиця товарів (щойно створена база) заповнюється початковим каталогом.
+ * Тести й локальна розробка: порожня вбудована база заповнюється початковим
+ * (демонстраційним) каталогом. Справжня база (Supabase) — НІКОЛИ: там товари
+ * лише ті, що додав власник, і порожній магазин лишається порожнім.
  * on conflict — щоб паралельні запити не заважали один одному
  */
 const g = globalThis as { __fcSeeded?: Set<string> };
 const seeded = (g.__fcSeeded ??= new Set());
 
 export async function ensureCatalog() {
-  const key = process.env.FC_DATA_DIR || process.env.DATABASE_URL || process.env.POSTGRES_URL || "local";
+  if (!seedsCatalog()) return;
+  const key = process.env.FC_DATA_DIR || "local";
   if (seeded.has(key)) return;
   const [{ any }] = await sql("select exists(select 1 from products) as any");
   if (!any) {

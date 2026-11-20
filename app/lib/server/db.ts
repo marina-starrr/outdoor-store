@@ -144,6 +144,12 @@ const remoteUrl = () => process.env.DATABASE_URL || process.env.POSTGRES_URL || 
 /** Вбудована база: у тестах (FC_DATA_DIR) завжди, інакше — лише якщо не задано підключення */
 const embeddedMode = () => !!process.env.FC_DATA_DIR || !remoteUrl();
 
+/**
+ * Вбудована база (тести й розробка без Supabase), у якій порожня таблиця товарів
+ * заповнюється початковим каталогом. FC_NO_SEED=1 — без нього (перевірка порожнього магазину)
+ */
+export const seedsCatalog = () => embeddedMode() && process.env.FC_NO_SEED !== "1";
+
 /** Працює окрема тимчасова тестова база (не Supabase і не локальна .data) */
 export const isTestDatabase = () => !!process.env.FC_DATA_DIR && !process.env.VERCEL;
 

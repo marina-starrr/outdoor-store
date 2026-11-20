@@ -8,6 +8,26 @@ import { sendMails, type Mail } from "../../../../lib/server/mail";
 import { productEvents, snapshot } from "../../../../lib/server/notifications";
 
 /**
+ * Видалення товару. Товар, який уже є в замовленнях, видалити не можна
+ * (історія замовлень) — його приховують з сайту
+ */
+export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/admin/products/[id]">) {
+  const auth = await requireAdmin(req);
+  if ("response" in auth) return auth.response;
+  const { id } = await ctx.params;
+  const result = await tx(async (q) => {
+    const [ordered] = await q.query("select 1 from order_items where product_id = $1 limit 1", [id]);
+    if (ordered) return "ordered" as const;
+    const deleted = await q.query("delete from products where id = $1 returning id", [id]);
+    return deleted.length ? ("ok" as const) : ("missing" as const);
+  });
+  if (result === "missing") return error("Товар не знайдено", 404);
+  if (result === "ordered") return error("Цей товар є в замовленнях — його не можна видалити, але можна приховати з сайту", 409);
+  invalidateCatalog();
+  return json({ ok: true });
+}
+
+/**
  * Зміна товару.
  * - повне редагування: усі поля форми (як при створенні);
  * - швидкі дії зі списку: лише { stock }, { price }, { hidden } — без решти полів

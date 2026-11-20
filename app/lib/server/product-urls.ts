@@ -1,5 +1,5 @@
 import "server-only";
-import { sql } from "./db";
+import { seedsCatalog, sql } from "./db";
 
 /*
  * Адреси видимих товарів «категорія/код» — для proxy.ts (справжній 404).
@@ -11,13 +11,16 @@ import { sql } from "./db";
 const URLS_TTL = 10_000;
 const g = globalThis as { __fcProductUrls?: { at: number; urls: Promise<Set<string> | null> } };
 
-/** null — таблиця товарів ще порожня (початковий каталог з'явиться при першому зверненні сайту) */
+/**
+ * null — вбудована база ще порожня, а початковий каталог з'явиться при першому
+ * зверненні сайту (лише тести й розробка). На справжній базі — завжди список, хоч і порожній
+ */
 export function productUrls(): Promise<Set<string> | null> {
   const c = g.__fcProductUrls;
   if (c && Date.now() - c.at < URLS_TTL) return c.urls;
   const urls = (async () => {
     const rows = await sql("select category, id from products where not hidden");
-    return rows.length ? new Set(rows.map((r) => `${r.category}/${r.id}`)) : null;
+    return rows.length || !seedsCatalog() ? new Set(rows.map((r) => `${r.category}/${r.id}`)) : null;
   })();
   g.__fcProductUrls = { at: Date.now(), urls };
   urls.catch(() => delete g.__fcProductUrls);

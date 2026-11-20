@@ -750,7 +750,8 @@ export function EmptyState({
 }: {
   title: string;
   text: string;
-  onReset: () => void;
+  /** Без нього — без кнопки «Скинути фільтри» (напр. товарів немає зовсім) */
+  onReset?: () => void;
 }) {
   return (
     <div className="rounded-[24px] bg-white px-6 py-16 text-center shadow-[0_18px_52px_rgba(79,93,101,.1)]">
@@ -759,12 +760,14 @@ export function EmptyState({
       </span>
       <p className="mt-5 text-xl font-extrabold">{title}</p>
       <p className="mt-2 text-sm text-[#527083]">{text}</p>
-      <button
-        onClick={onReset}
-        className="mt-6 rounded-full bg-[#ffd51f] px-6 py-3 text-sm font-extrabold transition hover:bg-[#ffe044]"
-      >
-        Скинути фільтри
-      </button>
+      {onReset && (
+        <button
+          onClick={onReset}
+          className="mt-6 rounded-full bg-[#ffd51f] px-6 py-3 text-sm font-extrabold transition hover:bg-[#ffe044]"
+        >
+          Скинути фільтри
+        </button>
+      )}
     </div>
   );
 }

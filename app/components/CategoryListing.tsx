@@ -317,11 +317,15 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
                   ))}
                 </div>
               ) : (
-                <EmptyState
-                  title="За цими параметрами нічого немає"
-                  text="Спробуйте розширити діапазон ціни або прибрати частину фільтрів."
-                  onReset={resetAll}
-                />
+                items.length ? (
+                  <EmptyState
+                    title="За цими параметрами нічого немає"
+                    text="Спробуйте розширити діапазон ціни або прибрати частину фільтрів."
+                    onReset={resetAll}
+                  />
+                ) : (
+                  <EmptyState title="Товари скоро з’являться" text="Ми саме наповнюємо цю категорію — загляньте трохи згодом." />
+                )
               )}
 
               <Pagination

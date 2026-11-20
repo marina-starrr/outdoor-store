@@ -73,7 +73,8 @@ export function computeHits(products: Product[], byId: ReadonlyMap<string, Produ
   });
   const bundleTotal = bundleItems.reduce((s, b) => s + b.product.price * b.qty, 0);
   const bundleOld = bundleItems.reduce((s, b) => s + (b.product.oldPrice ?? b.product.price) * b.qty, 0);
-  return { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld };
+  const bundleComplete = bundleItems.length === bundle.length;
+  return { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld, bundleComplete };
 }
 
 export default function HitsPage({ testimonials: rawTestimonials = [] }: { testimonials?: Testimonial[] }) {
@@ -84,7 +85,7 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
   const [sort, setSort] = useState<SortId>("sales");
   const [saleOnly, setSaleOnly] = useState(false);
   const { products, byId } = useCatalog();
-  const { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld } = useMemo(
+  const { hits, rankOf, totalReviews, avgRating, bundleItems, bundleTotal, bundleOld, bundleComplete } = useMemo(
     () => computeHits(products, byId),
     [products, byId],
   );
@@ -213,17 +214,22 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : hits.length ? (
               <p className="mt-6 rounded-[24px] bg-white px-6 py-12 text-center text-[#527083]">
                 У цій категорії немає хітів зі знижкою.{" "}
                 <button onClick={() => setSaleOnly(false)} className="font-bold text-[#098fd0] hover:underline">
                   Показати всі
                 </button>
               </p>
+            ) : (
+              <p className="mt-6 rounded-[24px] bg-white px-6 py-12 text-center text-[#527083]">
+                Хіти з’являться, щойно в каталозі будуть товари.
+              </p>
             )}
           </section>
 
-          {/* Готовий набір */}
+          {/* Готовий набір — лише коли в наявності всі його товари (текст описує саме їх) */}
+          {bundleComplete && (
           <section className="mt-20 overflow-hidden rounded-[28px] bg-[#082c45] text-white" aria-labelledby="bundle-title">
             <div className="grid gap-8 p-6 sm:p-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center">
               <div>
@@ -272,6 +278,7 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
               </ul>
             </div>
           </section>
+          )}
 
           {/* Відгуки */}
           {testimonials.length > 0 && (

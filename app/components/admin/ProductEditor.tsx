@@ -65,15 +65,32 @@ export default function ProductEditor({
   product,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   product?: Product;
   onClose: () => void;
   onSaved: (p: Product, created: boolean) => void;
+  onDeleted?: (id: string) => void;
 }) {
   const creating = !product;
   const [form, setForm] = useState<Form>(() => toForm(product));
   const [errors, setErrors] = useState<ProductErrors>({});
   const [pending, setPending] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const remove = async () => {
+    if (!product) return;
+    setPending(true);
+    try {
+      await adminFetch(`/api/admin/products/${product.id}`, { method: "DELETE" });
+      onDeleted?.(product.id);
+    } catch (err) {
+      setErrors({ form: (err as ApiError).message });
+      setConfirmDelete(false);
+    } finally {
+      setPending(false);
+    }
+  };
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Escape закриває, фокус — у першому полі, фон не прокручується
@@ -269,6 +286,22 @@ export default function ProductEditor({
           <button type="button" onClick={onClose} className="rounded-full px-5 py-3 text-sm font-bold text-[#527083] transition hover:bg-[#eef6fb]">
             Скасувати
           </button>
+          {!creating && onDeleted && (
+            confirmDelete ? (
+              <span className="ml-auto flex items-center gap-1.5">
+                <button type="button" onClick={remove} disabled={pending} className="rounded-full bg-[#e5484d] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#c53035] disabled:opacity-60">
+                  Так, видалити
+                </button>
+                <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-full px-3 py-3 text-sm font-bold text-[#527083] hover:bg-[#eef6fb]">
+                  Ні
+                </button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setConfirmDelete(true)} className="ml-auto rounded-full px-4 py-3 text-sm font-bold text-[#c53035] transition hover:bg-[#fdecec]">
+                Видалити товар
+              </button>
+            )
+          )}
         </div>
       </div>
     </div>

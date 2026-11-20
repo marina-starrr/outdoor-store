@@ -9,8 +9,11 @@ import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import RecentlyViewed from "./RecentlyViewed";
 import { useCatalog } from "./Catalog";
-import { discountPercent, formatPrice } from "./catalog-data";
-import { categories, products as showcase } from "./data";
+import { categoryBySlug, discountPercent, formatPrice, selectHits } from "./catalog-data";
+import { categories } from "./data";
+
+/** Скільки товарів у вітрині «Хіти продажу» на головній */
+const SHOWCASE_SIZE = 4;
 import { productUrl } from "./product-details";
 import { CardActions } from "./catalog-ui";
 import { CARD_SIZES, responsiveImage } from "./photo";
@@ -33,24 +36,22 @@ export default function Storefront() {
     };
   }, [catalog]);
 
-  // Вітрина: фото й підписи — свої, а назва, ціна й наявність — з каталогу (бази)
-  const products = useMemo(
-    () =>
-      showcase.flatMap((s) => {
-        const live = byId.get(s.id);
-        if (!live) return [];
-        return [{
-          ...s,
-          name: live.name,
-          price: formatPrice(live.price),
-          oldPrice: live.oldPrice ? formatPrice(live.oldPrice) : undefined,
-          // Знижка рахується з актуальних цін; без знижки «−15%» / «Акція» не показуємо
-          badge: live.oldPrice ? `−${discountPercent(live)}%` : s.badge === "Хіт" ? s.badge : undefined,
-          href: productUrl(live),
-        }];
-      }),
-    [byId],
-  );
+  // Вітрина — справжні хіти з каталогу (бази); якщо хітів мало — доповнюємо товарами в наявності
+  const products = useMemo(() => {
+    const hits = selectHits(catalog);
+    const rest = catalog.filter((p) => !p.hidden && p.inStock && !hits.includes(p)).sort((a, b) => a.popularity - b.popularity);
+    return [...hits, ...rest].slice(0, SHOWCASE_SIZE).map((p) => ({
+      id: p.id,
+      name: p.name,
+      category: categoryBySlug[p.category]?.name ?? "",
+      image: p.image,
+      alt: p.name,
+      price: formatPrice(p.price),
+      oldPrice: p.oldPrice ? formatPrice(p.oldPrice) : undefined,
+      badge: p.oldPrice ? `−${discountPercent(p)}%` : p.hit ? "Хіт" : undefined,
+      href: productUrl(p),
+    }));
+  }, [catalog]);
 
   const filteredProducts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("uk");
@@ -258,7 +259,7 @@ export default function Storefront() {
                   </article>
                 ))}
               </div>
-            ) : (
+            ) : query ? (
               <div className="mt-10 rounded-[28px] bg-sky-50 px-6 py-16 text-center">
                 <p className="text-xl font-extrabold">Нічого не знайдено</p>
                 <button
@@ -267,6 +268,11 @@ export default function Storefront() {
                 >
                   Очистити пошук
                 </button>
+              </div>
+            ) : (
+              <div className="mt-10 rounded-[28px] bg-sky-50 px-6 py-16 text-center">
+                <p className="text-xl font-extrabold">Каталог оновлюється</p>
+                <p className="mt-2 text-[#527083]">Зовсім скоро тут з’являться товари для сімейного відпочинку на природі.</p>
               </div>
             )}
 

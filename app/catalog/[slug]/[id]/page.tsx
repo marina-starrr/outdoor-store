@@ -14,8 +14,13 @@ import {
 import { getPublicCatalog } from "../../../lib/server/catalog";
 import { absoluteUrl, SITE_NAME } from "../../../lib/site";
 
+/** Сторінка-заглушка для порожнього каталогу: Next вимагає хоча б один варіант, а такого товару немає (404) */
+const NO_PRODUCTS_PARAM = { slug: "tents", id: "__catalog-empty" };
+
 export async function generateStaticParams() {
-  return (await getPublicCatalog()).map((p) => ({ slug: p.category, id: p.id }));
+  const params = (await getPublicCatalog()).map((p) => ({ slug: p.category, id: p.id }));
+  // Порожній магазин (усі товари видалені) теж має збиратися
+  return params.length ? params : [NO_PRODUCTS_PARAM];
 }
 
 async function getProduct(params: PageProps<"/catalog/[slug]/[id]">["params"]) {
