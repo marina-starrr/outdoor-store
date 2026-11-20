@@ -1,5 +1,5 @@
 import "server-only";
-import { cacheLife, cacheTag, revalidateTag } from "next/cache";
+import { cacheLife, cacheTag, revalidatePath, revalidateTag } from "next/cache";
 import { seedProducts, selectHits, withDerived, type Product } from "../../components/catalog-data";
 import { db, isoOpt, jsonb, num, opt, seedsCatalog, sql, type Queryable, type Row } from "./db";
 import { resetProductUrls } from "./product-urls";
@@ -13,6 +13,16 @@ import { approvedReviews, type PublicReview } from "./reviews";
  */
 
 export const CATALOG_TAG = "catalog";
+
+/**
+ * Скільки живе кешований каталог. Не "max": на Vercel кеш 'use cache' тримається
+ * в пам'яті кожного серверного екземпляра окремо, і revalidateTag з іншого
+ * екземпляра (синхронізація постачальника, адмінка) до нього не доходить —
+ * сторінки лишалися зі старими даними до наступної збірки. Тож не довше ніж
+ * кілька хвилин дані оновлюються самі (expire ≥ 5 хв, щоб сторінки й далі
+ * збиралися статично)
+ */
+const CATALOG_LIFE = { stale: 60, revalidate: 120, expire: 86_400 };
 
 const PRODUCT_COLUMNS =
   "id, name, category, brand, price, old_price, hit, is_new, stock, hidden, description, custom_image, popularity, specs, capacity, image, photo, attrs, updated_at, images, on_request";
@@ -143,7 +153,7 @@ export async function loadCatalog(q: Queryable = db): Promise<Product[]> {
 export async function getCatalog(): Promise<Product[]> {
   "use cache";
   cacheTag(CATALOG_TAG);
-  cacheLife("max");
+  cacheLife(CATALOG_LIFE);
   return loadCatalog();
 }
 
@@ -154,7 +164,7 @@ export async function getCatalog(): Promise<Product[]> {
 export async function getHitTestimonials(): Promise<{ productId: string; review: PublicReview }[]> {
   "use cache";
   cacheTag(CATALOG_TAG);
-  cacheLife("max");
+  cacheLife(CATALOG_LIFE);
   const hits = selectHits(await getPublicCatalog()).slice(0, 3);
   const result: { productId: string; review: PublicReview }[] = [];
   for (const p of hits) {
@@ -174,6 +184,8 @@ export function invalidateCatalog() {
   resetProductUrls();
   try {
     revalidateTag(CATALOG_TAG, { expire: 0 });
+    // Готові сторінки в кеші Vercel (ISR) — скидаються для всіх екземплярів одразу
+    revalidatePath("/", "layout");
   } catch {
     /* поза запитом Next (напр. у модульних тестах) кешу немає */
   }
