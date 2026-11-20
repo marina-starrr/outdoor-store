@@ -31,6 +31,7 @@ const nav: {
 }[] = [
   { href: "/admin", label: "Огляд", icon: "compare" },
   { href: "/admin/products", label: "Товари", icon: "tent", badge: (s) => s.products.outOfStock },
+  { href: "/admin/suppliers", label: "Постачальники", icon: "truck" },
   { href: "/admin/orders", label: "Замовлення", icon: "package", badge: (s) => s.orders.byStatus.new ?? 0 },
   { href: "/admin/chats", label: "Чат", icon: "chat", badge: (s) => s.chats?.waiting ?? 0 },
   // Архів звернень з колишньої форми «Контакти» — показується, лише поки в ньому щось є

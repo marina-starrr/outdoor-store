@@ -1,0 +1,227 @@
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import * as productItem from "../../app/api/admin/products/[id]/route";
+import * as supplierItem from "../../app/api/admin/suppliers/[id]/route";
+import * as supplierSync from "../../app/api/admin/suppliers/[id]/sync/route";
+import * as suppliers from "../../app/api/admin/suppliers/route";
+import * as register from "../../app/api/auth/register/route";
+import * as cron from "../../app/api/cron/orders/route";
+import { loadCatalog } from "../../app/lib/server/catalog";
+import { cleanDescription, parseFeed, suggestCategory } from "../../app/lib/server/suppliers";
+import { call, dbQuery, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
+
+/* Імпорт з YML-файлів постачальників. Сайт постачальника в тестах не викликається — fetch підмінено */
+
+process.env.FC_NO_SEED = "1";
+const OWNER = "suppliers-owner@example.com";
+process.env.ADMIN_EMAILS = OWNER;
+const FEED_URL = "https://supplier.example/feed.xml";
+
+type Offer = { id: string; name?: string; nameUa?: string; price: number; stock: number; available?: boolean; cat: string; pics?: number; desc?: string; vendor?: string };
+const yml = (offers: Offer[]) => `<?xml version="1.0" encoding="UTF-8"?>
+<yml_catalog date="2026-11-20 08:28"><shop><name>Ranger</name>
+<categories>
+  <category id="1">Складані крісла</category>
+  <category id="7">Намети та парасолі</category>
+  <category id="18">Військове спорядження</category>
+  <category id="999">Ranger</category>
+</categories>
+<offers>${offers.map((o) => `
+  <offer id="${o.id}" available="${o.available ?? o.stock > 0}">
+    <barcode>${o.id}</barcode><stock_quantity>${o.stock}</stock_quantity><price>${o.price}</price>
+    <currencyId>UAH</currencyId><categoryId>${o.cat}</categoryId>
+    ${Array.from({ length: o.pics ?? 2 }, (_, i) => `<picture>https://supplier.example/img/${o.id}-${i}.jpeg</picture>`).join("")}
+    <vendor>${o.vendor ?? "Ranger"}</vendor>
+    <name>${o.name ?? `Палатка ${o.id}`}</name>
+    <name_ua>${o.nameUa ?? `Намет ${o.id}`}</name_ua>
+    <description><![CDATA[Русское описание]]></description>
+    <description_ua><![CDATA[${o.desc ?? "Опис українською."}]]></description_ua>
+  </offer>`).join("")}
+</offers></shop></yml_catalog>`;
+
+let feed = "";
+function serveFeed(xml: string | null, status = 200) {
+  feed = xml ?? "";
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url !== FEED_URL) throw new Error(`неочікуваний запит ${url}`);
+    if (xml === null) throw new Error("network");
+    return new Response(feed, { status });
+  }));
+}
+afterEach(() => vi.unstubAllGlobals());
+
+const withId = <P extends Record<string, string>>(handler: (req: never, ctx: { params: Promise<P> }) => Promise<Response>, params: P) =>
+  ((req: never) => handler(req, { params: Promise.resolve(params) })) as Parameters<typeof call>[0];
+
+let admin = "";
+beforeAll(async () => {
+  admin = sessionCookie((await call(register.POST, { body: { firstName: "Власниця", email: OWNER, phone: "", password: "camping2026" } })).res);
+  await markEmailVerified(OWNER);
+});
+
+const create = async (offers: Offer[]) => {
+  serveFeed(yml(offers));
+  const r = await call(suppliers.POST, { cookie: admin, body: { name: "Ranger", feedUrl: FEED_URL } });
+  expect(r.status).toBe(201);
+  return r.data.supplier as { id: string; categoryMap: Record<string, string>; feedCategories: { id: string; inStock: number }[] };
+};
+const sync = (id: string) => call(withId(supplierSync.POST, { id }), { cookie: admin });
+const bySku = async (sku: string) => (await dbQuery("select * from products where supplier_sku = $1", [sku]))[0];
+
+describe("читання файлу постачальника", () => {
+  it("українська назва, а якщо її немає — з основної; опис без HTML; ціна й залишок", () => {
+    const f = parseFeed(yml([
+      { id: "A1", nameUa: "Назва товару (укр) не знайдено", name: "Стул Ranger", price: 599, stock: 30, cat: "1", desc: "<p>Перший&nbsp;абзац.</p><p>Другий<br>рядок</p>" },
+      { id: "A2", price: 1099, stock: 0, available: false, cat: "7" },
+      { id: "A3", price: 100, stock: 5, available: false, cat: "7" },
+    ]));
+    expect(f.offers[0]).toMatchObject({ sku: "A1", name: "Стул Ranger", price: 599, stock: 30, categoryId: "1", vendor: "Ranger" });
+    expect(f.offers[0].description).toBe("Перший абзац.\n\nДругий\nрядок");
+    expect(f.offers[0].pictures).toHaveLength(2);
+    expect(f.offers[2].stock).toBe(0); // available="false" — немає, хоч і стоїть кількість
+    expect(f.categories.find((c) => c.id === "1")).toEqual({ id: "1", name: "Складані крісла", inStock: 1 });
+  });
+
+  it("не YML або без товарів — зрозуміла помилка", () => {
+    expect(() => parseFeed("<html><body>hi</body></html>")).toThrow(/YML/);
+    expect(() => parseFeed(yml([]))).toThrow(/немає жодного товару/);
+    expect(cleanDescription("  a  <b>b</b>  ")).toBe("a b");
+  });
+
+  it("підказки категорій за назвою", () => {
+    expect(suggestCategory("Складані крісла")).toBe("furniture");
+    expect(suggestCategory("Намети та парасолі")).toBe("tents");
+    expect(suggestCategory("Військове спорядження")).toBe("tactical");
+    expect(suggestCategory("Термоси та термокухлі")).toBe("thermos");
+    expect(suggestCategory("Набори для пікніка та термосумки")).toBe("picnic");
+    expect(suggestCategory("Спальні мішки та коврики")).toBe("sleeping-bags");
+    expect(suggestCategory("Складані столи")).toBe("furniture");
+    expect(suggestCategory("Гойдалки садові тенти, гамаки")).toBe("hammocks");
+    expect(suggestCategory("Ranger")).toBe("");
+  });
+});
+
+describe("постачальники в адмін-панелі", () => {
+  it("лише адміністратор; невірне посилання чи недоступний файл — помилка без запису", async () => {
+    const customer = sessionCookie((await call(register.POST, { body: { firstName: "Покупець", email: uniqueEmail(), phone: "", password: "camping2026" } })).res);
+    expect((await call(suppliers.GET, { method: "GET", cookie: customer })).status).toBe(403);
+    expect((await call(suppliers.POST, { cookie: admin, body: { name: "X", feedUrl: "http://insecure.example/feed.xml" } })).status).toBe(400);
+    serveFeed(null);
+    const r = await call(suppliers.POST, { cookie: admin, body: { name: "Офлайн", feedUrl: FEED_URL } });
+    expect(r.status).toBe(400);
+    expect(r.data.error).toContain("Не вдалося завантажити");
+    expect((await call(suppliers.GET, { method: "GET", cookie: admin })).data.suppliers.some((s: { name: string }) => s.name === "Офлайн")).toBe(false);
+  });
+
+  it("імпорт: лише в наявності, з фото й зіставленою категорією; ціна — з файлу (РРЦ)", async () => {
+    const s = await create([
+      { id: "RA2256", nameUa: "Крісло складане Ranger Tourist (Арт. RA 2256)", price: 399, stock: 30, cat: "1" },
+      { id: "RA6667", price: 1099, stock: 0, cat: "7" },
+      { id: "RA7001", price: 2999, stock: 4, cat: "7", pics: 0 },
+      { id: "RA7002", price: 4999, stock: 2, cat: "7" },
+      { id: "GL9374", price: 1299, stock: 4, cat: "999" },
+    ]);
+    // Підказки: крісла → меблі, намети → намети, «Ranger» — не зрозуміло, не імпортувати
+    expect(s.categoryMap).toMatchObject({ "1": "furniture", "7": "tents", "18": "tactical", "999": "" });
+
+    const r = await sync(s.id);
+    expect(r.status).toBe(200);
+    expect(r.data.result).toEqual({ created: 2, updated: 0, outOfStock: 0, skippedNoPhoto: 1, skippedUnmapped: 1, skippedNotInStock: 1 });
+    expect(r.data.supplier.products).toBe(2);
+    expect(r.data.supplier.lastSyncOk).toBe(true);
+
+    const chair = (await loadCatalog()).find((p) => p.name.startsWith("Крісло складане Ranger Tourist"))!;
+    // Код в адресі — з назви (до 40 символів)
+    expect(chair.id).toMatch(/^krislo-skladane-ranger-tourist/);
+    expect(chair.id.length).toBeLessThanOrEqual(40);
+    expect(chair).toMatchObject({ category: "furniture", price: 399, stock: 30, brand: "Ranger", description: "Опис українською." });
+    expect(chair.images).toEqual(["https://supplier.example/img/RA2256-0.jpeg", "https://supplier.example/img/RA2256-1.jpeg"]);
+    expect(chair.image).toBe(chair.images![0]);
+    expect(chair.attrs).toContainEqual(["Артикул", "RA2256"]);
+  });
+
+  it("щоденне оновлення змінює лише ціну й залишок; правки власника лишаються", async () => {
+    const s = await create([
+      { id: "UP1", price: 500, stock: 10, cat: "7" },
+      { id: "UP2", price: 800, stock: 3, cat: "7" },
+      { id: "UP3", price: 900, stock: 2, cat: "7" },
+    ]);
+    await sync(s.id);
+    const up1 = await bySku("UP1");
+    // Власниця перейменувала товар в адмінці
+    const renamed = await call(withId(productItem.PATCH, { id: up1.id }), {
+      method: "PATCH",
+      cookie: admin,
+      body: { name: "Намет для всієї родини", brand: "Ranger", category: "tents", price: 500, stock: 10, specs: "4 місця", photo: "meadow", images: up1.images, attrs: [] },
+    });
+    expect(renamed.status).toBe(200);
+
+    // Новий файл: UP1 подорожчав, UP2 закінчився, UP3 зник, UP4 з'явився
+    serveFeed(yml([
+      { id: "UP1", price: 550, stock: 7, cat: "7" },
+      { id: "UP2", price: 800, stock: 0, cat: "7" },
+      { id: "UP4", price: 300, stock: 1, cat: "7" },
+    ]));
+    const r = await sync(s.id);
+    expect(r.data.result).toMatchObject({ created: 1, updated: 1, outOfStock: 2 });
+    expect(await bySku("UP1")).toMatchObject({ name: "Намет для всієї родини", stock: 7 });
+    expect(Number((await bySku("UP1")).price)).toBe(550);
+    expect((await bySku("UP2")).stock).toBe(0);
+    expect((await bySku("UP3")).stock).toBe(0);
+    expect((await bySku("UP4")).stock).toBe(1);
+
+    // Повторне оновлення без змін — нічого не робить
+    expect((await sync(s.id)).data.result).toMatchObject({ created: 0, updated: 0, outOfStock: 0 });
+  });
+
+  it("товар знову в наявності — сповіщення підписникам", async () => {
+    const s = await create([{ id: "BACK1", price: 700, stock: 5, cat: "7" }]);
+    await sync(s.id);
+    serveFeed(yml([{ id: "BACK1", price: 700, stock: 0, cat: "7" }]));
+    await sync(s.id);
+    const product = await bySku("BACK1");
+    const [user] = await dbQuery("select id from users where email = $1", [OWNER]);
+    await dbQuery("insert into stock_alerts (user_id, product_id) values ($1, $2)", [user.id, product.id]);
+    serveFeed(yml([{ id: "BACK1", price: 700, stock: 3, cat: "7" }]));
+    await sync(s.id);
+    const notes = await dbQuery("select title from notifications where user_id = $1 and kind = 'stock'", [user.id]);
+    expect(notes.map((n) => n.title)).toContainEqual(expect.stringContaining("знову в наявності"));
+  });
+
+  it("категорії: зберігаються лише наші справжні; нова відповідність діє для нових товарів", async () => {
+    const s = await create([{ id: "F1", price: 1299, stock: 4, cat: "999" }]);
+    const r = await call(withId(supplierItem.PATCH, { id: s.id }), { method: "PATCH", cookie: admin, body: { categoryMap: { "999": "fishing", "7": "не-категорія" } } });
+    expect(r.data.supplier.categoryMap["999"]).toBe("fishing");
+    expect(r.data.supplier.categoryMap["7"]).toBeUndefined();
+    expect((await sync(s.id)).data.result.created).toBe(1);
+    expect((await bySku("F1")).category).toBe("fishing");
+  });
+
+  it("файл недоступний — помилка видна в адмінці, товари не змінюються", async () => {
+    const s = await create([{ id: "ERR1", price: 100, stock: 1, cat: "7" }]);
+    await sync(s.id);
+    serveFeed("oops", 500);
+    const r = await sync(s.id);
+    expect(r.status).toBe(502);
+    expect(r.data.error).toContain("500");
+    expect(r.data.supplier).toMatchObject({ lastSyncOk: false, lastSyncMessage: expect.stringContaining("500") });
+    expect((await bySku("ERR1")).stock).toBe(1);
+  });
+
+  it("видалення постачальника лишає товари на сайті", async () => {
+    const s = await create([{ id: "DEL1", price: 100, stock: 1, cat: "7" }]);
+    await sync(s.id);
+    expect((await call(withId(supplierItem.DELETE, { id: s.id }), { method: "DELETE", cookie: admin })).status).toBe(200);
+    expect(await bySku("DEL1")).toMatchObject({ supplier_id: null, stock: 1 });
+  });
+
+  it("щоденний cron оновлює всіх постачальників (лише з секретом)", async () => {
+    process.env.CRON_SECRET = "test-cron-secret";
+    serveFeed(yml([{ id: "CRON1", price: 100, stock: 1, cat: "7" }]));
+    expect((await call(cron.GET, { method: "GET" })).status).toBe(401);
+    const res = await cron.GET(new (await import("next/server")).NextRequest("http://localhost/api/cron/orders", { headers: { authorization: "Bearer test-cron-secret" } }));
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.suppliers.Ranger).toBeDefined();
+    delete process.env.CRON_SECRET;
+  });
+});

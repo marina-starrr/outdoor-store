@@ -9,7 +9,13 @@ export type CategorySlug =
   | "lighting"
   | "grills"
   | "hammocks"
-  | "accessories";
+  | "accessories"
+  | "picnic"
+  | "thermos"
+  | "clothing"
+  | "tactical"
+  | "fishing"
+  | "electronics";
 
 export type CategoryInfo = {
   slug: CategorySlug;
@@ -124,6 +130,12 @@ export const categoryPhotos: Record<CategorySlug, PhotoKey[]> = {
   grills: ["skewers", "steak", "ribs", "campfire"],
   hammocks: ["hammockCabin", "hammockTent", "view", "meadow"],
   accessories: ["backpackGear", "hikers", "mug", "backpackGreen"],
+  picnic: ["friendsFire", "campTable", "skewers", "meadow"],
+  thermos: ["mug", "kettle", "cookStove", "campfire"],
+  clothing: ["hikers", "backpackTrail", "view", "mountains"],
+  tactical: ["backpackGear", "forestNight", "rocks", "hikers"],
+  fishing: ["lake", "sunset", "view", "meadow"],
+  electronics: ["glowTent", "forestNight", "starry", "milkyWay"],
 };
 
 /* ---------- Категорії ---------- */
@@ -138,6 +150,12 @@ export const categories: CategoryInfo[] = [
   { slug: "grills", name: "Мангали та гриль", title: "Мангали та гриль", subtitle: "Усе для пікніка та смаженого на вогні.", image: unsplash(photo.skewers, 720, 360), popularity: 7 },
   { slug: "hammocks", name: "Гамаки", title: "Гамаки", subtitle: "Найкращий спосіб відпочити між соснами.", image: unsplash(photo.hammockCabin, 720, 360), popularity: 8 },
   { slug: "accessories", name: "Аксесуари", title: "Туристичні аксесуари", subtitle: "Корисні дрібниці, без яких не обійтися в поході.", image: unsplash(photo.backpackGear, 720, 360), popularity: 9 },
+  { slug: "picnic", name: "Пікнік і термосумки", title: "Пікнік і термосумки", subtitle: "Набори для пікніка, термосумки й автохолодильники.", image: unsplash(photo.friendsFire, 720, 360), popularity: 10 },
+  { slug: "thermos", name: "Термоси й термокухлі", title: "Термоси й термокухлі", subtitle: "Гарячий чай і теплий обід у будь-якій мандрівці.", image: unsplash(photo.mug, 720, 360), popularity: 11 },
+  { slug: "clothing", name: "Термобілизна й одяг", title: "Термобілизна й одяг", subtitle: "Тепло й сухо — навіть у прохолодну ніч.", image: unsplash(photo.hikers, 720, 360), popularity: 12 },
+  { slug: "tactical", name: "Тактичне спорядження", title: "Тактичне спорядження", subtitle: "Підсумки, розвантаження, головні убори й аксесуари.", image: unsplash(photo.forestNight, 720, 360), popularity: 13 },
+  { slug: "fishing", name: "Рибалка", title: "Рибалка", subtitle: "Вудки, підставки та все для риболовлі.", image: unsplash(photo.lake, 720, 360), popularity: 14 },
+  { slug: "electronics", name: "Рації та електроніка", title: "Рації та електроніка", subtitle: "Рації, генератори й техніка для відпочинку.", image: unsplash(photo.glowTent, 720, 360), popularity: 15 },
 ];
 
 export const categoryBySlug = Object.fromEntries(

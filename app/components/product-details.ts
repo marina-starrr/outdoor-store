@@ -35,7 +35,8 @@ export function productGallery(p: Product) {
 const attr = (p: Product, name: string) =>
   p.attrs.find(([k]) => k === name)?.[1];
 
-const descriptions: Record<CategorySlug, (p: Product) => string[]> = {
+/** Шаблони лише для демонстраційного каталогу; нові категорії (товари постачальників) мають власні описи */
+const descriptions: Partial<Record<CategorySlug, (p: Product) => string[]>> = {
   tents: (p) => [
     `${p.name} — ${(p.capacity ?? 2) >= 4 ? "просторий сімейний" : "надійний"} намет на ${attr(p, "Місткість")} для кемпінгу та походів. Тент із водостійкістю ${attr(p, "Водостійкість тенту")} захищає від затяжного дощу, а проклеєні шви не пропускають воду навіть під час зливи.`,
     `Каркас (${attr(p, "Каркас")?.toLowerCase()}) встановлюється за 10–15 хвилин навіть однією людиною — дуги кольорово марковані, тож переплутати неможливо. ${attr(p, "Кількість входів") === "2" ? "Два входи з москітними сітками дозволяють виходити, не будячи сусідів, а тамбури вміщують взуття й рюкзаки." : "Вхід із москітною сіткою та тамбур для речей роблять ночівлю комфортною."}`,
@@ -78,11 +79,10 @@ const descriptions: Record<CategorySlug, (p: Product) => string[]> = {
 export function productDescription(p: Product): string[] {
   if (p.description?.trim())
     return p.description.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
-  const generated = descriptions[p.category](p);
+  const neutral = [`${p.name} від ${p.brand}.`];
+  const generated = descriptions[p.category]?.(p);
   // Новий товар з адмін-панелі може не мати характеристик, з яких складається шаблон
-  return generated.some((s) => s.includes("undefined"))
-    ? [`${p.name} від ${p.brand} — надійне спорядження для відпочинку на природі.`, ...descriptions.accessories(p).slice(1)]
-    : generated;
+  return !generated || generated.some((s) => s.includes("undefined")) ? neutral : generated;
 }
 
 /** 4 ключові характеристики для блоку біля ціни */
