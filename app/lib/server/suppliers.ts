@@ -113,11 +113,13 @@ export function parseFeed(xml: string): Feed {
     const name = (nameUa && !MISSING_NAME.test(nameUa) ? nameUa : text(o.name)).slice(0, 120);
     const descUa = text(o.description_ua);
     const description = cleanDescription(descUa && !MISSING_NAME.test(descUa) ? descUa : text(o.description));
-    const price = Math.round(Number(text(o.price).replace(",", ".")));
+    // Точно як у постачальника, з копійками (РРЦ 1236.90 — не 1237)
+    const price = Math.round(Number(text(o.price).replace(",", ".")) * 100) / 100;
     const available = text(o["@available"]) !== "false";
     const qtyRaw = text(o.stock_quantity) || text(o.quantity_in_stock);
     const qty = qtyRaw === "" ? (available ? 10 : 0) : Math.max(0, Math.floor(Number(qtyRaw)) || 0);
-    if (!sku || !name || !Number.isFinite(price) || price <= 0) return [];
+    // Ціна-заглушка (Ranger ставить 0.01 товарам, яких немає) — як товару немає у файлі
+    if (!sku || !name || !Number.isFinite(price) || price < 1) return [];
     return [{
       sku: sku.slice(0, 100),
       name,

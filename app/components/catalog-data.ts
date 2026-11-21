@@ -464,8 +464,12 @@ export function roundBounds([min, max]: [number, number]): [number, number] {
 /* ---------- Утиліти ---------- */
 
 /** Форматування без Intl, щоб сервер і браузер дали однаковий рядок */
+/** «1 237 ₴»; з копійками — «1 236,90 ₴» (ціни постачальників бувають не цілі) */
 export function formatPrice(value: number) {
-  return `${String(value).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ₴`;
+  const cents = Math.round(value * 100);
+  const whole = String(Math.trunc(Math.abs(cents) / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const kop = Math.abs(cents) % 100;
+  return `${cents < 0 ? "-" : ""}${whole}${kop ? `,${String(kop).padStart(2, "0")}` : ""} ₴`;
 }
 
 export function discountPercent(p: Product) {

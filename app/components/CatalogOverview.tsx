@@ -66,7 +66,7 @@ type Filters = {
   colors: string[];
   saleOnly: boolean;
   inStockOnly: boolean;
-  /** Лише ті, що відправимо сьогодні (без «під замовлення») */
+  /** Лише готові до відправки: є на складі, не «під замовлення» */
   readyOnly: boolean;
 };
 
@@ -267,7 +267,7 @@ export default function CatalogOverview() {
     })),
     ...(filters.saleOnly ? [{ key: "sale", label: "Зі знижкою", remove: () => update({ saleOnly: false }) }] : []),
     ...(filters.inStockOnly ? [{ key: "stock", label: "В наявності", remove: () => update({ inStockOnly: false }) }] : []),
-    ...(filters.readyOnly ? [{ key: "ready", label: "Відправимо сьогодні", remove: () => update({ readyOnly: false }) }] : []),
+    ...(filters.readyOnly ? [{ key: "ready", label: "Готові до відправки", remove: () => update({ readyOnly: false }) }] : []),
   ];
 
   const hrefFor = (row: CategoryRow) => {
@@ -330,7 +330,7 @@ export default function CatalogOverview() {
         />
         {hasOnRequest && (
           <Checkbox
-            label="Відправимо сьогодні"
+            label="Готові до відправки"
             checked={filters.readyOnly}
             onChange={() => update({ readyOnly: !filters.readyOnly })}
           />

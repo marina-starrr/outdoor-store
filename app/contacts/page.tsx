@@ -6,6 +6,7 @@ import InfoLayout from "../components/InfoLayout";
 import { Faq, InfoCard, InfoTitle } from "../components/info-ui";
 import { contacts } from "../components/data";
 import { RETURN_DAYS } from "../components/cart-logic";
+import { returnsInfoEnabled } from "../components/shop-config";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/contacts" },
@@ -33,7 +34,7 @@ export default function ContactsPage() {
       icon="headset"
       title="Ми на"
       accent="зв’язку"
-      lead="Допоможемо обрати спорядження, відстежити замовлення чи оформити повернення. Замовлення на сайті приймаємо цілодобово."
+      lead={`Допоможемо обрати спорядження, відстежити замовлення${returnsInfoEnabled() ? " чи оформити повернення" : ""}. Замовлення на сайті приймаємо цілодобово.`}
     >
       <div className="grid gap-4 md:grid-cols-3">
         {channels.map((c) => {
@@ -64,7 +65,7 @@ export default function ContactsPage() {
         <InfoCard>
           <InfoTitle icon="chat" eyebrow="Чат з консультантом">Напишіть нам</InfoTitle>
           <p className="mt-3 text-[15px] leading-relaxed text-[#3d5d70]">
-            Найшвидше — у чаті: допоможемо обрати намет чи спальник, підкажемо щодо доставки, оплати або повернення.
+            Найшвидше — у чаті: допоможемо обрати намет чи спальник, підкажемо щодо доставки та оплати{returnsInfoEnabled() ? " або повернення" : ""}.
             Реєстрація не потрібна. Уся переписка зберігається — повернутися до неї можна з будь-якої сторінки
             сайту через кнопку чату в правому нижньому куті.
           </p>
@@ -115,7 +116,7 @@ export default function ContactsPage() {
             { q: "Як дізнатися, де моє замовлення?", a: <>Статус перевірте на сторінці <Link href="/orders/track" className="font-bold text-[#098fd0] hover:underline">«Де моє замовлення?»</Link> за номером замовлення й телефоном. Якщо у вас є акаунт — усі замовлення є в <Link href="/account" className="font-bold text-[#098fd0] hover:underline">особистому кабінеті</Link>.</> },
             { q: "Чи можна оформити замовлення вночі?", a: "Так. Сайт приймає замовлення цілодобово — менеджер підтвердить його в робочий час." },
             { q: "Чи можна забрати товар самостійно?", a: "Ні, ми працюємо лише онлайн і не маємо пункту видачі. Найшвидший варіант — Нова пошта: 1–3 дні у відділення, поштомат або кур’єром." },
-            { q: "Як повернути товар?", a: <>Протягом {RETURN_DAYS} днів з дня отримання. Покрокова інструкція — на сторінці <Link href="/returns" className="font-bold text-[#098fd0] hover:underline">Обмін і повернення</Link>.</> },
+            ...(returnsInfoEnabled() ? [{ q: "Як повернути товар?", a: <>Протягом {RETURN_DAYS} днів з дня отримання. Покрокова інструкція — на сторінці <Link href="/returns" className="font-bold text-[#098fd0] hover:underline">Обмін і повернення</Link>.</> }] : []),
           ]}
         />
       </InfoCard>

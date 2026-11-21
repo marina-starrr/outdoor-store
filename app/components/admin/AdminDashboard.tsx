@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import Icon, { type IconName } from "../Icon";
 import { categoryBySlug, formatPrice } from "../catalog-data";
-import { orderStatusInfo, type OrderStatusId } from "../../lib/order-status";
+import { orderStatusInfo, statusLabel, type OrderStatusId } from "../../lib/order-status";
 import AdminShell, { LoadError, Panel, type AdminSummary } from "./AdminShell";
 import { adminFetch, shortDate, useAdminData } from "./api";
 import type { AdminOrder } from "./AdminOrders";
@@ -112,7 +112,7 @@ function Dashboard() {
                   <span className="text-[#527083]">{shortDate(o.createdAt)}</span>
                   <span className="min-w-0 flex-1 truncate">{o.contact.firstName} {o.contact.lastName}</span>
                   <b>{formatPrice(o.total)}</b>
-                  <StatusPill status={o.status} />
+                  <StatusPill status={o.status} payment={o.payment} />
                 </li>
               ))}
             </ul>
@@ -123,7 +123,7 @@ function Dashboard() {
   );
 }
 
-export function StatusPill({ status }: { status: OrderStatusId }) {
+export function StatusPill({ status, payment }: { status: OrderStatusId; payment?: string }) {
   const info = orderStatusInfo[status];
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${info.tone}`}>{info.label}</span>;
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${info.tone}`}>{statusLabel(status, payment)}</span>;
 }

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { returnsInfoEnabled } from "../components/shop-config";
 import Icon from "../components/Icon";
 import InfoLayout from "../components/InfoLayout";
 import { BannerStats, Callout, Faq, InfoCard, InfoTitle, Prose, Steps } from "../components/info-ui";
@@ -28,6 +30,8 @@ const cantReturn = [
 ];
 
 export default function ReturnsPage() {
+  // Сторінку сховано, поки не узгоджено умови повернення з постачальником (див. shop-config)
+  if (!returnsInfoEnabled()) notFound();
   return (
     <InfoLayout
       eyebrow="Покупцям"

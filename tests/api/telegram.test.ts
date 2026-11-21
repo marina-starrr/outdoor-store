@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as chat from "../../app/api/chat/route";
 import * as orders from "../../app/api/orders/route";
-import { call } from "./helpers";
+import { formatPrice } from "../../app/components/catalog-data";
+import { call, dbQuery } from "./helpers";
 
 /** Повідомлення, «надіслані» в режимі TELEGRAM_TRANSPORT=log */
 const sent = (): { text: string }[] => {
@@ -45,6 +46,30 @@ describe("сповіщення адміністратору в Telegram", () => 
     expect(text).toContain(`/admin/orders?q=${n}`);
     // Без порожніх рядків поспіль і «undefined»
     expect(text).not.toMatch(/\n\n\n|undefined|null/);
+  });
+
+  it("товар постачальника — з назвою постачальника й артикулом; накладений платіж — сума для ТТН", async () => {
+    const [s] = await dbQuery("insert into suppliers (name, feed_url) values ('Ranger', 'https://example.com/tg.xml') returning id");
+    await dbQuery("update products set supplier_id = $1, supplier_sku = 'RA6667' where id = 'np3'", [s.id]);
+    try {
+      const r = await call(orders.POST, {
+        ip: "10.50.0.9",
+        body: {
+          lines: [{ id: "np3", qty: 1 }],
+          contact: { firstName: "Ольга", lastName: "Артикул", phone: "+380 63 555 44 34", email: "sku@example.com" },
+          delivery: { method: "np-branch", city: "Київ", branch: "5" },
+          payment: "cod",
+          agreed: true,
+        },
+      });
+      expect(r.status).toBe(200);
+      const text = sent().at(-1)!.text;
+      expect(text).toMatch(/Намет Nature Peak 3 × 1 — .+\n   📦 Ranger, арт\. RA6667/);
+      expect(text).toContain(`Накладений платіж — ТТН з накладеним платежем на ${formatPrice(r.data.order.total)}`);
+    } finally {
+      await dbQuery("update products set supplier_id = null, supplier_sku = null where id = 'np3'");
+      await dbQuery("delete from suppliers where id = $1", [s.id]);
+    }
   });
 
   it("невдале замовлення не надсилає сповіщення", async () => {

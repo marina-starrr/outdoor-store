@@ -1,6 +1,6 @@
 import "server-only";
 import { randomInt } from "node:crypto";
-import { deliveryOptions, shippingLabel, deliveryWhere } from "../../components/cart-logic";
+import { deliveryOptions, paymentTitle, shippingLabel, deliveryWhere } from "../../components/cart-logic";
 import { formatPrice } from "../../components/catalog-data";
 import { sha256 } from "./auth";
 import { db, iso, isoOpt, num, opt, userFromRow, type Queryable, type Row, type StoredOrder, type StoredUser } from "./db";
@@ -207,7 +207,11 @@ export function orderPlacedMail(order: StoredOrder, to: string, guest: boolean):
       `${order.contact.firstName}, дякуємо за замовлення!\n\n${items}\n\n` +
       `Доставка: ${delivery}${where ? `, ${where}` : ""} — ${shippingLabel(order.shipping, formatPrice).toLowerCase()}\n` +
       (order.promoDiscount ? `Знижка за промокодом: −${formatPrice(order.promoDiscount)}\n` : "") +
-      `Разом: ${formatPrice(order.total)}\n\n` +
+      `Разом: ${formatPrice(order.total)}\n` +
+      `Оплата: ${paymentTitle(order.payment)}` +
+      (order.payment === "cod"
+        ? " — оплатите при отриманні, готівкою або карткою (комісію за переказ бере перевізник)\n\n"
+        : " — реквізити надішлемо після підтвердження замовлення\n\n") +
       (guest
         ? `Статус замовлення можна перевірити на сайті за номером ${order.number} і вашим телефоном.`
         : "Статус замовлення — у вашому профілі на сайті."),

@@ -14,7 +14,7 @@ import { useResendVerification } from "./useResendVerification";
 import { Breadcrumbs } from "./catalog-ui";
 import { deliveryOptions, paymentTitle, deliveryWhere } from "./cart-logic";
 import OrderPayment from "./OrderPayment";
-import { customerCanCancel, orderStatusInfo, type OrderStatusId } from "../lib/order-status";
+import { customerCanCancel, customerStatus, orderStatusInfo, type OrderStatusId } from "../lib/order-status";
 import CancelOrder from "./CancelOrder";
 import { formatPrice, productsWord } from "./catalog-data";
 import { Field, FormError, PasswordInput, SubmitButton, formatPhone, inputCls, isPhoneComplete } from "./form-ui";
@@ -306,7 +306,8 @@ function Orders() {
         <ul className="grid gap-4">
           {orders.map((order) => {
             // Ті самі статуси, що й в адмінці, — словами для покупця
-            const { customer: label, tone: cls } = orderStatusInfo[order.status];
+            const { tone: cls } = orderStatusInfo[order.status];
+            const label = customerStatus(order.status, order.payment);
             // «Самовивіз» — для замовлень, оформлених до того, як його прибрали
             const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? "Самовивіз";
             const payment = paymentTitle(order.payment);

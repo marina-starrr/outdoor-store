@@ -14,7 +14,6 @@ const pages = [
   { path: "/about", h1: /сімейного відпочинку/ },
   { path: "/contacts", h1: /зв’язку/ },
   { path: "/delivery", h1: /Доставка/ },
-  { path: "/returns", h1: /Обмін/ },
   { path: "/privacy", h1: /Політика/ },
 ];
 
@@ -32,6 +31,20 @@ test.describe("усі сторінки відкриваються без пом�
       expect(errors.filter((e) => !e.includes("images.unsplash.com"))).toEqual([]);
     });
   }
+});
+
+test("обмін і повернення поки сховано: сторінки й посилань немає", async ({ page }) => {
+  const res = await page.goto("/returns");
+  expect(res?.status()).toBe(404);
+  await page.goto("/catalog/tents/np3");
+  await expect(page.locator('a[href="/returns"]')).toHaveCount(0);
+  await expect(page.locator("main")).not.toContainText("Обмін і повернення");
+});
+
+test("сторінка товару: коли відправимо — за київським часом, у будні до 14:00", async ({ page }) => {
+  await page.goto("/catalog/tents/np3");
+  await expect(page.getByText("Замовлення, оформлені в будні до 14:00, відправляємо того ж дня")).toBeVisible();
+  await expect(page.getByText(/Є в наявності · відправимо (сьогодні|завтра|в понеділок)|Залишилось лише \d+ шт\. · відправимо/)).toBeVisible();
 });
 
 test("неіснуючий товар показує сторінку «не знайдено»", async ({ page }) => {
@@ -59,8 +72,9 @@ test.describe("футер", () => {
   test("посилання ведуть на інформаційні сторінки", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator("footer");
-    await footer.getByRole("link", { name: "Обмін і повернення" }).click();
-    await expect(page).toHaveURL("/returns");
+    await expect(footer.getByRole("link", { name: "Обмін і повернення" })).toHaveCount(0);
+    await footer.getByRole("link", { name: "Доставка і оплата" }).click();
+    await expect(page).toHaveURL("/delivery");
     await page.locator("footer").getByRole("link", { name: "Політика конфіденційності" }).click();
     await expect(page).toHaveURL("/privacy");
   });

@@ -217,7 +217,8 @@ test("повне оформлення: згода з умовами обов'я�
   // Посилання на умови ведуть на справжні сторінки
   const agree = page.locator("label").filter({ has: page.locator("#field-agree") });
   await expect(agree.getByRole("link", { name: "умовами доставки й оплати" })).toHaveAttribute("href", "/delivery");
-  await expect(agree.getByRole("link", { name: "умовами повернення" })).toHaveAttribute("href", "/returns");
+  // Умови повернення поки сховані (shop-config: returnsInfoEnabled)
+  await expect(agree.getByRole("link", { name: "умовами повернення" })).toHaveCount(0);
   await expect(agree.getByRole("link", { name: "політикою конфіденційності" })).toHaveAttribute("href", "/privacy");
 
   await page.locator("#field-agree").check();

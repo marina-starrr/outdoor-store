@@ -7,6 +7,7 @@ import {
   paymentOptions,
 } from "./cart-logic";
 import { PAYMENT_DAYS } from "../lib/order-status";
+import { SHIP_CUTOFF_HOUR, discountsEnabled, returnsInfoEnabled } from "./shop-config";
 import { contacts } from "./data";
 import { InfoCard, InfoTitle, Prose, Toc } from "./info-ui";
 import { SITE_URL } from "../lib/site";
@@ -19,14 +20,15 @@ import { sellerCodeLabel, sellerTitle, type Seller } from "../lib/seller";
  * Перед запуском текст варто показати юристу.
  */
 
-export const offerSections = [
+export const offerSections = () => [
   { id: "general", label: "Загальні положення" },
   { id: "terms", label: "Терміни" },
   { id: "subject", label: "Предмет договору" },
   { id: "order", label: "Оформлення замовлення" },
   { id: "price", label: "Ціна та оплата" },
   { id: "delivery", label: "Доставка й отримання" },
-  { id: "returns", label: "Обмін і повернення" },
+  // Обмін і повернення — сховано, поки не узгоджено умови з постачальником (shop-config)
+  ...(returnsInfoEnabled() ? [{ id: "returns", label: "Обмін і повернення" }] : []),
   { id: "duties", label: "Права та обов’язки сторін" },
   { id: "liability", label: "Відповідальність" },
   { id: "data", label: "Персональні дані" },
@@ -36,12 +38,12 @@ export const offerSections = [
 ];
 
 /** Номер розділу — для посилань «див. розділ 7» */
-const n = (id: string) => offerSections.findIndex((s) => s.id === id) + 1;
+const n = (id: string) => offerSections().findIndex((s) => s.id === id) + 1;
 
 function Section({ id, children }: { id: string; children: ReactNode }) {
   return (
     <InfoCard id={id}>
-      <InfoTitle eyebrow={`Розділ ${n(id)}`}>{offerSections[n(id) - 1].label}</InfoTitle>
+      <InfoTitle eyebrow={`Розділ ${n(id)}`}>{offerSections()[n(id) - 1].label}</InfoTitle>
       <Prose className="mt-4">{children}</Prose>
     </InfoCard>
   );
@@ -53,7 +55,7 @@ export default function OfferContent({ seller }: { seller: Seller }) {
 
   return (
     <>
-      <Toc items={offerSections} />
+      <Toc items={offerSections()} />
 
       <Section id="general">
         <p>
@@ -88,7 +90,8 @@ export default function OfferContent({ seller }: { seller: Seller }) {
         </p>
         <p>
           Фото товару може незначно відрізнятися від самого товару відтінком кольору через налаштування екрана. Якщо
-          товар суттєво не відповідає опису, Покупець має право на повернення (розділ {n("returns")}).
+          товар суттєво не відповідає опису, Покупець має права, передбачені Законом «Про захист прав
+          споживачів»{returnsInfoEnabled() && <> (розділ {n("returns")})</>}.
         </p>
       </Section>
 
@@ -112,7 +115,7 @@ export default function OfferContent({ seller }: { seller: Seller }) {
       <Section id="price">
         <p>
           Ціни вказані на сайті в гривнях. Ціна товару фіксується в момент оформлення замовлення і після цього не
-          змінюється. Знижки за промокодами діють на умовах, указаних при оформленні.
+          змінюється.{discountsEnabled() && " Знижки за промокодами діють на умовах, указаних при оформленні."}
         </p>
         <p>Способи оплати:</p>
         <ul>
@@ -123,11 +126,17 @@ export default function OfferContent({ seller }: { seller: Seller }) {
           ))}
         </ul>
         <p>
-          Оплата здійснюється на поточний рахунок Продавця за реквізитами, які Покупець отримує після підтвердження
+          При оплаті на рахунок оплата здійснюється на поточний рахунок Продавця за реквізитами, які Покупець отримує після підтвердження
           замовлення, протягом <b>{PAYMENT_DAYS} днів</b>. На цей строк товар бронюється за Покупцем. Якщо оплата не
           надійшла вчасно, замовлення скасовується, а бронювання знімається. Комісію банку Покупця (якщо вона є)
           сплачує Покупець.
         </p>
+        {paymentOptions.some((o) => o.id === "cod") && (
+          <p>
+            При накладеному платежі Покупець оплачує замовлення при отриманні — у відділенні, поштоматі чи кур’єру,
+            готівкою або карткою. Комісію перевізника за переказ коштів сплачує Покупець.
+          </p>
+        )}
         <p>
           Вартість доставки не входить у ціну товару: її сплачує Покупець перевізнику при отриманні замовлення за
           тарифами перевізника. Продавець надає Покупцю розрахунковий документ відповідно до законодавства.
@@ -144,7 +153,9 @@ export default function OfferContent({ seller }: { seller: Seller }) {
           ))}
         </ul>
         <p>
-          Замовлення відправляється після надходження оплати. Строки доставки орієнтовні й залежать від перевізника. Замовлення зберігається у відділенні{" "}
+          Замовлення з оплатою на рахунок відправляється після надходження оплати, з накладеним платежем — після
+          підтвердження. Відправки — у будні; замовлення, підтверджені й (за потреби) оплачені до {SHIP_CUTOFF_HOUR}:00,
+          відправляються того ж дня. Строки доставки орієнтовні й залежать від перевізника. Замовлення зберігається у відділенні{" "}
           {PARCEL_STORAGE_DAYS} днів, далі його може бути повернено Продавцю.
         </p>
         <p>
@@ -157,7 +168,7 @@ export default function OfferContent({ seller }: { seller: Seller }) {
         </p>
       </Section>
 
-      <Section id="returns">
+      {returnsInfoEnabled() && <Section id="returns">
         <p>
           Покупець має право повернути або обміняти непродовольчий товар належної якості протягом{" "}
           <b>{RETURN_DAYS} днів</b>, не враховуючи дня отримання, якщо товар не був у використанні, збережено його
@@ -172,7 +183,7 @@ export default function OfferContent({ seller }: { seller: Seller }) {
           Порядок повернення та строки повернення коштів — на сторінці{" "}
           <Link href="/returns">«Обмін і повернення»</Link>.
         </p>
-      </Section>
+      </Section>}
 
       <Section id="duties">
         <p><b>Продавець зобов’язується:</b></p>

@@ -10,7 +10,7 @@ import { Breadcrumbs } from "./catalog-ui";
 import { deliveryOptions, paymentTitle, shippingLabel } from "./cart-logic";
 import { formatPrice } from "./catalog-data";
 import { Field, FormError, SubmitButton, formatPhone, inputCls } from "./form-ui";
-import { customerCanCancel, orderStatusInfo, orderSteps, type OrderStatusId } from "../lib/order-status";
+import { customerCanCancel, customerStatus, orderStatusInfo, orderSteps, type OrderStatusId } from "../lib/order-status";
 import CancelOrder from "./CancelOrder";
 import OrderPayment from "./OrderPayment";
 
@@ -133,7 +133,7 @@ function OrderStatus({
           <p className="text-sm text-[#527083]">від {date(order.createdAt)}</p>
         </div>
         <span className={`rounded-full px-3 py-1 text-sm font-extrabold ${orderStatusInfo[order.status].tone}`}>
-          {orderStatusInfo[order.status].customer}
+          {customerStatus(order.status, order.payment)}
         </span>
       </div>
 

@@ -77,9 +77,12 @@ type PaymentOption = { id: PaymentId; title: string; text: string; minTotal?: nu
  * (LiqPay / WayForPay / monobank) — показувати оплату, яку ніхто не приймає, не можна
  */
 export const allPaymentOptions: PaymentOption[] = [
-  // Накладений платіж вимкнено: товар відправляємо лише після оплати на рахунок
-  { id: "cod", title: "Накладений платіж", text: "Оплата при отриманні у відділенні, комісія перевізника", enabled: false },
   { id: "invoice", title: "Оплата на рахунок", text: "Після підтвердження замовлення надішлемо реквізити; оплатити потрібно протягом 3 днів", enabled: true },
+  /*
+   * Накладений платіж: покупець платить при отриманні. Обирати «готівкою чи карткою»
+   * на сайті не потрібно — Нова пошта й Укрпошта приймають і те, й інше
+   */
+  { id: "cod", title: "Накладений платіж", text: "Оплата при отриманні — готівкою або карткою; комісію за переказ бере перевізник", enabled: true },
   { id: "card", title: "Карткою онлайн", text: "Visa, Mastercard, Apple Pay, Google Pay", enabled: false },
   { id: "parts", title: "Оплата частинами", text: "До 6 платежів без переплат", minTotal: 3000, enabled: false },
 ];
@@ -104,11 +107,12 @@ export function cartTotals(
   delivery: DeliveryId = "np-branch",
   promo?: string,
 ) {
-  const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
-  const savings = lines.reduce(
+  // До копійки: ціни постачальників бувають з копійками, а 0.1 + 0.2 у JS — не 0.3
+  const subtotal = toCents(lines.reduce((s, l) => s + l.product.price * l.qty, 0));
+  const savings = toCents(lines.reduce(
     (s, l) => s + ((l.product.oldPrice ?? l.product.price) - l.product.price) * l.qty,
     0,
-  );
+  ));
   // Знижки вимкнено — промокоди не діють (і поле для них сховане)
   const percent = promo && discountsEnabled() ? (promoCodes[promo]?.percent ?? 0) : 0;
   // Промокод не діє на товари з ціною постачальника (РРЦ): продаж нижче РРЦ — порушення його політики
@@ -125,9 +129,11 @@ export function cartTotals(
     /** Є товари, на які промокод не діє (ціна постачальника) */
     promoExcluded: lines.some((l) => l.product.fixedPrice),
     shipping,
-    total: subtotal - promoDiscount + shipping,
+    total: toCents(subtotal - promoDiscount + shipping),
   };
 }
+
+const toCents = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * «Вам також знадобиться»: спершу товари з інших категорій (до намету —

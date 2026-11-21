@@ -1,8 +1,9 @@
 /**
  * Статуси замовлення та дозволені переходи — спільні для адмін-панелі, API і профілю покупця.
  *
- * Шлях замовлення (оплата лише на рахунок):
- *   нове → підтверджене (товар заброньовано, чекаємо оплату) → оплачене → відправлене → виконане.
+ * Шлях замовлення:
+ *   оплата на рахунок: нове → підтверджене (товар заброньовано, чекаємо оплату) → оплачене → відправлене → виконане;
+ *   накладений платіж: нове → підтверджене (готуємо до відправки) → відправлене → виконане.
  * Скасувати можна до відправлення. Підтверджене, але не оплачене за PAYMENT_DAYS дні,
  * скасовується автоматично, а товар повертається на склад.
  */
@@ -46,8 +47,20 @@ export const nextStatuses: Record<OrderStatusId, OrderStatusId[]> = {
 };
 
 /**
- * Переходи з урахуванням оплати: замовлення з накладеним платежем (оформлені,
- * поки він був на сайті) оплачуються при отриманні — їх відправляють без «оплачене»
+ * Накладений платіж: оплата при отриманні, тож підтверджене замовлення не «чекає
+ * оплату», а готується до відправки. Назви статусу з урахуванням способу оплати
+ */
+const codConfirmed = { label: "Готується до відправки", customer: "Готуємо до відправки" };
+
+export const statusLabel = (status: OrderStatusId, payment?: string) =>
+  status === "confirmed" && payment === "cod" ? codConfirmed.label : orderStatusInfo[status].label;
+
+export const customerStatus = (status: OrderStatusId, payment?: string) =>
+  status === "confirmed" && payment === "cod" ? codConfirmed.customer : orderStatusInfo[status].customer;
+
+/**
+ * Переходи з урахуванням оплати: замовлення з накладеним платежем оплачуються
+ * при отриманні — їх відправляють без «оплачене»
  */
 export function nextStatusesFor(status: OrderStatusId, payment?: string): OrderStatusId[] {
   if (status === "confirmed" && payment === "cod") return ["shipped", "cancelled"];

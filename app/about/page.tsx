@@ -7,6 +7,7 @@ import { BannerStats, InfoCard, InfoTitle, Prose } from "../components/info-ui";
 import { brandsOf, categories, photoUrl } from "../components/catalog-data";
 import { getPublicCatalog } from "../lib/server/catalog";
 import { RETURN_DAYS } from "../components/cart-logic";
+import { SHIP_CUTOFF_HOUR, returnsInfoEnabled } from "../components/shop-config";
 import { responsiveImage } from "../components/photo";
 
 export const metadata: Metadata = {
@@ -24,7 +25,9 @@ export const metadata: Metadata = {
 const promises: { icon: IconName; title: string; text: string }[] = [
   { icon: "tent", title: "Для всієї родини", text: "Підбираємо спорядження для сімейного кемпінгу: просторі намети, теплі спальники, посуд і меблі для відпочинку з дітьми." },
   { icon: "chat", title: "Допомога з вибором", text: "Напишіть нам — підкажемо модель під ваш склад сім’ї, сезон і бюджет." },
-  { icon: "return", title: `${RETURN_DAYS} днів на повернення`, text: `Обмін і повернення протягом ${RETURN_DAYS} днів за Законом «Про захист прав споживачів».` },
+  returnsInfoEnabled()
+    ? { icon: "return", title: `${RETURN_DAYS} днів на повернення`, text: `Обмін і повернення протягом ${RETURN_DAYS} днів за Законом «Про захист прав споживачів».` }
+    : { icon: "truck", title: "Швидка відправка", text: `Замовлення, оформлені в будні до ${SHIP_CUTOFF_HOUR}:00, відправляємо того ж дня.` },
   { icon: "shield", title: "Гарантія", text: "Гарантійні зобов’язання — відповідно до умов виробника та законодавства України." },
 ];
 

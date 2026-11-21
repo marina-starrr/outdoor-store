@@ -96,6 +96,18 @@ test("Укрпошта: індекс відділення з 5 цифр", async 
   await expect(page.locator("h1")).toHaveText("Дякуємо, Олена!");
 });
 
+test("накладений платіж: без реквізитів, оплата при отриманні готівкою або карткою", async ({ page }) => {
+  await startCheckout(page);
+  await page.locator("#field-branch").fill("5");
+  const payment = page.getByRole("radio", { name: /Накладений платіж/ });
+  await page.getByText("Накладений платіж", { exact: true }).click();
+  await expect(payment).toBeChecked();
+  await submit(page);
+  await expect(page.locator("h1")).toHaveText("Дякуємо, Олена!");
+  await expect(page.getByTestId("payment-cod-note")).toContainText("готівкою або карткою");
+  await expect(page.getByTestId("payment-email-note")).toHaveCount(0);
+});
+
 test("доставка — за тарифами перевізника, без «безкоштовно»", async ({ page }) => {
   await startCheckout(page);
   await expect(page.locator("main").getByText("Доставка — за тарифами перевізника, оплачується при отриманні посилки")).toBeVisible();

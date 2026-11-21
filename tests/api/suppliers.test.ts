@@ -84,6 +84,15 @@ describe("читання файлу постачальника", () => {
     expect(f.categories.find((c) => c.id === "1")).toEqual({ id: "1", name: "Складані крісла", inStock: 1 });
   });
 
+  it("ціна точно як РРЦ, з копійками; заглушка 0.01 — як товару немає", () => {
+    const f = parseFeed(yml([
+      { id: "GL8156", price: 1236.9, stock: 3, cat: "1" },
+      { id: "RA8822", price: 437.5, stock: 0, available: false, cat: "1" },
+      { id: "KI953", price: 0.01, stock: 0, available: false, cat: "1" },
+    ]));
+    expect(f.offers.map((o) => [o.sku, o.price])).toEqual([["GL8156", 1236.9], ["RA8822", 437.5]]);
+  });
+
   it("не YML або без товарів — зрозуміла помилка", () => {
     expect(() => parseFeed("<html><body>hi</body></html>")).toThrow(/YML/);
     expect(() => parseFeed(yml([]))).toThrow(/немає жодного товару/);

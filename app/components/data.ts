@@ -1,4 +1,5 @@
 import { SELLER } from "../lib/seller";
+import { returnsInfoEnabled } from "./shop-config";
 
 export type Category = {
   name: string;
@@ -31,7 +32,7 @@ export const infoLinks = [
   { label: "Про нас", href: "/about" },
   { label: "Контакти", href: "/contacts" },
   { label: "Доставка і оплата", href: "/delivery" },
-  { label: "Обмін і повернення", href: "/returns" },
+  ...(returnsInfoEnabled() ? [{ label: "Обмін і повернення", href: "/returns" }] : []),
   { label: "Політика конфіденційності", href: "/privacy" },
   // Оферта — лише коли заповнено реквізити продавця (app/lib/seller.ts)
   ...(SELLER ? [{ label: "Публічна оферта", href: "/offer" }] : []),

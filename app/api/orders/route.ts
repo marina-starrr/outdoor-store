@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   // Пастка для ботів: приховане поле, яке людина не заповнює
   if (!user && cleanText(body.website, 100)) return error("Не вдалося оформити замовлення");
   if (body.agreed !== true)
-    return error("Підтвердьте згоду з умовами доставки, повернення та політикою конфіденційності");
+    return error("Підтвердьте згоду з умовами доставки й оплати та політикою конфіденційності");
 
   // Ціни та суми рахуються лише на сервері — дані з браузера не довіряємо
   const catalog = await loadCatalog();
@@ -147,13 +147,20 @@ export async function POST(req: NextRequest) {
 
   const claimToken = user ? undefined : randomBytes(24).toString("base64url");
   let order: StoredOrder;
+  /** Постачальник і його артикул — для сповіщення в Telegram (щоб одразу замовити в постачальника) */
+  const supplierSkus = new Map<string, string>();
   try {
     // Товар лише перевіряється — списується (бронюється) він, коли адміністратор
     // підтверджує замовлення (див. order-flow.ts)
     order = await tx(async (q) => {
       const onRequest = new Set<string>();
       for (const l of lines) {
-        const [p] = await q.query("select stock, hidden, on_request from products where id = $1", [l.id]);
+        const [p] = await q.query(
+          `select p.stock, p.hidden, p.on_request, p.supplier_sku, s.name as supplier
+           from products p left join suppliers s on s.id = p.supplier_id where p.id = $1`,
+          [l.id],
+        );
+        if (p?.supplier_sku) supplierSkus.set(l.id, `${p.supplier ?? "постачальник"}, арт. ${p.supplier_sku}`);
         const stock = p && !p.hidden ? Number(p.stock) : 0;
         // «Під замовлення» — кількість уточнить адміністратор у постачальника перед підтвердженням
         if (p?.on_request && stock > 0) {
@@ -204,7 +211,7 @@ export async function POST(req: NextRequest) {
   const mailTo = contact.email || user?.email;
   await Promise.all([
     // Адміністратор дізнається про замовлення одразу
-    notifyAdmin(newOrderText(order, !user)),
+    notifyAdmin(newOrderText(order, !user, supplierSkus)),
     mailTo ? sendMail(orderPlacedMail(order, mailTo, !user)) : null,
   ]);
   return json(claimToken ? { order, claimToken } : { order });

@@ -71,12 +71,39 @@ beforeAll(async () => {
   admin = sessionCookie(r.res);
 });
 
-describe("оплата лише на рахунок", () => {
-  it("накладений платіж більше не приймається", async () => {
-    const r = await place({ payment: "cod" });
+describe("способи оплати", () => {
+  it("вимкнені способи (картка онлайн) не приймаються", async () => {
+    const r = await place({ payment: "card" });
     expect(r.status).toBe(400);
     expect(r.data.error).toMatch(/спосіб оплати/);
   });
+
+  it("накладений платіж: підтвердження без реквізитів → відправлено без «оплачено», без автоскасування", async () => {
+    await setStock(5);
+    const placed = await place({ payment: "cod" });
+    expect(placed.status).toBe(200);
+    const number = placed.data.order.number;
+    // Лист про нове замовлення пояснює оплату при отриманні
+    expect(lastMailFor(number)!.text).toMatch(/Накладений платіж — оплатите при отриманні, готівкою або карткою/);
+
+    const r = await setStatus(number, "confirmed");
+    expect(r.status).toBe(200);
+    expect(await stock()).toBe(3);
+    const mail = lastMailFor(number)!;
+    expect(mail.subject).toBe(`Замовлення ${number}: готуємо до відправки`);
+    expect(mail.text).toMatch(/при отриманні, готівкою або карткою/);
+    expect(mail.text).not.toContain("IBAN");
+
+    // «Оплачено» для накладеного платежу не буває — одразу «Відправлено»
+    expect((await setStatus(number, "paid")).status).toBe(409);
+    // Навіть через 3+ дні після підтвердження не скасовується як неоплачене
+    await dbQuery("update orders set confirmed_at = now() - interval '10 days' where number = $1", [number]);
+    await cron("Bearer flow-secret");
+    expect((await setStatus(number, "shipped")).data.order.status).toBe("shipped");
+  });
+});
+
+describe("оплата на рахунок", () => {
 
   it("нове замовлення: товар не списано, покупець бачить «очікує підтвердження»", async () => {
     await setStock(5);

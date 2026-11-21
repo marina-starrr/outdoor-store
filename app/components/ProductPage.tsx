@@ -10,6 +10,7 @@ import { useLists } from "./Lists";
 import { useNotifications } from "./Notifications";
 import RecentlyViewed, { useTrackView } from "./RecentlyViewed";
 import { RETURN_DAYS, SHIPPING_BY_CARRIER, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
+import { SHIP_CUTOFF_HOUR, returnsInfoEnabled, shipDay } from "./shop-config";
 import { ShippingNote } from "./cart-ui";
 import ChatButton from "./ChatButton";
 import { useCatalog } from "./Catalog";
@@ -48,6 +49,14 @@ export default function ProductPage({ product }: { product: Product }) {
   const gallery = productGallery(product);
   const description = productDescription(product);
   const discount = discountPercent(product);
+  // «сьогодні / завтра / в понеділок» — лише в браузері: сторінка кешується, час сервера тут не підходить
+  const [shipping, setShipping] = useState<string | null>(null);
+  useEffect(() => {
+    const update = () => setShipping(shipDay());
+    update();
+    const timer = setInterval(update, 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [query, setQuery] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -185,9 +194,12 @@ export default function ProductPage({ product }: { product: Product }) {
                   <span className={`h-2 w-2 rounded-full ${product.inStock ? "bg-[#1f9d55]" : "bg-[#f5ad00]"}`} />
                   {!product.inStock
                     ? "Очікується надходження"
-                    : product.stock <= LOW_STOCK
-                      ? `Залишилось лише ${product.stock} шт. · відправимо сьогодні`
-                      : "Є в наявності · відправимо сьогодні"}
+                    : `${product.stock <= LOW_STOCK ? `Залишилось лише ${product.stock} шт.` : "Є в наявності"}${shipping ? ` · відправимо ${shipping}` : ""}`}
+                </p>
+              )}
+              {product.inStock && !product.onRequest && (
+                <p className="mt-1 text-xs text-[#527083]">
+                  Замовлення, оформлені в будні до {SHIP_CUTOFF_HOUR}:00, відправляємо того ж дня
                 </p>
               )}
 
@@ -295,7 +307,11 @@ export default function ProductPage({ product }: { product: Product }) {
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Perk icon="truck" title="Швидка доставка" text="по всій Україні" />
                 <Perk icon="shield" title="Гарантія якості" text={product.attrs.find(([k]) => k === "Гарантія")?.[1] ?? "12 місяців"} />
-                <Perk icon="return" title="Обмін і повернення" text="14 днів" />
+                {returnsInfoEnabled() ? (
+                  <Perk icon="return" title="Обмін і повернення" text={`${RETURN_DAYS} днів`} />
+                ) : (
+                  <Perk icon="clock" title="Відправка в день" text={`замовлення до ${SHIP_CUTOFF_HOUR}:00`} />
+                )}
               </div>
             </div>
           </div>
@@ -505,7 +521,7 @@ function QuantityStepper({
   );
 }
 
-function Perk({ icon, title, text }: { icon: "truck" | "shield" | "return"; title: string; text: string }) {
+function Perk({ icon, title, text }: { icon: "truck" | "shield" | "return" | "clock"; title: string; text: string }) {
   return (
     <div className="flex items-center gap-3">
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eef6fb] text-[#067eb7]">
@@ -879,13 +895,25 @@ function DeliveryTab() {
       <InfoList title="Доставка" icon="truck" items={delivery} />
       <InfoList title="Оплата" icon="shield" items={payment} />
       <div className="rounded-[22px] bg-[#fffbe6] p-6 lg:col-span-2">
-        <p className="font-extrabold">Обмін і повернення</p>
-        <p className="mt-2 text-sm leading-relaxed text-[#3d5d70]">
-          Протягом {RETURN_DAYS} днів ви можете повернути або обміняти товар, якщо він не був у використанні та збережено товарний вигляд. Вартість зворотної доставки — за тарифами перевізника.
-        </p>
+        {returnsInfoEnabled() ? (
+          <>
+            <p className="font-extrabold">Обмін і повернення</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#3d5d70]">
+              Протягом {RETURN_DAYS} днів ви можете повернути або обміняти товар, якщо він не був у використанні та збережено товарний вигляд. Вартість зворотної доставки — за тарифами перевізника.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="font-extrabold">Коли відправимо</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#3d5d70]">
+              Замовлення, оформлені в будні до {SHIP_CUTOFF_HOUR}:00, відправляємо того ж дня, пізніші — наступного
+              робочого дня. У суботу й неділю відправок немає.
+            </p>
+          </>
+        )}
         <p className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm font-bold">
           <Link href="/delivery" className="text-[#098fd0] hover:underline">Усе про доставку й оплату →</Link>
-          <Link href="/returns" className="text-[#098fd0] hover:underline">Як повернути товар →</Link>
+          {returnsInfoEnabled() && <Link href="/returns" className="text-[#098fd0] hover:underline">Як повернути товар →</Link>}
         </p>
       </div>
     </div>

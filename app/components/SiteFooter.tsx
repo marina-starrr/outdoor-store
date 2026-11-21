@@ -3,6 +3,7 @@ import Icon, { type IconName } from "./Icon";
 import { BrandLogo } from "./SiteHeader";
 import { contacts } from "./data";
 import { SELLER, sellerCodeLabel, sellerTitle } from "../lib/seller";
+import { returnsInfoEnabled } from "./shop-config";
 
 const socials: { icon: IconName; label: string }[] = [
   { icon: "instagram", label: "Instagram" },
@@ -58,7 +59,7 @@ export default function SiteFooter() {
             <Link href="/about">Про нас</Link>
             <Link href="/delivery">Доставка і оплата</Link>
             <Link href="/orders/track">Де моє замовлення?</Link>
-            <Link href="/returns">Обмін і повернення</Link>
+            {returnsInfoEnabled() && <Link href="/returns">Обмін і повернення</Link>}
             <Link href="/favorites">Обране</Link>
             <Link href="/compare">Порівняння товарів</Link>
             <Link href="/contacts">Контакти</Link>
@@ -94,9 +95,11 @@ export default function SiteFooter() {
             <Link href="/privacy" className="tap-y transition hover:text-white hover:underline">
               Політика конфіденційності
             </Link>
-            <Link href="/returns" className="tap-y transition hover:text-white hover:underline">
-              Умови повернення
-            </Link>
+            {returnsInfoEnabled() && (
+              <Link href="/returns" className="tap-y transition hover:text-white hover:underline">
+                Умови повернення
+              </Link>
+            )}
             {SELLER && (
               <Link href="/offer" className="tap-y transition hover:text-white hover:underline">
                 Публічна оферта

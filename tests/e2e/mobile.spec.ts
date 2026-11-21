@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { expectNoHorizontalScroll, helperAdminApi, register } from "./helpers";
 
-const paths = ["/", "/catalog", "/catalog/tents", "/catalog/tents/np3", "/hits", "/cart", "/account", "/notifications", "/orders/track", "/about", "/contacts", "/delivery", "/returns", "/privacy"];
+const paths = ["/", "/catalog", "/catalog/tents", "/catalog/tents/np3", "/hits", "/cart", "/account", "/notifications", "/orders/track", "/about", "/contacts", "/delivery", "/privacy"];
 
 test.describe("мобільна версія (390px)", () => {
   for (const path of paths) {

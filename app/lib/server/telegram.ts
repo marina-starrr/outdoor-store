@@ -65,14 +65,22 @@ export async function notifyAdmin(text: string): Promise<boolean> {
 }
 
 /** Текст про нове замовлення: усе, щоб передзвонити й відправити, не відкриваючи адмінку */
-export function newOrderText(order: StoredOrder, guest: boolean) {
+export function newOrderText(
+  order: StoredOrder,
+  guest: boolean,
+  /** id товару → «Ranger, арт. RA6667» (товари постачальників) */
+  supplierSkus: ReadonlyMap<string, string> = new Map(),
+) {
   const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? order.delivery.method;
   const where = deliveryWhere(order.delivery);
   const c = order.contact;
   return [
     `🛒 Нове замовлення ${order.number} — ${formatPrice(order.total)}`,
     "",
-    ...order.lines.map((l) => `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}${l.onRequest ? " ⚠️ під замовлення" : ""}`),
+    ...order.lines.flatMap((l) => [
+      `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}${l.onRequest ? " ⚠️ під замовлення" : ""}`,
+      ...(supplierSkus.has(l.id) ? [`   📦 ${supplierSkus.get(l.id)}`] : []),
+    ]),
     order.lines.some((l) => l.onRequest) ? "⚠️ Уточніть кількість у постачальника, перш ніж підтвердити" : null,
     order.promoDiscount ? `Промокод ${order.promo}: −${formatPrice(order.promoDiscount)}` : null,
     `Доставка: ${shippingLabel(order.shipping, formatPrice).toLowerCase()}`,
@@ -81,7 +89,7 @@ export function newOrderText(order: StoredOrder, guest: boolean) {
     `📞 ${c.phone}${order.noCall ? " — просить не телефонувати" : ""}`,
     c.email ? `✉️ ${c.email}` : null,
     `🚚 ${delivery}: ${where}`,
-    `💳 ${paymentTitle(order.payment)}`,
+    `💳 ${paymentTitle(order.payment)}${order.payment === "cod" ? ` — ТТН з накладеним платежем на ${formatPrice(order.total)}` : ""}`,
     order.comment ? `💬 ${order.comment}` : null,
     "",
     absoluteUrl(`/admin/orders?q=${encodeURIComponent(order.number)}`),

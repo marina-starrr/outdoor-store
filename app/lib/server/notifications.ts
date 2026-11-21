@@ -1,7 +1,7 @@
 import "server-only";
 import { formatPrice, type Product } from "../../components/catalog-data";
 import { productUrl } from "../../components/product-details";
-import { PAYMENT_DAYS, orderStatusInfo, paymentDue, type CancelReason, type OrderStatusId } from "../order-status";
+import { PAYMENT_DAYS, customerStatus, paymentDue, type CancelReason, type OrderStatusId } from "../order-status";
 import { paymentDetails, paymentDetailsText } from "../payment";
 import { db, notificationFromRow, userFromRow, type NotificationKind, type Queryable, type StoredNotification, type StoredOrder, type StoredUser } from "./db";
 import type { Mail } from "./mail";
@@ -92,6 +92,8 @@ export async function productEvents(q: Queryable, product: Product, before: Prod
 function statusText(order: StoredOrder, status: OrderStatusId, reason?: CancelReason, email?: string): string | null {
   switch (status) {
     case "confirmed": {
+      if (order.payment === "cod")
+        return `підтверджено, товар заброньовано за вами. Відправимо найближчим часом — оплата ${formatPrice(order.total)} при отриманні, готівкою або карткою`;
       const to = email ? `на ${email}` : "на ваш email";
       const where = paymentDetails(order)
         ? `Реквізити для оплати — у листі ${to} і на сторінці замовлення`
@@ -123,7 +125,7 @@ const formatDue = (order: StoredOrder) =>
 
 /** У листі про підтвердження — ще й реквізити для оплати */
 const mailExtra = (order: StoredOrder, status: OrderStatusId) =>
-  status === "confirmed" ? `
+  status === "confirmed" && order.payment !== "cod" ? `
 
 ${paymentDetailsText(order)}` : "";
 
@@ -141,7 +143,7 @@ export async function orderEvent(
   const before = mails.length;
   await notifyUser(q, user, {
     kind: "order",
-    title: `Замовлення ${order.number}: ${orderStatusInfo[status].customer.toLowerCase()}`,
+    title: `Замовлення ${order.number}: ${customerStatus(status, order.payment).toLowerCase()}`,
     text: `Ваше замовлення ${order.number} ${text}.`,
     href: "/account",
   }, mails);
@@ -155,7 +157,7 @@ export function guestOrderEvent(order: StoredOrder, status: OrderStatusId, mails
   if (!text || !order.contact.email) return;
   mails.push({
     to: order.contact.email,
-    subject: `Замовлення ${order.number}: ${orderStatusInfo[status].customer.toLowerCase()}`,
+    subject: `Замовлення ${order.number}: ${customerStatus(status, order.payment).toLowerCase()}`,
     text: `Ваше замовлення ${order.number} ${text}.${mailExtra(order, status)}`,
     href: `/orders/track?number=${encodeURIComponent(order.number)}`,
   });

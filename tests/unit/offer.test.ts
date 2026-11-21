@@ -39,10 +39,32 @@ describe("публічна оферта", () => {
     expect(html).toContain("UA213223130000026007233566001");
   });
 
-  it("умови збігаються з рештою сайту: строк повернення, оплата, безкоштовна доставка", () => {
+  it("умови повернення сховані, поки власник не ввімкне (NEXT_PUBLIC_RETURNS=1)", () => {
+    const saved = process.env.NEXT_PUBLIC_RETURNS;
+    try {
+      delete process.env.NEXT_PUBLIC_RETURNS;
+      let html = render(fop);
+      expect(html).not.toContain("Обмін і повернення");
+      expect(html).not.toContain('href="/returns"');
+      expect(offerSections().map((s) => s.id)).not.toContain("returns");
+
+      process.env.NEXT_PUBLIC_RETURNS = "1";
+      html = render(fop);
+      expect(html).toContain(`${RETURN_DAYS} днів`);
+      expect(html).toContain('href="/returns"');
+      expect(offerSections().map((s) => s.id)).toContain("returns");
+    } finally {
+      if (saved === undefined) delete process.env.NEXT_PUBLIC_RETURNS;
+      else process.env.NEXT_PUBLIC_RETURNS = saved;
+    }
+  });
+
+  it("умови збігаються з рештою сайту: оплата, відправка, безкоштовна доставка", () => {
     const html = render(fop);
-    expect(html).toContain(`${RETURN_DAYS} днів`);
     for (const o of paymentOptions) expect(html).toContain(o.title);
+    // Накладений платіж: оплата при отриманні готівкою або карткою
+    expect(html).toContain("готівкою або карткою");
+    expect(html).toMatch(/будні.*14:00/);
     // Вимкнені способи оплати (картка, частинами) в оферті не обіцяємо
     expect(html).not.toContain("Карткою онлайн");
     // Доставка — за тарифами перевізника, без безкоштовної доставки
@@ -52,7 +74,7 @@ describe("публічна оферта", () => {
 
   it("зміст посилається на кожен розділ", () => {
     const html = render(fop);
-    for (const s of offerSections) {
+    for (const s of offerSections()) {
       expect(html).toContain(`href="#${s.id}"`);
       expect(html).toContain(`id="${s.id}"`);
     }

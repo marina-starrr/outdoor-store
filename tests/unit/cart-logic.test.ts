@@ -84,8 +84,17 @@ describe("cartTotals", () => {
 
 describe("оплата", () => {
   it("покупцям доступні лише способи, які справді працюють", () => {
-    // Лише оплата на рахунок: накладеним платежем не відправляємо
-    expect(paymentOptions.map((p) => p.id)).toEqual(["invoice"]);
+    // Оплата на рахунок або накладений платіж (картка онлайн і частинами — ще не підключені)
+    expect(paymentOptions.map((p) => p.id)).toEqual(["invoice", "cod"]);
+    // Готівкою чи карткою — вирішує покупець у відділенні, на сайті не обирає
+    expect(paymentOptions.find((p) => p.id === "cod")!.text).toMatch(/готівкою або карткою/);
+  });
+
+  it("суми з копійками рахуються до копійки", () => {
+    const product = { ...seedProducts[0], price: 1236.9, oldPrice: undefined };
+    const totals = cartTotals([{ id: product.id, product, qty: 3 }], "np-branch");
+    expect(totals.subtotal).toBe(3710.7);
+    expect(totals.total).toBe(3710.7);
   });
 
   it("назви вимкнених способів лишаються для старих замовлень", () => {

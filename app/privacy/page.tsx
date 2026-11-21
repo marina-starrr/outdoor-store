@@ -4,6 +4,7 @@ import Icon, { type IconName } from "../components/Icon";
 import InfoLayout from "../components/InfoLayout";
 import { Callout, InfoCard, InfoTitle, Prose, Toc } from "../components/info-ui";
 import { contacts } from "../components/data";
+import { returnsInfoEnabled } from "../components/shop-config";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
@@ -111,7 +112,7 @@ export default function PrivacyPage() {
             <li>оформити, доставити замовлення та зв’язатися з вами щодо нього;</li>
             <li>зберігати ваш кошик, обране та історію замовлень між пристроями;</li>
             <li>надіслати фіскальний чек і повідомлення про статус замовлення;</li>
-            <li>відповісти вам у чаті, опрацювати обмін чи повернення;</li>
+            <li>відповісти вам у чаті{returnsInfoEnabled() ? ", опрацювати обмін чи повернення" : ""};</li>
             <li>захистити акаунт від зламу (наприклад, обмежити кількість спроб входу).</li>
           </ul>
           <p>

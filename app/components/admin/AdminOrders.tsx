@@ -104,9 +104,11 @@ function Orders() {
       setNotice(
         status === "cancelled"
           ? `Замовлення ${number} скасовано, заброньовані товари повернено на склад`
-          : status === "confirmed"
-            ? `Замовлення ${number} підтверджено: товар заброньовано на ${PAYMENT_DAYS} дні, покупцю надіслано реквізити`
-            : `Замовлення ${number}: ${orderStatusInfo[status].label.toLowerCase()}`,
+          : status === "confirmed" && order.payment === "cod"
+            ? `Замовлення ${number} підтверджено, товар заброньовано. Накладений платіж — відправте посилку з оплатою при отриманні на ${formatPrice(order.total)}`
+            : status === "confirmed"
+              ? `Замовлення ${number} підтверджено: товар заброньовано на ${PAYMENT_DAYS} дні, покупцю надіслано реквізити`
+              : `Замовлення ${number}: ${orderStatusInfo[status].label.toLowerCase()}`,
       );
     } catch (e) {
       setNotice((e as ApiError).message);
@@ -190,7 +192,7 @@ function Orders() {
                     <span className="block truncate text-xs text-[#527083]">{o.contact.phone} · {o.lines.reduce((s, l) => s + l.qty, 0)} шт.</span>
                   </span>
                   <b className="text-base">{formatPrice(o.total)}</b>
-                  <StatusPill status={o.status} />
+                  <StatusPill status={o.status} payment={o.payment} />
                   <Icon name="arrow" className={`h-4 w-4 text-[#8aa5b5] transition ${expanded ? "-rotate-90" : "rotate-90"}`} />
                 </button>
 
@@ -237,6 +239,11 @@ function Orders() {
                         {o.status === "confirmed" && o.confirmedAt && o.payment === "invoice" && (
                           <span className="mt-1 block text-xs font-bold text-[#c27c00]">
                             Чекаємо оплату до {shortDate(paymentDue(o.confirmedAt))}, далі — автоскасування
+                          </span>
+                        )}
+                        {o.payment === "cod" && (o.status === "new" || o.status === "confirmed") && (
+                          <span className="mt-1 block text-xs font-bold text-[#c27c00]">
+                            Оформіть ТТН з накладеним платежем на {formatPrice(o.total)}
                           </span>
                         )}
                         {o.paidAt && <span className="mt-1 block text-xs font-bold text-[#1f9d55]">Оплачено {shortDate(o.paidAt)}</span>}

@@ -28,11 +28,12 @@ import {
   isDeliveryId,
   paymentOptions,
   promoCodes,
+  RETURN_DAYS,
   type DeliveryId,
   type PaymentId,
 } from "./cart-logic";
 import { formatPrice, productsWord } from "./catalog-data";
-import { discountsEnabled } from "./shop-config";
+import { SHIP_CUTOFF_HOUR, discountsEnabled, returnsInfoEnabled } from "./shop-config";
 
 type Form = {
   firstName: string;
@@ -484,7 +485,7 @@ export default function CartPage() {
                       </div>
                     )}
                     <p className="mt-4 text-xs text-[#8aa5b5]">
-                      Відправляємо щодня. Детальніше про строки й вартість —{" "}
+                      Відправляємо в будні: оформлені до {SHIP_CUTOFF_HOUR}:00 — того ж дня. Детальніше про строки й вартість —{" "}
                       <Link href="/delivery" target="_blank" className="font-bold text-[#098fd0] hover:underline">
                         Доставка і оплата
                       </Link>
@@ -605,7 +606,11 @@ export default function CartPage() {
                               </>
                             )}
                             <Link href="/delivery" target="_blank" className="font-bold text-[#098fd0] hover:underline">умовами доставки й оплати</Link>,{" "}
-                            <Link href="/returns" target="_blank" className="font-bold text-[#098fd0] hover:underline">умовами повернення</Link>{" "}
+                            {returnsInfoEnabled() && (
+                              <>
+                                <Link href="/returns" target="_blank" className="font-bold text-[#098fd0] hover:underline">умовами повернення</Link>{" "}
+                              </>
+                            )}
                             та{" "}
                             <Link href="/privacy" target="_blank" className="font-bold text-[#098fd0] hover:underline">політикою конфіденційності</Link>
                           </span>
@@ -633,7 +638,11 @@ export default function CartPage() {
 
                   <ul className="mt-4 grid gap-3 px-2 text-sm text-[#3d5d70]">
                     <li className="flex items-center gap-3"><Icon name="shield" className="h-5 w-5 text-[#067eb7]" /> Гарантія якості на все спорядження</li>
-                    <li className="flex items-center gap-3"><Icon name="return" className="h-5 w-5 text-[#067eb7]" /> Обмін і повернення протягом 14 днів</li>
+                    {returnsInfoEnabled() ? (
+                      <li className="flex items-center gap-3"><Icon name="return" className="h-5 w-5 text-[#067eb7]" /> Обмін і повернення протягом {RETURN_DAYS} днів</li>
+                    ) : (
+                      <li className="flex items-center gap-3"><Icon name="clock" className="h-5 w-5 text-[#067eb7]" /> Оформлені в будні до {SHIP_CUTOFF_HOUR}:00 — відправляємо того ж дня</li>
+                    )}
                     <li className="flex items-center gap-3"><Icon name="headset" className="h-5 w-5 text-[#067eb7]" /> Допомога з вибором: {contacts.phone}</li>
                   </ul>
                 </aside>
@@ -690,6 +699,12 @@ function OrderSuccess({ order }: { order: PlacedOrder }) {
           <b className="text-[#082c45]">Як оплатити:</b> щойно менеджер підтвердить замовлення, товар буде заброньовано
           за вами, а на {order.email ? <b className="text-[#082c45]">{order.email}</b> : "ваш email"} прийде лист із
           реквізитами для оплати. Оплатити потрібно протягом {PAYMENT_DAYS} днів.
+        </p>
+      )}
+      {order.payment === "cod" && (
+        <p data-testid="payment-cod-note" className="mx-auto mt-4 max-w-md rounded-2xl bg-[#fffbe6] px-5 py-4 text-sm leading-relaxed text-[#3d5d70]">
+          <b className="text-[#082c45]">Оплата при отриманні:</b> {formatPrice(order.total)} сплатите у відділенні чи
+          кур’єру — готівкою або карткою. Перевізник бере невелику комісію за переказ коштів.
         </p>
       )}
 
