@@ -93,6 +93,30 @@ test.describe("фільтри категорії", () => {
     await expect(chip).toBeHidden();
   });
 
+  test("тип товару з назв: звужує список, потрапляє в URL і відновлюється з нього", async ({ page }) => {
+    await page.goto("/catalog/lighting");
+    const aside = page.locator('aside[aria-label="Фільтри"]');
+    const group = aside.locator("fieldset").filter({ has: page.locator("legend", { hasText: "Тип товару" }) });
+    await expect(group).toBeVisible();
+    await group.locator("label").filter({ hasText: "Налобні ліхтарі" }).click();
+    await expect(page.getByRole("button", { name: "Прибрати фільтр Налобні ліхтарі" })).toBeVisible();
+    await expect(page).toHaveURL(/type=/);
+    await expect(listing(page).locator("article")).toHaveCount(1);
+    await expect(listing(page).locator("article").first()).toContainText("Налобний ліхтар");
+
+    await page.reload();
+    await expect(aside.getByRole("checkbox", { name: /^Налобні ліхтарі/ })).toBeChecked();
+    await expect(listing(page).locator("article")).toHaveCount(1);
+  });
+
+  test("місткість наметів і групи без вибору (один бренд, один колір) не показуються зайвими", async ({ page }) => {
+    await page.goto("/catalog/tents");
+    const aside = page.locator('aside[aria-label="Фільтри"]');
+    await expect(aside.locator("legend", { hasText: "Місткість" })).toBeVisible();
+    // У початкових наметах кольорів у назвах немає — фільтра «Колір» немає
+    await expect(aside.locator("legend", { hasText: "Колір" })).toHaveCount(0);
+  });
+
   test("фільтр за ціною з URL зберігається після перезавантаження", async ({ page }) => {
     await page.goto("/catalog/tents");
     await sortButton(page).click();

@@ -289,6 +289,49 @@ export function Checkbox({
   );
 }
 
+/** Список чекбоксів, що згортається після `limit` значень (обрані завжди видно) */
+export function CheckboxList({
+  options,
+  isChecked,
+  count,
+  onToggle,
+  limit = 6,
+}: {
+  options: { value: string; label: string }[];
+  isChecked: (value: string) => boolean;
+  count: (value: string) => number;
+  onToggle: (value: string) => void;
+  limit?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const collapsible = options.length > limit + 1;
+  const shown =
+    !collapsible || expanded ? options : options.filter((o, i) => i < limit || isChecked(o.value));
+  return (
+    <>
+      {shown.map((o) => (
+        <Checkbox
+          key={o.value}
+          label={o.label}
+          count={count(o.value)}
+          checked={isChecked(o.value)}
+          onChange={() => onToggle(o.value)}
+        />
+      ))}
+      {collapsible && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="justify-self-start text-sm font-bold text-[#067eb7] hover:underline"
+        >
+          {expanded ? "Згорнути" : `Показати всі (${options.length})`}
+        </button>
+      )}
+    </>
+  );
+}
+
 export function ResetButton({ onClick }: { onClick: () => void }) {
   return (
     <button

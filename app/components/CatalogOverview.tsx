@@ -12,6 +12,7 @@ import {
   ActiveChips,
   Breadcrumbs,
   Checkbox,
+  CheckboxList,
   EmptyState,
   FilterDrawer,
   FilterGroup,
@@ -42,6 +43,7 @@ import {
   type Product,
 } from "./catalog-data";
 import { useCatalog } from "./Catalog";
+import { availableFacets, facetValues, matchesFacets, shipsToday } from "./catalog-facets";
 import { matchesSearch } from "./search";
 import { CARD_SIZES, responsiveImage } from "./photo";
 
@@ -59,28 +61,36 @@ type Filters = {
   price: [number, number];
   categories: CategorySlug[];
   brands: string[];
+  /** Колір — з назв товарів (catalog-facets) */
+  colors: string[];
   saleOnly: boolean;
   inStockOnly: boolean;
+  /** Лише ті, що відправимо сьогодні (без «під замовлення») */
+  readyOnly: boolean;
 };
 
 const initialFiltersFor = (bounds: [number, number]): Filters => ({
   price: bounds,
   categories: [],
   brands: [],
+  colors: [],
   saleOnly: false,
   inStockOnly: false,
+  readyOnly: false,
 });
 
 const toggle = <T,>(list: T[], value: T) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
 /** Фільтри товару (без категорії та пошуку) */
-function matches(p: Product, f: Filters, skip?: "brands") {
+function matches(p: Product, f: Filters, skip?: "brands" | "colors") {
   if (p.price < f.price[0] || p.price > f.price[1]) return false;
   if (skip !== "brands" && f.brands.length && !f.brands.includes(p.brand))
     return false;
+  if (skip !== "colors" && !matchesFacets(p, { color: f.colors })) return false;
   if (f.saleOnly && !p.oldPrice) return false;
   if (f.inStockOnly && !p.inStock) return false;
+  if (f.readyOnly && !shipsToday(p)) return false;
   return true;
 }
 
@@ -98,6 +108,8 @@ export default function CatalogOverview() {
   const { products, brands } = useCatalog();
   const BOUNDS = useMemo(() => roundBounds(priceBounds(products)), [products]);
   const initialFilters = useMemo(() => initialFiltersFor(BOUNDS), [BOUNDS]);
+  const colors = useMemo(() => availableFacets(products, undefined, ["color"])[0]?.values ?? [], [products]);
+  const hasOnRequest = products.some((p) => p.inStock && p.onRequest);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Filters>(() => initialFiltersFor(roundBounds(priceBounds(products))));
   const [sort, setSort] = useState<SortId>("popular");
@@ -121,22 +133,26 @@ export default function CatalogOverview() {
         (c): c is CategorySlug => c in categoryBySlug,
       ),
       brands: listParam(sp, "brand").filter((b) => brands.includes(b)),
+      colors: listParam(sp, "color").filter((c) => colors.includes(c)),
       saleOnly: sp.get("sale") === "1",
       inStockOnly: sp.get("stock") === "1",
+      readyOnly: sp.get("ready") === "1",
     });
     if (sortOptions.some((o) => o.id === s)) setSort(s as SortId);
     setQuery(sp.get("q") ?? "");
     setUrlReady(true);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [BOUNDS, brands]);
+  }, [BOUNDS, brands, colors]);
 
   // Параметри, що передаються далі на сторінку категорії
   const carried = {
     min: filters.price[0] !== BOUNDS[0] ? String(filters.price[0]) : undefined,
     max: filters.price[1] !== BOUNDS[1] ? String(filters.price[1]) : undefined,
     brand: filters.brands.join(",") || undefined,
+    color: filters.colors.join(",") || undefined,
     sale: filters.saleOnly ? "1" : undefined,
     stock: filters.inStockOnly ? "1" : undefined,
+    ready: filters.readyOnly ? "1" : undefined,
   };
   const carriedKey = JSON.stringify(carried);
 
@@ -186,16 +202,17 @@ export default function CatalogOverview() {
   const counts = useMemo(() => {
     const category: Record<string, number> = {};
     const brand: Record<string, number> = {};
+    const color: Record<string, number> = {};
     for (const p of products) {
       if (matches(p, filters))
         category[p.category] = (category[p.category] ?? 0) + 1;
-      if (
-        matches(p, filters, "brands") &&
-        (!filters.categories.length || filters.categories.includes(p.category))
-      )
+      const inCategories = !filters.categories.length || filters.categories.includes(p.category);
+      if (inCategories && matches(p, filters, "brands"))
         brand[p.brand] = (brand[p.brand] ?? 0) + 1;
+      if (inCategories && matches(p, filters, "colors"))
+        for (const c of facetValues(p).color) color[c] = (color[c] ?? 0) + 1;
     }
-    return { category, brand };
+    return { category, brand, color };
   }, [filters, products]);
 
   // Товари за пошуковим запитом або «Гарячі пропозиції»
@@ -242,8 +259,14 @@ export default function CatalogOverview() {
       label: b,
       remove: () => update({ brands: filters.brands.filter((x) => x !== b) }),
     })),
+    ...filters.colors.map((c) => ({
+      key: `color-${c}`,
+      label: c,
+      remove: () => update({ colors: filters.colors.filter((x) => x !== c) }),
+    })),
     ...(filters.saleOnly ? [{ key: "sale", label: "Зі знижкою", remove: () => update({ saleOnly: false }) }] : []),
     ...(filters.inStockOnly ? [{ key: "stock", label: "В наявності", remove: () => update({ inStockOnly: false }) }] : []),
+    ...(filters.readyOnly ? [{ key: "ready", label: "Відправимо сьогодні", remove: () => update({ readyOnly: false }) }] : []),
   ];
 
   const hrefFor = (row: CategoryRow) => {
@@ -274,16 +297,23 @@ export default function CatalogOverview() {
         ))}
       </FilterGroup>
       <FilterGroup title="Бренд">
-        {brands.map((b) => (
-          <Checkbox
-            key={b}
-            label={b}
-            count={counts.brand[b] ?? 0}
-            checked={filters.brands.includes(b)}
-            onChange={() => update({ brands: toggle(filters.brands, b) })}
-          />
-        ))}
+        <CheckboxList
+          options={brands.map((b) => ({ value: b, label: b }))}
+          isChecked={(b) => filters.brands.includes(b)}
+          count={(b) => counts.brand[b] ?? 0}
+          onToggle={(b) => update({ brands: toggle(filters.brands, b) })}
+        />
       </FilterGroup>
+      {colors.length > 0 && (
+        <FilterGroup title="Колір">
+          <CheckboxList
+            options={colors.map((c) => ({ value: c, label: c }))}
+            isChecked={(c) => filters.colors.includes(c)}
+            count={(c) => counts.color[c] ?? 0}
+            onToggle={(c) => update({ colors: toggle(filters.colors, c) })}
+          />
+        </FilterGroup>
+      )}
       <FilterGroup title="Додатково">
         <Checkbox
           label="Зі знижкою"
@@ -295,6 +325,13 @@ export default function CatalogOverview() {
           checked={filters.inStockOnly}
           onChange={() => update({ inStockOnly: !filters.inStockOnly })}
         />
+        {hasOnRequest && (
+          <Checkbox
+            label="Відправимо сьогодні"
+            checked={filters.readyOnly}
+            onChange={() => update({ readyOnly: !filters.readyOnly })}
+          />
+        )}
       </FilterGroup>
       <ResetButton onClick={resetAll} />
     </div>
