@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   HIT_SOLD,
   selectHits,
+  selectShowcase,
   brandsOf,
   categories,
   categoryBySlug,
@@ -51,6 +52,21 @@ describe("дані каталогу", () => {
     const list = products.map((p, i) => ({ ...p, hit: i === 0, sold: i === 1 ? HIT_SOLD : i === 2 ? HIT_SOLD - 1 : 0 }));
     const hits = selectHits(list);
     expect(hits.map((p) => p.id)).toEqual([list[1].id, list[0].id]);
+  });
+
+  it("вітрина хітів: спершу справжні хіти, далі — товари в наявності за популярністю, без прихованих", () => {
+    const list = products.map((p, i) => ({ ...p, hit: i === 5, hidden: i === 0, sold: 0 }));
+    const showcase = selectShowcase(list, 4);
+    expect(showcase).toHaveLength(4);
+    expect(showcase[0].id).toBe(list[5].id);
+    expect(showcase.some((p) => p.hidden || !p.inStock)).toBe(false);
+    expect(new Set(showcase.map((p) => p.id)).size).toBe(4);
+    const rest = showcase.slice(1).map((p) => p.popularity);
+    expect(rest).toEqual([...rest].sort((a, b) => a - b));
+    // Хітів достатньо — лише вони
+    const allHits = list.map((p) => ({ ...p, hit: true }));
+    expect(selectShowcase(allHits, 2)).toEqual(selectHits(allHits));
+    expect(selectShowcase([], 4)).toEqual([]);
   });
 
   it("у наметів вказана місткість", () => {

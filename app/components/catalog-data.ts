@@ -396,6 +396,20 @@ export const bySales = (a: Product, b: Product) => (b.sold ?? 0) - (a.sold ?? 0)
 export const selectHits = (products: Product[]) =>
   products.filter((p) => !p.hidden && (p.hit || (p.sold ?? 0) >= HIT_SOLD)).sort(bySales);
 
+/**
+ * Вітрина хітів (головна, сторінка «Хіти»): спершу справжні хіти, а якщо їх менше
+ * за `size` — доповнюємо товарами в наявності в порядку «Популярні»
+ */
+export function selectShowcase(products: Product[], size: number): Product[] {
+  const hits = selectHits(products);
+  if (hits.length >= size) return hits;
+  const taken = new Set(hits.map((p) => p.id));
+  const rest = products
+    .filter((p) => !p.hidden && p.inStock && !taken.has(p.id))
+    .sort((a, b) => a.popularity - b.popularity);
+  return [...hits, ...rest.slice(0, size - hits.length)];
+}
+
 /** Бренди зі списку товарів (для фільтрів) */
 export const brandsOf = (list: Product[]) => Array.from(new Set(list.map((p) => p.brand))).sort();
 

@@ -9,7 +9,7 @@ import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import RecentlyViewed from "./RecentlyViewed";
 import { useCatalog } from "./Catalog";
-import { categoryBySlug, discountPercent, formatPrice, selectHits } from "./catalog-data";
+import { categoryBySlug, discountPercent, formatPrice, selectShowcase } from "./catalog-data";
 import { categories } from "./data";
 
 /** Скільки товарів у вітрині «Хіти продажу» на головній */
@@ -38,9 +38,7 @@ export default function Storefront() {
 
   // Вітрина — справжні хіти з каталогу (бази); якщо хітів мало — доповнюємо товарами в наявності
   const products = useMemo(() => {
-    const hits = selectHits(catalog);
-    const rest = catalog.filter((p) => !p.hidden && p.inStock && !hits.includes(p)).sort((a, b) => a.popularity - b.popularity);
-    return [...hits, ...rest].slice(0, SHOWCASE_SIZE).map((p) => ({
+    return selectShowcase(catalog, SHOWCASE_SIZE).slice(0, SHOWCASE_SIZE).map((p) => ({
       id: p.id,
       name: p.name,
       category: categoryBySlug[p.category]?.name ?? "",

@@ -16,7 +16,7 @@ import {
   formatPrice,
   plural,
   productsWord,
-  selectHits,
+  selectShowcase,
   type CategorySlug,
   type Product,
 } from "./catalog-data";
@@ -47,6 +47,9 @@ const sorters: Record<SortId, (a: Product, b: Product) => number> = {
   discount: (a, b) => discountPercent(b) - discountPercent(a),
 };
 
+/** Скільки товарів щонайменше показує сторінка «Хіти», поки справжніх хітів мало */
+const HITS_PAGE_MIN = 12;
+
 /** Готовий набір із хітів для першої сімейної ночівлі */
 const bundle: { id: string; qty: number }[] = [
   { id: "ch3", qty: 1 },
@@ -58,8 +61,11 @@ const bundle: { id: string; qty: number }[] = [
 
 /** Усі розрахунки сторінки — з актуального каталогу (ціни, наявність, продажі й відгуки з бази) */
 export function computeHits(products: Product[], byId: ReadonlyMap<string, Product>) {
-  /** Хіти: з позначкою «Хіт» або ті, що справді добре продаються; порядок — за продажами */
-  const hits = selectHits(products);
+  /**
+   * Хіти: з позначкою «Хіт» або ті, що справді добре продаються (порядок — за продажами);
+   * поки їх мало — доповнюються популярними товарами в наявності, як вітрина на головній
+   */
+  const hits = selectShowcase(products, HITS_PAGE_MIN);
   /** Місце серед хітів (1 — найпопулярніший) */
   const rankOf = new Map(hits.map((p, i) => [p.id, i + 1]));
   // Рейтинг — лише з товарів, що мають справжні відгуки
