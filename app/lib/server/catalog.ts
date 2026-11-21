@@ -50,6 +50,8 @@ export const productFromRow = (r: Row): Product =>
     customImage: opt(r.custom_image),
     images: Array.isArray(r.images) && r.images.length ? r.images : undefined,
     onRequest: r.on_request || undefined,
+    // Товари постачальників продаються за їхньою РРЦ (антидемпінгова політика)
+    fixedPrice: r.supplier_id ? true : undefined,
     updatedAt: isoOpt(r.updated_at),
     popularity: num(r.popularity),
     specs: r.specs,
@@ -101,7 +103,7 @@ export async function updateProduct(q: Queryable, p: Product) {
 
 /** Товар для зміни: рядок блокується до кінця транзакції */
 export async function lockProduct(q: Queryable, id: string): Promise<Product | null> {
-  const [row] = await q.query(`select ${PRODUCT_COLUMNS} from products where id = $1 for update`, [id]);
+  const [row] = await q.query(`select ${PRODUCT_COLUMNS}, supplier_id from products where id = $1 for update`, [id]);
   return row ? productFromRow(row) : null;
 }
 

@@ -27,6 +27,8 @@ export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/admin/pro
   return json({ ok: true });
 }
 
+const FIXED_PRICE_ERROR = "Ціну задає постачальник (РРЦ) — змінити її вручну не можна";
+
 /**
  * Зміна товару.
  * - повне редагування: усі поля форми (як при створенні);
@@ -55,6 +57,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/prod
     if (isQuick) merged.oldPrice = null;
     const { data, errors } = validateProduct(merged);
     if (!data) return { errors };
+    // Товар постачальника: ціна — його РРЦ (антидемпінгова політика), оновлюється синхронізацією
+    if (product.fixedPrice && "price" in body && data.price !== product.price)
+      return { errors: { price: FIXED_PRICE_ERROR } };
 
     if (isQuick) {
       if ("stock" in body) product.stock = data.stock;

@@ -198,8 +198,20 @@ export default function ProductEditor({
           </Section>
 
           <Section title="Ціна та склад">
-            <F id="price" label="Ціна, ₴" error={errors.price}>
-              <input id="pe-price" inputMode="numeric" value={form.price} onChange={(e) => set("price", e.target.value)} className={inputCls(errors.price)} />
+            <F
+              id="price"
+              label="Ціна, ₴"
+              error={errors.price}
+              hint={product?.fixedPrice ? "РРЦ постачальника — оновлюється автоматично, змінити вручну не можна" : undefined}
+            >
+              <input
+                id="pe-price"
+                inputMode="numeric"
+                value={form.price}
+                onChange={(e) => set("price", e.target.value)}
+                readOnly={product?.fixedPrice}
+                className={`${inputCls(errors.price)} ${product?.fixedPrice ? "cursor-not-allowed bg-[#f1f5f8] text-[#527083]" : ""}`}
+              />
             </F>
             <F id="oldPrice" label="Стара ціна, ₴" error={errors.oldPrice} hint="Заповніть, щоб показати знижку">
               <input id="pe-oldPrice" inputMode="numeric" value={form.oldPrice} onChange={(e) => set("oldPrice", e.target.value)} className={inputCls(errors.oldPrice)} />

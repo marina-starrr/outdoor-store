@@ -109,7 +109,9 @@ export function cartTotals(
     0,
   );
   const percent = promo ? (promoCodes[promo]?.percent ?? 0) : 0;
-  const promoDiscount = Math.round((subtotal * percent) / 100);
+  // Промокод не діє на товари з ціною постачальника (РРЦ): продаж нижче РРЦ — порушення його політики
+  const promoBase = lines.reduce((s, l) => s + (l.product.fixedPrice ? 0 : l.product.price * l.qty), 0);
+  const promoDiscount = Math.round((promoBase * percent) / 100);
   // Доставку покупець оплачує перевізнику при отриманні — у суму не входить
   void delivery;
   const shipping = 0;
@@ -118,6 +120,8 @@ export function cartTotals(
     subtotal,
     savings,
     promoDiscount,
+    /** Є товари, на які промокод не діє (ціна постачальника) */
+    promoExcluded: lines.some((l) => l.product.fixedPrice),
     shipping,
     total: subtotal - promoDiscount + shipping,
   };

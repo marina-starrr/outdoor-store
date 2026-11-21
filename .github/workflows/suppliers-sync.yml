@@ -1,0 +1,56 @@
+# Щогодинне оновлення цін і залишків постачальників (Ranger тощо).
+#
+# Vercel Hobby дозволяє cron лише раз на добу, тож щогодини маршрут
+# /api/cron/suppliers викликає GitHub Actions. Щоденний cron Vercel лишається.
+#
+# Секрети репозиторію (Settings → Secrets and variables → Actions):
+#   CRON_SECRET  — те саме значення, що й CRON_SECRET у Vercel
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID — повідомлення, якщо оновлення не вдалося
+
+name: Оновлення постачальників
+
+on:
+  schedule:
+    - cron: "17 * * * *" # щогодини о :17
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: suppliers-sync
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://outdoor-store-ten.vercel.app
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Оновити ціни й залишки
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          # Без секрету — пропуск (не червоний запуск і не сповіщення щогодини)
+          if [ -z "$CRON_SECRET" ]; then echo "::warning::Немає секрету CRON_SECRET — оновлення пропущено"; exit 0; fi
+          code=$(curl -sS -o result.json -w '%{http_code}' --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/suppliers")
+          echo "HTTP $code"
+          cat result.json; echo
+          [ "$code" = "200" ] || { echo "::error::Оновлення повернуло $code"; exit 1; }
+
+      - name: Повідомити в Telegram про помилку
+        if: failure()
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHATS: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -z "$TOKEN" ] || [ -z "$CHATS" ] && exit 0
+          for chat in $(echo "$CHATS" | tr ',' ' '); do
+            curl -sS -o /dev/null "https://api.telegram.org/bot$TOKEN/sendMessage" \
+              --data-urlencode "chat_id=$chat" \
+              --data-urlencode "text=⚠️ Оновлення цін і залишків постачальників не вдалося. Подробиці: $RUN_URL"
+          done

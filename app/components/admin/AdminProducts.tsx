@@ -188,7 +188,13 @@ function ProductRow({
       </div>
       <div className="col-span-2 flex items-center gap-2 lg:col-span-1">
         <span className="w-16 text-xs text-[#8aa5b5] lg:hidden">Ціна</span>
-        <InlineNumber label={`Ціна ${p.name}`} value={p.price} suffix="₴" onSave={(price) => onQuick({ price })} />
+        {p.fixedPrice ? (
+          <span className="whitespace-nowrap text-sm font-extrabold" title="РРЦ постачальника — оновлюється автоматично">
+            {formatPrice(p.price)} <span className="ml-1 rounded-full bg-[#eef6fb] px-2 py-0.5 text-[11px] font-bold text-[#527083]">РРЦ</span>
+          </span>
+        ) : (
+          <InlineNumber label={`Ціна ${p.name}`} value={p.price} suffix="₴" onSave={(price) => onQuick({ price })} />
+        )}
         {p.oldPrice && <span className="whitespace-nowrap text-xs text-slate-400 line-through">{formatPrice(p.oldPrice)}</span>}
       </div>
       <div className="col-span-2 flex items-center gap-2 lg:col-span-1">

@@ -5,6 +5,9 @@ import * as supplierSync from "../../app/api/admin/suppliers/[id]/sync/route";
 import * as suppliers from "../../app/api/admin/suppliers/route";
 import * as register from "../../app/api/auth/register/route";
 import * as cron from "../../app/api/cron/orders/route";
+import * as suppliersCron from "../../app/api/cron/suppliers/route";
+import { NextRequest } from "next/server";
+import { cartTotals } from "../../app/components/cart-logic";
 import { loadCatalog } from "../../app/lib/server/catalog";
 import { cleanDescription, parseFeed, suggestCategory } from "../../app/lib/server/suppliers";
 import { call, dbQuery, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
@@ -262,5 +265,48 @@ describe("постачальники в адмін-панелі", () => {
     expect(res.status).toBe(200);
     expect(data.suppliers.Ranger).toBeDefined();
     delete process.env.CRON_SECRET;
+  });
+
+  it("щогодинний маршрут: лише з секретом, оновлює ціни й залишки, збій постачальника → 502", async () => {
+    process.env.CRON_SECRET = "test-cron-secret";
+    const s = await create([{ id: "HOUR1", price: 100, stock: 3, cat: "7" }]);
+    await sync(s.id);
+    const hourly = (auth?: string) =>
+      suppliersCron.GET(new NextRequest("http://localhost/api/cron/suppliers", { headers: auth ? { authorization: auth } : {} }));
+    expect((await hourly()).status).toBe(401);
+    expect((await hourly("Bearer wrong")).status).toBe(401);
+
+    serveFeed(yml([{ id: "HOUR1", price: 120, stock: 1, cat: "7" }]));
+    const ok = await hourly("Bearer test-cron-secret");
+    expect(ok.status).toBe(200);
+    expect(await bySku("HOUR1")).toMatchObject({ stock: 1 });
+    expect(Number((await bySku("HOUR1")).price)).toBe(120);
+
+    serveFeed("oops", 500);
+    const bad = await hourly("Bearer test-cron-secret");
+    expect(bad.status).toBe(502);
+    expect((await bad.json()).ok).toBe(false);
+    delete process.env.CRON_SECRET;
+  });
+
+  it("ціна товару постачальника — РРЦ: в адмінці не змінити, промокод на неї не діє", async () => {
+    const s = await create([{ id: "RRP1", price: 1000, stock: 5, cat: "7" }]);
+    await sync(s.id);
+    const row = await bySku("RRP1");
+    const patch = (body: unknown) =>
+      call(withId(productItem.PATCH, { id: row.id as string }), { method: "PATCH", cookie: admin, body });
+    const lower = await patch({ price: 900 });
+    expect(lower.status).toBe(400);
+    expect(lower.data.errors.price).toContain("РРЦ");
+    expect(Number((await bySku("RRP1")).price)).toBe(1000);
+    // Залишок і інші поля — можна
+    expect((await patch({ stock: 4 })).status).toBe(200);
+
+    const product = (await loadCatalog()).find((p) => p.id === row.id)!;
+    expect(product.fixedPrice).toBe(true);
+    const totals = cartTotals([{ id: product.id, product, qty: 2 }], "np-branch", "FAMILY10");
+    expect(totals.promoDiscount).toBe(0);
+    expect(totals.promoExcluded).toBe(true);
+    expect(totals.total).toBe(2000);
   });
 });

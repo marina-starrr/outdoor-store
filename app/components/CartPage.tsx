@@ -540,6 +540,13 @@ export default function CartPage() {
                           <span>
                             <b className="text-[#1f9d55]">{promo}</b>{" "}
                             <span className="text-[#3d5d70]">{promoCodes[promo].label}</span>
+                            {totals.promoExcluded && (
+                              <span className="mt-1 block text-xs text-[#527083]">
+                                {totals.promoDiscount > 0
+                                  ? "Не діє на товари з фіксованою ціною виробника."
+                                  : "На товари в кошику промокод не діє: у них фіксована ціна виробника."}
+                              </span>
+                            )}
                           </span>
                           <button type="button" onClick={() => { setPromo(undefined); setPromoInput(""); }} className="grid h-7 w-7 place-items-center rounded-full text-[#527083] hover:bg-white" aria-label="Скасувати промокод">
                             <Icon name="close" className="h-4 w-4" />
