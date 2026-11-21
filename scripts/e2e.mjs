@@ -9,7 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
-const env = { ...process.env, FC_DATA_DIR: join(tmpdir(), "fc-e2e-build") };
+// NEXT_PUBLIC_DISCOUNTS=1: знижки на сайті вимкнено, але тести перевіряють і їх (вбудовується під час збірки)
+const env = { ...process.env, FC_DATA_DIR: join(tmpdir(), "fc-e2e-build"), NEXT_PUBLIC_DISCOUNTS: process.env.NEXT_PUBLIC_DISCOUNTS ?? "1" };
 
 const run = (bin, args) => {
   const r = spawnSync(process.execPath, [bin, ...args], { stdio: "inherit", env });

@@ -14,6 +14,8 @@ delete process.env.POSTGRES_URL;
 delete process.env.DATABASE_URL;
 // База в пам'яті з шаблону (tests/global-setup.ts); файл тесту може вимкнути це до першого запиту
 process.env.FC_DB_MEMORY = "1";
+// Знижки на сайті вимкнено (shop-config), але сама функція має лишатися перевіреною
+process.env.NEXT_PUBLIC_DISCOUNTS ??= "1";
 // Довідник міст — з локального файлу, без запитів до Нової пошти
 process.env.NP_CITIES_FIXTURE = join(process.cwd(), "tests", "fixtures", "np-cities.json");
 

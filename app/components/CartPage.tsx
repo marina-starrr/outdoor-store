@@ -32,6 +32,7 @@ import {
   type PaymentId,
 } from "./cart-logic";
 import { formatPrice, productsWord } from "./catalog-data";
+import { discountsEnabled } from "./shop-config";
 
 type Form = {
   firstName: string;
@@ -533,7 +534,8 @@ export default function CartPage() {
                       <Row label="Доставка" value={SHIPPING_BY_CARRIER} />
                     </dl>
 
-                    {/* Промокод */}
+                    {/* Промокод — лише коли знижки ввімкнено (зараз вимкнено, див. shop-config) */}
+                    {discountsEnabled() && (
                     <div className="mt-5">
                       {promo ? (
                         <p className="flex items-center justify-between rounded-2xl bg-[#e7f7ee] px-4 py-3 text-sm">
@@ -571,6 +573,7 @@ export default function CartPage() {
                         </>
                       )}
                     </div>
+                    )}
 
                     <div className="mt-5 flex items-baseline justify-between border-t border-[#e3edf3] pt-4">
                       <span className="font-bold">До сплати</span>

@@ -1,4 +1,5 @@
 import type { Product } from "./catalog-data";
+import { discountsEnabled } from "./shop-config";
 
 export const MAX_QTY = 20;
 
@@ -108,7 +109,8 @@ export function cartTotals(
     (s, l) => s + ((l.product.oldPrice ?? l.product.price) - l.product.price) * l.qty,
     0,
   );
-  const percent = promo ? (promoCodes[promo]?.percent ?? 0) : 0;
+  // Знижки вимкнено — промокоди не діють (і поле для них сховане)
+  const percent = promo && discountsEnabled() ? (promoCodes[promo]?.percent ?? 0) : 0;
   // Промокод не діє на товари з ціною постачальника (РРЦ): продаж нижче РРЦ — порушення його політики
   const promoBase = lines.reduce((s, l) => s + (l.product.fixedPrice ? 0 : l.product.price * l.qty), 0);
   const promoDiscount = Math.round((promoBase * percent) / 100);

@@ -1,3 +1,5 @@
+import { discountsEnabled } from "./shop-config";
+
 /* ---------- Типи ---------- */
 
 export type CategorySlug =
@@ -384,11 +386,14 @@ export const isCategorySlug = (v: unknown): v is CategorySlug => typeof v === "s
 
 /** Похідні поля товару (фото, наявність) — рахуються однаково на сервері й у браузері */
 export function withDerived(p: Product): Product {
-  return {
+  const derived = {
     ...p,
     image: p.images?.[0] || p.customImage || img(p.photo),
     inStock: p.stock > 0,
   };
+  // Знижки вимкнено — стара (перекреслена) ціна ніде не показується, навіть якщо лишилась у базі
+  if (!discountsEnabled()) delete derived.oldPrice;
+  return derived;
 }
 
 /** Від скількох проданих штук товар потрапляє в хіти без позначки «Хіт» */
@@ -440,6 +445,10 @@ export const productSortOptions = [
 ] as const;
 
 export type ProductSortId = (typeof productSortOptions)[number]["id"];
+
+/** Варіанти сортування для покупця: без «Найбільша знижка», коли знижки вимкнено */
+export const visibleSortOptions = <T extends { id: string }>(options: readonly T[]): T[] =>
+  options.filter((o) => o.id !== "discount" || discountsEnabled());
 
 export function priceBounds(list: Product[]): [number, number] {
   if (!list.length) return [0, 0];

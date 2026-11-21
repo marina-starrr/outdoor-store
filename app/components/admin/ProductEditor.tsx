@@ -18,6 +18,7 @@ import { MAX_IMAGES, validateProduct, type ProductErrors } from "../../lib/admin
 import { PLACEHOLDER_PHOTO, resizeImage } from "../photo";
 import { adminFetch, type ApiError } from "./api";
 import { uploadProductPhoto } from "./photo-upload";
+import { discountsEnabled } from "../shop-config";
 
 type Form = {
   id: string;
@@ -213,9 +214,12 @@ export default function ProductEditor({
                 className={`${inputCls(errors.price)} ${product?.fixedPrice ? "cursor-not-allowed bg-[#f1f5f8] text-[#527083]" : ""}`}
               />
             </F>
-            <F id="oldPrice" label="Стара ціна, ₴" error={errors.oldPrice} hint="Заповніть, щоб показати знижку">
-              <input id="pe-oldPrice" inputMode="numeric" value={form.oldPrice} onChange={(e) => set("oldPrice", e.target.value)} className={inputCls(errors.oldPrice)} />
-            </F>
+            {/* Знижки зараз вимкнено (shop-config) — поле старої ціни сховане */}
+            {discountsEnabled() && (
+              <F id="oldPrice" label="Стара ціна, ₴" error={errors.oldPrice} hint="Заповніть, щоб показати знижку">
+                <input id="pe-oldPrice" inputMode="numeric" value={form.oldPrice} onChange={(e) => set("oldPrice", e.target.value)} className={inputCls(errors.oldPrice)} />
+              </F>
+            )}
             <F id="stock" label="Залишок на складі, шт." error={errors.stock} hint="0 — «Очікується», купити не можна">
               <input id="pe-stock" inputMode="numeric" value={form.stock} onChange={(e) => set("stock", e.target.value)} className={inputCls(errors.stock)} />
             </F>

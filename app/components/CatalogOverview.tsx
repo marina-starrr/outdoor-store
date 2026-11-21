@@ -43,6 +43,7 @@ import {
   type Product,
 } from "./catalog-data";
 import { useCatalog } from "./Catalog";
+import { discountsEnabled } from "./shop-config";
 import { availableFacets, facetValues, matchesFacets, shipsToday } from "./catalog-facets";
 import { matchesSearch } from "./search";
 import { CARD_SIZES, responsiveImage } from "./photo";
@@ -315,11 +316,13 @@ export default function CatalogOverview() {
         </FilterGroup>
       )}
       <FilterGroup title="Додатково">
-        <Checkbox
-          label="Зі знижкою"
-          checked={filters.saleOnly}
-          onChange={() => update({ saleOnly: !filters.saleOnly })}
-        />
+        {discountsEnabled() && (
+          <Checkbox
+            label="Зі знижкою"
+            checked={filters.saleOnly}
+            onChange={() => update({ saleOnly: !filters.saleOnly })}
+          />
+        )}
         <Checkbox
           label="В наявності"
           checked={filters.inStockOnly}

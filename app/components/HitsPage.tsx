@@ -17,11 +17,13 @@ import {
   plural,
   productsWord,
   selectShowcase,
+  visibleSortOptions,
   type CategorySlug,
   type Product,
 } from "./catalog-data";
 import { productUrl } from "./product-details";
 import { useCatalog } from "./Catalog";
+import { discountsEnabled } from "./shop-config";
 import { resizeImage, responsiveImage } from "./photo";
 
 /** Справжній схвалений відгук (див. lib/server/reviews.ts) */
@@ -177,6 +179,7 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                {discountsEnabled() && (
                 <label className="flex cursor-pointer items-center gap-2.5 text-sm font-bold">
                   <span className="relative inline-flex">
                     <input type="checkbox" checked={saleOnly} onChange={(e) => setSaleOnly(e.target.checked)} className="peer sr-only" />
@@ -185,7 +188,8 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
                   </span>
                   Зі знижкою
                 </label>
-                <SortSelect value={sort} options={sortOptions} onChange={setSort} />
+                )}
+                <SortSelect value={sort} options={visibleSortOptions(sortOptions)} onChange={setSort} />
               </div>
             </div>
 

@@ -34,6 +34,7 @@ import {
   formatPrice,
   priceBounds,
   productSortOptions,
+  visibleSortOptions,
   productsWord,
   roundBounds,
   type CapacityId,
@@ -42,6 +43,7 @@ import {
   type ProductSortId,
 } from "./catalog-data";
 import { useCatalog } from "./Catalog";
+import { discountsEnabled } from "./shop-config";
 import {
   availableFacets,
   facetValues,
@@ -305,11 +307,13 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
       {facetGroup("volume")}
       {facetGroup("color")}
       <FilterGroup title="Додатково">
-        <Checkbox
-          label="Зі знижкою"
-          checked={filters.saleOnly}
-          onChange={() => update({ saleOnly: !filters.saleOnly })}
-        />
+        {discountsEnabled() && (
+          <Checkbox
+            label="Зі знижкою"
+            checked={filters.saleOnly}
+            onChange={() => update({ saleOnly: !filters.saleOnly })}
+          />
+        )}
         <Checkbox
           label="В наявності"
           checked={filters.inStockOnly}
@@ -358,7 +362,7 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
               />
               <SortSelect
                 value={sort}
-                options={productSortOptions}
+                options={visibleSortOptions(productSortOptions)}
                 onChange={setSort}
               />
             </div>
