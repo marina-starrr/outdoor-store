@@ -8,6 +8,7 @@ import CartDrawer from "./components/CartDrawer";
 import ChatWidget from "./components/ChatWidget";
 import { ListsProvider } from "./components/Lists";
 import { NotificationsProvider } from "./components/Notifications";
+import SiteAnalytics from "./components/SiteAnalytics";
 import { getPublicCatalog } from "./lib/server/catalog";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "./lib/site";
 import "./globals.css";
@@ -56,6 +57,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Suspense fallback={null}>
                     <ChatWidget />
                   </Suspense>
+                  {/* Статистика відвідувань (Vercel Web Analytics, без cookie) — лише на Vercel: локально її скрипта немає */}
+                  {process.env.VERCEL && (
+                    <Suspense fallback={null}>
+                      <SiteAnalytics />
+                    </Suspense>
+                  )}
                 </ListsProvider>
               </CartProvider>
             </NotificationsProvider>
