@@ -4,7 +4,7 @@ import ChatButton from "../components/ChatButton";
 import Icon, { type IconName } from "../components/Icon";
 import InfoLayout from "../components/InfoLayout";
 import { Faq, InfoCard, InfoTitle } from "../components/info-ui";
-import { contacts } from "../components/data";
+import { contacts, socialLinks } from "../components/data";
 import { RETURN_DAYS } from "../components/cart-logic";
 import { returnsInfoEnabled } from "../components/shop-config";
 
@@ -21,11 +21,6 @@ const channels: { icon: IconName; title: string; value: string; href?: string; n
   { icon: "clock", title: "Замовлення на сайті", value: "Цілодобово, 24/7", note: "Підтверджуємо в робочий час" },
 ];
 
-const socials: { icon: IconName; label: string }[] = [
-  { icon: "instagram", label: "Instagram" },
-  { icon: "facebook", label: "Facebook" },
-  { icon: "youtube", label: "YouTube" },
-];
 
 export default function ContactsPage() {
   return (
@@ -98,10 +93,19 @@ export default function ContactsPage() {
           <InfoCard>
             <p className="text-lg font-extrabold">Ми в соцмережах</p>
             <p className="mt-1 text-sm text-[#527083]">Огляди спорядження, маршрути й розіграші.</p>
-            <div className="mt-4 flex gap-3">
-              {socials.map((s) => (
-                <a key={s.label} href="#" aria-label={s.label} className="grid h-11 w-11 place-items-center rounded-full bg-[#eef9ff] text-[#067eb7] transition hover:bg-[#ffff00] hover:text-[#063e62]">
-                  <Icon name={s.icon} className="h-5 w-5" />
+            <div className="mt-4 flex flex-wrap gap-3">
+              {socialLinks.map((s) => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center gap-2.5 rounded-full bg-[#eef9ff] py-1.5 pl-1.5 pr-5 text-sm font-extrabold text-[#067eb7] transition hover:bg-[#ffff00] hover:text-[#063e62]"
+                >
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-white">
+                    <Icon name={s.icon} className="h-5 w-5" />
+                  </span>
+                  {s.label}
                 </a>
               ))}
             </div>

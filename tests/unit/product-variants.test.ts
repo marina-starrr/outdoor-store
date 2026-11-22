@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CategorySlug, Product } from "../../app/components/catalog-data";
-import { baseTitle, collapseVariants, variantGroups, variantOptions, variantSummary, variantValue } from "../../app/components/product-variants";
+import { baseTitle, collapseVariants, primaryVariant, variantGroups, variantOptions, variantSummary, variantValue } from "../../app/components/product-variants";
 
 let seq = 0;
 const make = (name: string, category: CategorySlug, over: Partial<Product> = {}): Product =>
@@ -60,6 +60,8 @@ describe("варіанти товару", () => {
       ["Піксель", true, true],
       ["Олива", false, false],
     ]);
+    // Основний варіант для Google — перший колір і перший розмір, хоч би що було в наявності
+    expect(primaryVariant(g).name).toBe("Шапка флісова Ranger мультикам 55-57 (RA8951)");
     const sizes = variantOptions(items[0], g, "size");
     expect(sizes.map((o) => [o.value, o.selected])).toEqual([["55–57", true], ["58–61", false]]);
   });

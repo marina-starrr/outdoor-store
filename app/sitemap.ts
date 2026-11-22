@@ -4,6 +4,7 @@ import { productGallery, productUrl } from "./components/product-details";
 import { getPublicCatalog } from "./lib/server/catalog";
 import { SELLER } from "./lib/seller";
 import { returnsInfoEnabled } from "./components/shop-config";
+import { primaryVariant, variantGroups } from "./components/product-variants";
 import { absoluteUrl } from "./lib/site";
 
 /**
@@ -13,6 +14,7 @@ import { absoluteUrl } from "./lib/site";
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const products = await getPublicCatalog();
+  const groups = variantGroups(products);
   const lastProductUpdate = products
     .map((p) => p.updatedAt)
     .filter((d): d is string => !!d)
@@ -33,7 +35,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         .sort()
         .at(-1),
     })),
-    ...products.map((p) => ({
+    // Інші розміри й кольори товару не додаємо — їхня canonical-адреса веде на основний варіант
+    ...products.filter((p) => {
+      const group = groups.get(p.id);
+      return !group || primaryVariant(group).id === p.id;
+    }).map((p) => ({
       url: absoluteUrl(productUrl(p)),
       changeFrequency: "weekly" as const,
       priority: 0.7,

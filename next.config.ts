@@ -35,9 +35,29 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
 ];
 
+/*
+ * Стара адреса Vercel → власний домен (301/308), щоб Google не бачив двох однакових сайтів.
+ * Крім /api/: щогодинне оновлення постачальників (pg_cron у Supabase, GitHub Actions)
+ * і далі звертається до outdoor-store-ten.vercel.app.
+ */
+const LEGACY_HOST = "outdoor-store-ten.vercel.app";
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/+$/, "");
+const redirectLegacyHost = /^https:\/\//.test(SITE_URL) && !SITE_URL.includes(LEGACY_HOST);
+
 const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
+  },
+  async redirects() {
+    if (!redirectLegacyHost) return [];
+    return [
+      {
+        source: "/:path((?!api/).*)",
+        has: [{ type: "host", value: LEGACY_HOST }],
+        destination: `${SITE_URL}/:path`,
+        permanent: true,
+      },
+    ];
   },
   /* config options here */
   experimental: {

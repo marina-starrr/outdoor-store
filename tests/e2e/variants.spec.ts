@@ -64,6 +64,8 @@ test("сторінка товару: вибір розміру відкрива�
   await expect(page.getByRole("heading", { level: 1, name: "Термобілизна Варіантна Тест (L)" })).toBeVisible();
   await expect(picker).toContainText("Розмір: L");
   await expect(page.getByText("990 ₴").first()).toBeVisible();
+  // Для Google усі розміри — одна сторінка: canonical веде на основний (перший) розмір
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", new RegExp(`/catalog/clothing/${ids[0]}$`));
   // У кошик — саме обраний розмір
   await page.getByRole("button", { name: /^Додати в кошик/ }).first().click();
   await page.goto("/cart");

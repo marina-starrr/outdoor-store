@@ -11,6 +11,7 @@ import {
   productGallery,
   productUrl,
 } from "../../../components/product-details";
+import { primaryVariant, variantGroups } from "../../../components/product-variants";
 import { getPublicCatalog } from "../../../lib/server/catalog";
 import { absoluteUrl, SITE_NAME } from "../../../lib/site";
 
@@ -33,10 +34,13 @@ export async function generateMetadata({ params }: PageProps<"/catalog/[slug]/[i
   if (!product) return {};
   const description = productDescription(product)[0].slice(0, 300);
   const url = productUrl(product);
+  // Розміри й кольори одного товару — для Google одна сторінка (основний варіант)
+  const group = variantGroups(await getPublicCatalog()).get(product.id);
+  const canonical = group ? productUrl(primaryVariant(group)) : url;
   return {
     title: product.name,
     description,
-    alternates: { canonical: url },
+    alternates: { canonical },
     openGraph: {
       type: "website",
       url,

@@ -1,15 +1,9 @@
 import Link from "./NavLink";
-import Icon, { type IconName } from "./Icon";
+import Icon from "./Icon";
 import { BrandLogo } from "./SiteHeader";
-import { contacts } from "./data";
+import { contacts, socialLinks } from "./data";
 import { SELLER, sellerCodeLabel, sellerTitle } from "../lib/seller";
 import { returnsInfoEnabled } from "./shop-config";
-
-const socials: { icon: IconName; label: string }[] = [
-  { icon: "instagram", label: "Instagram" },
-  { icon: "facebook", label: "Facebook" },
-  { icon: "youtube", label: "YouTube" },
-];
 
 /** Єдиний футер для всіх сторінок сайту */
 export default function SiteFooter() {
@@ -30,10 +24,12 @@ export default function SiteFooter() {
             з доставкою по всій Україні.
           </p>
           <div className="mt-7 flex gap-3">
-            {socials.map(({ icon, label }) => (
+            {socialLinks.map(({ icon, label, href }) => (
               <a
                 key={icon}
-                href="#"
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="grid h-10 w-10 place-items-center rounded-full bg-[#eef9ff] text-[#067eb7] transition hover:bg-[#ffff00] hover:text-[#063e62]"
                 aria-label={label}
               >

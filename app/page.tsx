@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import JsonLd from "./components/JsonLd";
 import Storefront from "./components/Storefront";
-import { contacts } from "./components/data";
+import { contacts, socialLinks } from "./components/data";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL, absoluteUrl } from "./lib/site";
 
 export const metadata: Metadata = {
@@ -26,6 +26,8 @@ export default function Home() {
             email: contacts.email,
             telephone: contacts.phoneIntl,
             areaServed: "UA",
+            // Сторінки магазину в соцмережах — Google пов'язує їх із сайтом
+            sameAs: socialLinks.map((s) => s.href),
           },
           {
             "@context": "https://schema.org",

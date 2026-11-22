@@ -148,7 +148,21 @@ export function variantOptions(current: Product, group: VariantGroup, dim: Varia
   });
 }
 
-const LETTER_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "4XL", "5XL"];
+/**
+ * Основний варіант групи — для пошукових систем (canonical і sitemap): сторінки
+ * розмірів і кольорів майже однакові, тож Google показуватиме одну. Перший за
+ * порядком кольору й розміру — не залежить від продажів і залишків, тож не «стрибає»
+ */
+export function primaryVariant(group: VariantGroup): Product {
+  const rank = (p: Product) => group.dims.map((d) => facetSortedValues(group, d).indexOf(variantValue(p, d)));
+  return [...group.members].sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] - rb[i];
+    return a.id.localeCompare(b.id);
+  })[0];
+}
+
+const LETTER_ORDER =["XS", "S", "M", "L", "XL", "XXL", "XXXL", "4XL", "5XL"];
 function facetSortedValues(group: VariantGroup, dim: VariantDim): string[] {
   const values = [...new Set(group.members.map((m) => variantValue(m, dim)))];
   if (dim === "color") {

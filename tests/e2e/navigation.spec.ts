@@ -73,6 +73,9 @@ test.describe("футер", () => {
     await page.goto("/");
     const footer = page.locator("footer");
     await expect(footer.getByRole("link", { name: "Обмін і повернення" })).toHaveCount(0);
+    // Соцмережі — лише справжні сторінки (поки що Facebook), без «#»
+    await expect(footer.getByRole("link", { name: "Facebook" })).toHaveAttribute("href", /^https:\/\/www\.facebook\.com\//);
+    await expect(footer.locator('a[href="#"]')).toHaveCount(0);
     await footer.getByRole("link", { name: "Доставка і оплата" }).click();
     await expect(page).toHaveURL("/delivery");
     await page.locator("footer").getByRole("link", { name: "Політика конфіденційності" }).click();

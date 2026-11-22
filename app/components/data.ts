@@ -27,6 +27,14 @@ export const contacts = {
   schedule: "Замовлення на сайті приймаємо цілодобово",
 };
 
+/**
+ * Сторінки магазину в соцмережах (лише справжні — іконка без сторінки нікуди не веде).
+ * Instagram і YouTube додати сюди, коли з'являться
+ */
+export const socialLinks: { icon: "facebook" | "instagram" | "youtube"; label: string; href: string }[] = [
+  { icon: "facebook", label: "Facebook", href: "https://www.facebook.com/share/1D3RsQUZik/" },
+];
+
 /** Інформаційні сторінки — бічна навігація та футер */
 export const infoLinks = [
   { label: "Про нас", href: "/about" },
