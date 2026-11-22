@@ -21,7 +21,9 @@ export default function Home() {
             "@type": "OnlineStore",
             name: SITE_NAME,
             url: SITE_URL,
-            logo: absoluteUrl("/family-camping-lake.webp"),
+            // Логотип для Google — знак магазину, а не фото
+            logo: absoluteUrl("/family-icon.png"),
+            image: absoluteUrl("/family-camping-autumn-og.jpg"),
             description: SITE_DESCRIPTION,
             email: contacts.email,
             telephone: contacts.phoneIntl,

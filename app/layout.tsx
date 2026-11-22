@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "uk_UA",
     siteName: SITE_NAME,
-    images: [{ url: "/family-camping-lake.webp", alt: "Сім’я відпочиває з наметом біля лісового озера" }],
+    images: [{ url: "/family-camping-autumn-og.jpg", width: 1200, height: 630, alt: "Родина з собакою біля вогнища й намету в осінньому лісі" }],
   },
   twitter: { card: "summary_large_image" },
   formatDetection: { telephone: false },

@@ -78,12 +78,18 @@ export default function Storefront() {
         {/* Hero */}
         <section className="relative isolate min-h-[680px] overflow-hidden bg-[#063e62] lg:min-h-[720px]">
           <img
-            src="/family-camping-lake.webp"
-            srcSet="/family-camping-lake-640.webp 640w, /family-camping-lake.webp 1024w"
+            src="/family-camping-autumn.webp"
+            srcSet="/family-camping-autumn-640.webp 640w, /family-camping-autumn.webp 1280w"
             sizes="100vw"
-            alt="Сім’я відпочиває з наметом на зеленій галявині біля лісового озера"
+            alt="Родина з собакою біля вогнища й намету в осінньому лісі"
             className="absolute inset-0 -z-20 h-full w-full object-cover object-center brightness-[1.04] saturate-[1.08]"
             fetchPriority="high"
+          />
+          {/* Легке затемнення лише за написом: жовте «Camping» на осінньому листі інакше зливається */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 -z-10"
+            style={{ background: "radial-gradient(ellipse 46% 44% at 50% 44%, rgba(0,0,0,.34), rgba(0,0,0,.2) 55%, transparent 100%)" }}
           />
 
           <div className="mx-auto flex min-h-[680px] max-w-[1440px] items-center justify-center px-5 pb-36 pt-24 text-center lg:min-h-[720px] lg:px-8">
