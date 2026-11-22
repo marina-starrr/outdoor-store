@@ -37,7 +37,12 @@ function transport(): Transport {
 /** Відправник: MAIL_FROM або «Family Camping <SMTP_USER>» */
 const sender = () => process.env.MAIL_FROM || `"${SITE_NAME}" <${process.env.SMTP_USER}>`;
 
-/* Одне SMTP-з'єднання на екземпляр сервера (Gmail обмежує кількість підключень) */
+/*
+ * Налаштування SMTP — одне на екземпляр сервера, але БЕЗ постійного з'єднання (pool):
+ * Vercel «заморожує» функцію між запитами, і відкрите з'єднання з Gmail може тихо
+ * розірватися (ймовірна причина, чому 22.11 листи про замовлення не дійшли, а після
+ * нового деплою — дійшли). Тепер кожен лист — нове з'єднання; для магазину цього досить
+ */
 const g = globalThis as { __fcSmtp?: Promise<import("nodemailer").Transporter> };
 
 function smtp() {
@@ -47,9 +52,6 @@ function smtp() {
       host: process.env.SMTP_HOST || "smtp.gmail.com",
       port,
       secure: port === 465,
-      // Кілька листів одразу (напр. «товар з'явився» підписникам) — через 2 з'єднання, а не десяток
-      pool: true,
-      maxConnections: 2,
       // Пароль додатка Google часто копіюють із пробілами («abcd efgh …») — прибираємо їх
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS?.replace(/\s+/g, "") },
       connectionTimeout: 10_000,
