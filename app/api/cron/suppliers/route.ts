@@ -8,8 +8,9 @@ export const maxDuration = 60;
 /**
  * Щогодинне оновлення цін і залишків постачальників (у постачальників часто
  * лишається 1–2 шт. — раз на добу замало). Vercel Hobby дозволяє cron лише раз
- * на добу, тож щогодини цей маршрут викликає GitHub Actions
- * (.github/workflows/suppliers-sync.yml) з тим самим CRON_SECRET.
+ * на добу, тож щогодини цей маршрут викликає pg_cron у Supabase
+ * (supabase/manual/cron-suppliers.sql) і, запасним, GitHub Actions
+ * (.github/workflows/suppliers-sync.yml; GitHub запускає розклад нерегулярно) — з тим самим CRON_SECRET.
  * Помилка хоч одного постачальника → 502, щоб запуск став червоним і прийшло сповіщення.
  */
 export async function GET(req: NextRequest) {
