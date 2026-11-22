@@ -23,6 +23,7 @@ import {
 } from "./catalog-data";
 import { productUrl } from "./product-details";
 import { useCatalog } from "./Catalog";
+import { collapseVariants, variantGroups } from "./product-variants";
 import { discountsEnabled } from "./shop-config";
 import { resizeImage, responsiveImage } from "./photo";
 
@@ -111,6 +112,9 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
         .sort(sorters[sort]),
     [hits, category, saleOnly, sort],
   );
+  // Розміри й кольори одного товару — одна картка
+  const groups = useMemo(() => variantGroups(products), [products]);
+  const cards = useMemo(() => collapseVariants(visible, groups), [visible, groups]);
 
   const addBundle = () => {
     bundleItems.forEach((b) => add(b.id, b.qty));
@@ -215,12 +219,12 @@ export default function HitsPage({ testimonials: rawTestimonials = [] }: { testi
 
             {visible.length > 0 ? (
               <div className="mt-6 grid grid-cols-1 gap-5 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {visible.map((p) => (
+                {cards.map(({ product: p, group }) => (
                   <div key={p.id} className="relative">
                     <span className="pointer-events-none absolute -left-2 -top-2 z-10 grid h-9 min-w-9 place-items-center rounded-full bg-[#082c45] px-2 text-xs font-black text-[#ffd51f] shadow-lg">
                       #{rankOf.get(p.id)}
                     </span>
-                    <ProductCard product={p} showCategory onAdd={() => add(p.id)} />
+                    <ProductCard product={p} group={group} showCategory onAdd={() => add(p.id)} />
                   </div>
                 ))}
               </div>

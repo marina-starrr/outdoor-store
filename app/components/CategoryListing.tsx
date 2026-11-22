@@ -43,6 +43,7 @@ import {
   type ProductSortId,
 } from "./catalog-data";
 import { useCatalog } from "./Catalog";
+import { collapseVariants, variantGroups } from "./product-variants";
 import { discountsEnabled } from "./shop-config";
 import {
   availableFacets,
@@ -209,12 +210,16 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
     return { brand, capacity, facet };
   }, [items, filters, normalizedQuery, facets]);
 
+  // Варіанти (розміри, кольори) одного товару — одна картка
+  const groups = useMemo(() => variantGroups(products), [products]);
+  const cards = useMemo(() => collapseVariants(results, groups), [results, groups]);
+
   const paging = usePaging(
-    results.length,
+    cards.length,
     PAGE_SIZE,
     JSON.stringify([filters, normalizedQuery, sort]),
   );
-  const visible = results.slice(paging.start, paging.end);
+  const visible = cards.slice(paging.start, paging.end);
 
   const update = (patch: Partial<Filters>) =>
     setFilters((f) => ({ ...f, ...patch }));
@@ -375,15 +380,15 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
 
             <section aria-label="Товари">
               <ActiveChips
-                total={results.length}
+                total={cards.length}
                 query={query.trim()}
                 chips={chips}
               />
 
               {visible.length > 0 ? (
                 <div className="grid grid-cols-1 gap-5 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {visible.map((p) => (
-                    <ProductCard key={p.id} product={p} onAdd={() => add(p.id)} />
+                  {visible.map(({ product: p, group }) => (
+                    <ProductCard key={p.id} product={p} group={group} onAdd={() => add(p.id)} />
                   ))}
                 </div>
               ) : (
@@ -402,7 +407,7 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
                 from={paging.from}
                 to={paging.to}
                 totalPages={paging.totalPages}
-                remaining={Math.min(PAGE_SIZE, results.length - paging.end)}
+                remaining={Math.min(PAGE_SIZE, cards.length - paging.end)}
                 onPage={(p) => {
                   paging.goTo(p);
                   scrollToId("listing-top");
@@ -421,7 +426,7 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
       <FilterDrawer
         open={filtersOpen}
         onClose={closeFilters}
-        resultLabel={`Показати ${results.length} ${productsWord(results.length)}`}
+        resultLabel={`Показати ${cards.length} ${productsWord(cards.length)}`}
       >
         {filterPanel}
       </FilterDrawer>

@@ -39,7 +39,7 @@ export type Supplier = {
   name: string;
   feedUrl: string;
   createdAt: string;
-  categoryMap: Record<string, CategorySlug | "">;
+  categoryMap: Record<string, MappedCategory>;
   feedCategories: FeedCategory[];
   lastSyncAt?: string;
   lastSyncOk?: boolean;
@@ -181,9 +181,62 @@ const RULES: [RegExp, CategorySlug][] = [
   [/аксес|туризм/i, "accessories"],
 ];
 
+/** «Категорію визначати за назвою кожного товару» — для змішаних категорій постачальника */
+export const AUTO_CATEGORY = "auto";
+export type MappedCategory = CategorySlug | typeof AUTO_CATEGORY | "";
+
 /** Підказка: наша категорія за назвою їхньої ("" — не знаємо) */
-export function suggestCategory(name: string): CategorySlug | "" {
+export function suggestCategory(name: string, supplierName?: string): MappedCategory {
+  // Категорія з назвою самого постачальника («Ranger») — збірна, там усе підряд
+  if (supplierName && name.trim().toLowerCase() === supplierName.trim().toLowerCase()) return AUTO_CATEGORY;
   return RULES.find(([re]) => re.test(name))?.[1] ?? "";
+}
+
+/*
+ * Наша категорія за назвою ТОВАРУ (для збірних категорій постачальника).
+ * Порядок важливий: «коропова розкладачка» — меблі, а не рибалка;
+ * «чохол для вудилища» — рибалка, а не рюкзаки
+ */
+const PRODUCT_RULES: [RegExp, CategorySlug][] = [
+  [/power ?bank|павербанк|(?<!\p{L})раці[яї]|генератор|кондиціонер|підводн\p{L}* камер/iu, "electronics"],
+  [/плитоноск|підсумок|кобур|розвантаж|кавер|шолом|бронежилет|балаклав|тактичн|військов|турнікет|(?<!\p{L})ак(?!\p{L})|мульт[иі]кам|піксел/iu, "tactical"],
+  [/термосумк|холодильник|пікнік|акумулятор холоду/iu, "picnic"],
+  [/термос|термокру|термокух|термочаш/iu, "thermos"],
+  [/термобілизн|шкарпет|кофт|футболк|штан|шорт/iu, "clothing"],
+  [/гамак|гойдалк|павільйон/iu, "hammocks"],
+  [/кр[іi]сл|(?<!\p{L})стіл|стіл[еє]ць|стільц|ліжк|розкладачк|шезлонг/iu, "furniture"],
+  [/вудк|вудилищ|котушк|[сc]пінінг|сигналізатор|род-под|буз-бар|підставка телескоп|короп|фідер|приманк|гачк|волосін|блешн|воблер/iu, "fishing"],
+  [/намет|тент|bivvy/iu, "tents"],
+  [/рюкзак|гермомі|чохол/iu, "backpacks"],
+  [/спальн|карема|карима|килимок/iu, "sleeping-bags"],
+  [/пальник|казан|посуд|чайник|сковор|каструл/iu, "cookware"],
+  [/ліхтар|лампа/iu, "lighting"],
+  [/мангал|гриль|барбек/iu, "grills"],
+];
+
+/** Категорія за назвою товару; undefined — не впізнали (товар не імпортується) */
+export function categoryFromName(name: string): CategorySlug | undefined {
+  return PRODUCT_RULES.find(([re]) => re.test(name))?.[1];
+}
+
+/*
+ * Бренд з назви. Ranger у файлі ставить vendor=Ranger і чужим брендам, які
+ * продає (Gladiator, Mikado…), тож коли vendor — сам постачальник, шукаємо
+ * відомий бренд у назві
+ */
+const KNOWN_BRANDS = [
+  "Gladiator", "Mikado", "GoodLuck", "River Sport", "Sadei", "Yumoshi", "Keeplit", "YODO", "Adventure Outdoors",
+  "Navigators", "Cobra King", "New Hunter", "Kirasa", "LeRoy", "Fishing ROI", "Hytera", "Aspor", "Kibas", "Vulkan",
+];
+const brandPattern = (b: string) => new RegExp(`(?<![\\p{L}\\d])${b.replace(/\s+/g, "[\\s-]*")}(?![\\p{L}\\d])`, "iu");
+const BRAND_PATTERNS = KNOWN_BRANDS.map((b) => [b, brandPattern(b)] as const);
+
+export function brandFromName(name: string, vendor: string, supplierName: string): string {
+  const own = supplierName.trim();
+  if (vendor && vendor.trim().toLowerCase() !== own.toLowerCase()) return vendor.trim();
+  // У назві є сам постачальник («Намет Ranger …») — це його бренд
+  if (brandPattern(own).test(name)) return vendor || own;
+  return BRAND_PATTERNS.find(([, re]) => re.test(name))?.[0] ?? (vendor || own);
 }
 
 /* ---------- Збереження ---------- */
@@ -217,7 +270,7 @@ export async function getSupplier(id: string, q: Queryable = db): Promise<Suppli
 /** Новий постачальник: файл перевіряється одразу, категорії отримують підказки */
 export async function createSupplier(name: string, feedUrl: string): Promise<Supplier> {
   const feed = await fetchFeed(feedUrl);
-  const map = Object.fromEntries(feed.categories.map((c) => [c.id, suggestCategory(c.name)]));
+  const map = Object.fromEntries(feed.categories.map((c) => [c.id, suggestCategory(c.name, name)]));
   const [row] = await sql(
     "insert into suppliers (name, feed_url, category_map, feed_categories) values ($1, $2, $3::jsonb, $4::jsonb) returning id",
     [name, feedUrl, jsonb(map), jsonb(feed.categories)],
@@ -230,7 +283,7 @@ export async function updateSupplier(
   patch: { name?: string; feedUrl?: string; categoryMap?: Record<string, string>; otherBrandsOnRequest?: boolean },
 ) {
   const map = patch.categoryMap
-    ? Object.fromEntries(Object.entries(patch.categoryMap).filter(([k, v]) => k.length <= 60 && (v === "" || isCategorySlug(v))))
+    ? Object.fromEntries(Object.entries(patch.categoryMap).filter(([k, v]) => k.length <= 60 && (v === "" || v === AUTO_CATEGORY || isCategorySlug(v))))
     : undefined;
   await sql(
     `update suppliers set name = coalesce($2, name), feed_url = coalesce($3, feed_url),
@@ -290,6 +343,8 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
     let popularity = Number(max);
     const seen = new Set<string>();
     const changes: { id: string; price: number; stock: number; on_request: boolean }[] = [];
+    /** Бренд з назви для вже доданих товарів, у яких досі бренд за замовчуванням */
+    const brandFixes: { id: string; brand: string; attrs: [string, string][]; specs: string }[] = [];
     const photoUpdates: { id: string; images: string[]; image: string }[] = [];
     const events: { after: Product; before: Product }[] = [];
     const created: (Product & { sku: string })[] = [];
@@ -302,8 +357,19 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
       seen.add(o.sku);
       const before = existing.get(o.sku);
       const onRequest = onRequestOf(o);
+      const brand = brandFromName(o.name, o.vendor, supplier.name);
 
       if (before) {
+        // Бренд виправляємо, лише якщо він той, що поставив імпорт (власник міг змінити його в адмінці)
+        if (before.brand !== brand && before.brand === (o.vendor || supplier.name)) {
+          const swap = (s: string) => s.split(before.brand).join(brand);
+          brandFixes.push({
+            id: before.id,
+            brand,
+            attrs: before.attrs.map(([k, v]) => [k, k === "Бренд" && v === before.brand ? brand : v] as [string, string]),
+            specs: swap(before.specs ?? ""),
+          });
+        }
         // Заглушку «Фото скоро» замінюємо фото, щойно постачальник їх додав (власні фото власника не чіпаємо)
         const placeholderOnly = before.images?.length === 1 && before.images[0] === PLACEHOLDER_PHOTO;
         if (placeholderOnly && o.pictures.length) photoUpdates.push({ id: before.id, images: o.pictures, image: o.pictures[0] });
@@ -321,7 +387,9 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
       // Новий товар
       // Спершу наявність: «пропущено без категорії» — лише серед тих, що є в наявності
       if (o.stock <= 0) { result.skippedNotInStock++; continue; }
-      const category = supplier.categoryMap[o.categoryId];
+      const mapped = supplier.categoryMap[o.categoryId];
+      // «За назвою товару» — для збірних категорій постачальника
+      const category = mapped === AUTO_CATEGORY ? categoryFromName(o.name) : mapped || undefined;
       if (!category) { result.skippedUnmapped++; continue; }
       // Без жодного фото — нейтральна заглушка «Фото скоро», а не чуже стокове фото
       if (!o.pictures.length) result.noPhoto++;
@@ -330,7 +398,7 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
           id: uniqueId(o.name, o.sku, taken),
           name: o.name,
           category,
-          brand: o.vendor || supplier.name,
+          brand,
           price: o.price,
           rating: 0,
           reviews: 0,
@@ -340,10 +408,10 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
           images: o.pictures.length ? o.pictures : [PLACEHOLDER_PHOTO],
           onRequest: onRequest || undefined,
           popularity: ++popularity,
-          specs: o.vendor ? `${o.vendor} · арт. ${o.sku}` : `Арт. ${o.sku}`,
+          specs: `${brand} · арт. ${o.sku}`,
           image: "",
           photo: categoryPhotos[category][0],
-          attrs: [["Бренд", o.vendor || supplier.name], ["Артикул", o.sku]],
+          attrs: [["Бренд", brand], ["Артикул", o.sku]],
         } satisfies Product),
         sku: o.sku,
       });
@@ -363,6 +431,12 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
                 old_price = case when p.old_price <= v.price then null else p.old_price end
          from jsonb_to_recordset($1::jsonb) as v(id text, price numeric, stock int, on_request boolean) where p.id = v.id`,
         [jsonb(changes)],
+      );
+    if (brandFixes.length)
+      await q.query(
+        `update products p set brand = v.brand, attrs = v.attrs, specs = v.specs, updated_at = now()
+         from jsonb_to_recordset($1::jsonb) as v(id text, brand text, attrs jsonb, specs text) where p.id = v.id`,
+        [jsonb(brandFixes)],
       );
     if (photoUpdates.length)
       await q.query(
@@ -387,8 +461,9 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
       `Додано ${result.created}, оновлено ${result.updated}, закінчилось ${result.outOfStock}` +
       (result.skippedUnmapped ? `; пропущено без категорії — ${result.skippedUnmapped}` : "") +
       (result.noPhoto ? `; без фото (із заглушкою) — ${result.noPhoto}` : "") +
-      (photoUpdates.length ? `; з'явились фото — ${photoUpdates.length}` : "");
-    const map = Object.fromEntries(feed.categories.map((c) => [c.id, supplier.categoryMap[c.id] ?? suggestCategory(c.name)]));
+      (photoUpdates.length ? `; з'явились фото — ${photoUpdates.length}` : "") +
+      (brandFixes.length ? `; бренд з назви — ${brandFixes.length}` : "");
+    const map = Object.fromEntries(feed.categories.map((c) => [c.id, supplier.categoryMap[c.id] ?? suggestCategory(c.name, supplier.name)]));
     await q.query(
       `update suppliers set last_sync_at = now(), last_sync_ok = true, last_sync_message = $2,
               feed_categories = $3::jsonb, category_map = $4::jsonb where id = $1`,

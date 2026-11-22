@@ -11,6 +11,7 @@ import { useNotifications } from "./Notifications";
 import RecentlyViewed, { useTrackView } from "./RecentlyViewed";
 import { RETURN_DAYS, SHIPPING_BY_CARRIER, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
 import { SHIP_CUTOFF_HOUR, returnsInfoEnabled, shipDay } from "./shop-config";
+import { collapseVariants, variantDimTitle, variantGroups, variantOptions, variantValue } from "./product-variants";
 import { ShippingNote } from "./cart-ui";
 import ChatButton from "./ChatButton";
 import { useCatalog } from "./Catalog";
@@ -218,6 +219,8 @@ export default function ProductPage({ product }: { product: Product }) {
                   </>
                 )}
               </div>
+
+              <VariantPicker product={product} />
 
               <p className="mt-4 text-[15px] leading-relaxed text-[#3d5d70]">
                 {description[0]}
@@ -517,6 +520,58 @@ function QuantityStepper({
       <button className={btn} onClick={() => onChange(value + 1)} disabled={disabled || value >= max} aria-label="Збільшити кількість">
         +
       </button>
+    </div>
+  );
+}
+
+/**
+ * Вибір кольору й розміру: кожен варіант — окремий товар зі своєю сторінкою,
+ * тож кнопка веде на сторінку обраного варіанта (без перезавантаження, без прокрутки вгору)
+ */
+function VariantPicker({ product }: { product: Product }) {
+  const { products } = useCatalog();
+  const group = variantGroups(products).get(product.id);
+  if (!group) return null;
+  return (
+    <div className="mt-5 grid gap-4" data-testid="variant-picker">
+      {group.dims.map((dim) => {
+        const options = variantOptions(product, group, dim);
+        return (
+          <fieldset key={dim}>
+            <legend className="text-sm text-[#527083]">
+              {variantDimTitle[dim]}: <b className="text-[#082c45]">{variantValue(product, dim)}</b>
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {options.map((o) =>
+                o.selected ? (
+                  <span
+                    key={o.value}
+                    aria-current="true"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border-2 border-[#082c45] bg-[#082c45] px-3.5 text-sm font-extrabold text-white"
+                  >
+                    {o.value}
+                  </span>
+                ) : (
+                  <Link
+                    key={o.value}
+                    href={productUrl(o.product)}
+                    scroll={false}
+                    replace
+                    aria-label={`${variantDimTitle[dim]} ${o.value}${o.available ? "" : " — немає в наявності"}`}
+                    className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border-2 px-3.5 text-sm font-bold transition hover:border-[#098fd0] hover:text-[#098fd0] ${
+                      o.available
+                        ? "border-[#d5e5ef] bg-white text-[#082c45]"
+                        : "border-dashed border-[#d5e5ef] bg-[#f6fafd] text-[#8aa5b5] line-through decoration-1"
+                    }`}
+                  >
+                    {o.value}
+                  </Link>
+                ),
+              )}
+            </div>
+          </fieldset>
+        );
+      })}
     </div>
   );
 }
@@ -957,7 +1012,11 @@ function InfoList({
 function Related({ product }: { product: Product }) {
   const { add } = useCart();
   const { products } = useCatalog();
-  const items = relatedProducts(products, product);
+  // Без інших розмірів і кольорів цього ж товару (вони — у виборі вище), одна картка на групу
+  const groups = variantGroups(products);
+  const own = groups.get(product.id);
+  const candidates = products.filter((p) => !own || groups.get(p.id) !== own);
+  const items = collapseVariants(relatedProducts(candidates, product, 12), groups).slice(0, 4);
   if (!items.length) return null;
   return (
     <section className="mb-20 mt-6" aria-labelledby="related-title">
@@ -971,9 +1030,9 @@ function Related({ product }: { product: Product }) {
       </div>
       {/* На телефоні — стрічка, яку гортають убік (поруч видно край наступної картки), далі — сітка */}
       <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-3 min-[480px]:mx-0 min-[480px]:grid min-[480px]:grid-cols-2 min-[480px]:gap-5 min-[480px]:overflow-visible min-[480px]:px-0 min-[480px]:pb-0 lg:grid-cols-4">
-        {items.map((p) => (
+        {items.map(({ product: p, group }) => (
           <div key={p.id} className="w-[80%] shrink-0 snap-start min-[480px]:w-auto">
-            <ProductCard product={p} onAdd={() => add(p.id)} />
+            <ProductCard product={p} group={group} onAdd={() => add(p.id)} />
           </div>
         ))}
       </div>

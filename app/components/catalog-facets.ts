@@ -141,12 +141,16 @@ const colorRules: Rule[] = [
   ["Білий", /(?<!\p{L})біл[ийаі]|white/u],
 ];
 
+/** Для варіантів товару: назви кольорів (у порядку фільтра) і їхні шаблони */
+export const colorLabels = colorRules.map(([label]) => label);
+export const colorPatterns = colorRules.map(([, re]) => re);
+
 /** Розмір шукаємо лише там, де він справді є (одяг, головні убори) */
-const SIZE_CATEGORIES = new Set<CategorySlug>(["clothing", "tactical"]);
+export const SIZE_CATEGORIES = new Set<CategorySlug>(["clothing", "tactical"]);
 const LETTER_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "4XL", "5XL"];
 
 /** Без артикулів у дужках — щоб «KI4239XL» не став розміром XL */
-const stripCodes = (name: string) =>
+export const stripCodes = (name: string) =>
   name
     .replace(/\(\s*(?:арт|art)[^)]*\)?/gi, " ")
     .replace(/\(\s*[A-Z]{1,3}\s?\d[\w\-]*\s*\)\s*$/i, " ")

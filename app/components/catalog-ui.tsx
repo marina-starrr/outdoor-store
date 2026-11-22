@@ -14,6 +14,7 @@ import {
   type Product,
 } from "./catalog-data";
 import { CARD_SIZES, responsiveImage } from "./photo";
+import { variantSummary, type VariantGroup } from "./product-variants";
 
 /* ---------- Синхронізація стану з адресним рядком ---------- */
 
@@ -674,12 +675,22 @@ export function ProductCard({
   product,
   onAdd,
   showCategory = false,
+  group,
 }: {
   product: Product;
   onAdd: () => void;
   /** На сторінці категорії підпис — назва категорії; при пошуку — посилання на неї */
   showCategory?: boolean;
+  /** Товар має варіанти (розміри, кольори) — картка одна на всю групу */
+  group?: VariantGroup;
 }) {
+  const title = group?.title ?? product.name;
+  // Ціни варіантів різні — «від» найменшої серед тих, що є в наявності
+  const variantPrices = group?.members.filter((m) => m.inStock).map((m) => m.price) ?? [];
+  const minPrice = variantPrices.length ? Math.min(...variantPrices) : product.price;
+  const fromPrice = !!group && variantPrices.some((p) => p !== minPrice);
+  // Розмір треба обрати на сторінці товару — кнопка веде туди, а не кладе випадковий розмір у кошик
+  const chooseSize = !!group?.dims.includes("size");
   const discount = discountPercent(product);
   const badge = discount
     ? `−${discount}%`
@@ -701,7 +712,7 @@ export function ProductCard({
       >
         <img
           {...responsiveImage(product.image, CARD_SIZES)}
-          alt={product.name}
+          alt={title}
           loading="lazy"
           decoding="async"
           className={`h-full w-full object-cover brightness-[1.05] saturate-[1.1] transition duration-700 group-hover:scale-105 ${product.inStock ? "" : "grayscale-[60%]"}`}
@@ -756,20 +767,37 @@ export function ProductCard({
             href={productUrl(product)}
             className="tap-y transition hover:text-[#098fd0]"
           >
-            {product.name}
+            {title}
           </Link>
         </h3>
-        <p className="mt-1 text-xs text-[#527083]">{product.specs}</p>
+        {group ? (
+          <p className="mt-1 text-xs font-bold text-[#098fd0]">{variantSummary(group)}</p>
+        ) : (
+          <p className="mt-1 text-xs text-[#527083]">{product.specs}</p>
+        )}
 
         <div className="mt-auto flex items-end justify-between gap-3 pt-4">
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-lg font-black">{formatPrice(product.price)}</span>
+            <span className="text-lg font-black">
+              {fromPrice && <span className="text-sm font-bold text-[#527083]">від </span>}
+              {formatPrice(fromPrice ? minPrice : product.price)}
+            </span>
             {product.oldPrice && (
               <span className="text-xs font-semibold text-slate-400 line-through">
                 {formatPrice(product.oldPrice)}
               </span>
             )}
           </div>
+          {chooseSize ? (
+            <Link
+              href={productUrl(product)}
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#ffd51f] text-[#082c45] shadow-[0_8px_20px_rgba(255,213,31,.3)] transition hover:-translate-y-0.5 hover:bg-[#ffe044]"
+              aria-label={`Обрати розмір: ${title}`}
+              title="Обрати розмір"
+            >
+              <Icon name="cart" className="h-5 w-5" />
+            </Link>
+          ) : (
           <button
             onClick={onAdd}
             disabled={!product.inStock}
@@ -782,6 +810,7 @@ export function ProductCard({
           >
             <Icon name="cart" className="h-5 w-5" />
           </button>
+          )}
         </div>
       </div>
     </article>

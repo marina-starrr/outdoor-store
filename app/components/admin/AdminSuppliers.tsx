@@ -225,6 +225,8 @@ function SupplierCard({ supplier: s, onChange, onDeleted }: { supplier: Supplier
                 className={`${inputCls()} py-2.5 ${map[c.id] ? "" : "text-[#8aa5b5]"}`}
               >
                 <option value="">Не імпортувати</option>
+                {/* Для «змішаних» категорій (напр. «Ranger» — усе підряд): наша категорія з назви кожного товару */}
+                <option value="auto">За назвою товару</option>
                 {categories.map((cat) => (
                   <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                 ))}

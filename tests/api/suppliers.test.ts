@@ -9,7 +9,11 @@ import * as suppliersCron from "../../app/api/cron/suppliers/route";
 import { NextRequest } from "next/server";
 import { cartTotals } from "../../app/components/cart-logic";
 import { loadCatalog } from "../../app/lib/server/catalog";
-import { cleanDescription, parseFeed, suggestCategory } from "../../app/lib/server/suppliers";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import sharp from "sharp";
+import { brandFromName, categoryFromName, cleanDescription, parseFeed, suggestCategory } from "../../app/lib/server/suppliers";
+import { copySupplierPhotos } from "../../app/lib/server/supplier-photos";
 import { call, dbQuery, markEmailVerified, sessionCookie, uniqueEmail } from "./helpers";
 
 /* Імпорт з YML-файлів постачальників. Сайт постачальника в тестах не викликається — fetch підмінено */
@@ -109,6 +113,31 @@ describe("читання файлу постачальника", () => {
     expect(suggestCategory("Складані столи")).toBe("furniture");
     expect(suggestCategory("Гойдалки садові тенти, гамаки")).toBe("hammocks");
     expect(suggestCategory("Ranger")).toBe("");
+    // Збірна категорія з назвою самого постачальника — за назвою товару
+    expect(suggestCategory("Ranger", "Ranger")).toBe("auto");
+  });
+
+  it("категорія за назвою товару (для збірних категорій)", () => {
+    expect(categoryFromName("Котушка GLADIATOR AGIX 2000 5+1 (GL6781)")).toBe("fishing");
+    expect(categoryFromName("Вудка карбонова Mikado Princess без кілець 4м Carbon (GL5835)")).toBe("fishing");
+    expect(categoryFromName("Плитоноска з швидкоскидом кордура Kirasa піксель (Арт.KI1043)")).toBe("tactical");
+    expect(categoryFromName("Кобура на стегно для ПМ кордура Kirasa чорна(Арт.KI282)")).toBe("tactical");
+    expect(categoryFromName("М'яка підкладка на плече під ремінь АК, Cordura 500, олива (LE3095)")).toBe("tactical");
+    expect(categoryFromName("Power Bank Aspor A381 Magnetic Wireless 5000mAh (Type-C/20W)- синій (900153)")).toBe("electronics");
+    expect(categoryFromName("Коропова розкладачка Ranger BED 84")).toBe("furniture");
+    expect(categoryFromName("Термосумка Ranger 15L Brown")).toBe("picnic");
+    expect(categoryFromName("Щось зовсім незрозуміле")).toBeUndefined();
+  });
+
+  it("бренд з назви, коли постачальник вказав себе", () => {
+    expect(brandFromName("Котушка GLADIATOR AGIX 2000 5+1", "Ranger", "Ranger")).toBe("Gladiator");
+    expect(brandFromName("Вудка карбонова Mikado Princess без кілець 4м", "Ranger", "Ranger")).toBe("Mikado");
+    expect(brandFromName("Вудка River Sport Storm без кілець 4м", "Ranger", "Ranger")).toBe("River Sport");
+    expect(brandFromName("Термосумка YODO 8L Brown", "Ranger", "Ranger")).toBe("YODO");
+    // Ranger у назві — його бренд; бренду немає — лишається постачальник; vendor інший — vendor
+    expect(brandFromName("Термосумка Ranger 15L Brown", "Ranger", "Ranger")).toBe("Ranger");
+    expect(brandFromName("Котушка 801", "Ranger", "Ranger")).toBe("Ranger");
+    expect(brandFromName("Плитоноска Kirasa", "Kirasa", "Ranger")).toBe("Kirasa");
   });
 });
 
@@ -132,13 +161,15 @@ describe("постачальники в адмін-панелі", () => {
       { id: "RA7002", price: 4999, stock: 2, cat: "7" },
       { id: "GL9374", price: 1299, stock: 4, cat: "999" },
     ]);
-    // Підказки: крісла → меблі, намети → намети, «Ranger» — не зрозуміло, не імпортувати
-    expect(s.categoryMap).toMatchObject({ "1": "furniture", "7": "tents", "18": "tactical", "999": "" });
+    // Підказки: крісла → меблі, намети → намети; збірна «Ranger» (назва постачальника) — за назвою товару
+    expect(s.categoryMap).toMatchObject({ "1": "furniture", "7": "tents", "18": "tactical", "999": "auto" });
 
     const r = await sync(s.id);
     expect(r.status).toBe(200);
-    expect(r.data.result).toEqual({ created: 3, updated: 0, outOfStock: 0, noPhoto: 1, skippedUnmapped: 1, skippedNotInStock: 1 });
-    expect(r.data.supplier.products).toBe(3);
+    // GL9374 зі збірної категорії — «Намет GL9374» → намети
+    expect(r.data.result).toEqual({ created: 4, updated: 0, outOfStock: 0, noPhoto: 1, skippedUnmapped: 0, skippedNotInStock: 1 });
+    expect(r.data.supplier.products).toBe(4);
+    expect((await bySku("GL9374")).category).toBe("tents");
     // Без фото — заглушка «Фото скоро», а не чуже стокове фото
     expect((await bySku("RA7001")).images).toEqual(["/photo-soon.svg"]);
     expect(r.data.supplier.lastSyncOk).toBe(true);
@@ -245,6 +276,69 @@ describe("постачальники в адмін-панелі", () => {
     expect(r.data.supplier.categoryMap["7"]).toBeUndefined();
     expect((await sync(s.id)).data.result.created).toBe(1);
     expect((await bySku("F1")).category).toBe("fishing");
+  });
+
+  it("бренд з назви: новим — одразу, доданим раніше — при оновленні (якщо власник не міняв бренд)", async () => {
+    const s = await create([
+      { id: "GLB1", nameUa: "Котушка GLADIATOR AGIX 2000 5+1 (GLB1)", price: 900, stock: 3, cat: "1" },
+      { id: "GLB2", nameUa: "Котушка SADEI HO3000 BLUE (GLB2)", price: 700, stock: 3, cat: "1" },
+      { id: "GLB3", nameUa: "Вудка Mikado Princess 5м (GLB3)", price: 800, stock: 3, cat: "1" },
+    ]);
+    await sync(s.id);
+    expect(await bySku("GLB1")).toMatchObject({ brand: "Gladiator", specs: "Gladiator · арт. GLB1" });
+    expect((await bySku("GLB1")).attrs).toContainEqual(["Бренд", "Gladiator"]);
+
+    // Як було до виправлення: бренд Ranger; у GLB3 власниця сама вказала бренд
+    await dbQuery("update products set brand = 'Ranger', specs = 'Ranger · арт. GLB2', attrs = '[[\"Бренд\",\"Ranger\"],[\"Артикул\",\"GLB2\"]]'::jsonb where supplier_sku = 'GLB2'");
+    await dbQuery("update products set brand = 'Mikado Japan' where supplier_sku = 'GLB3'");
+    const r = await sync(s.id);
+    expect(r.data.supplier.lastSyncMessage).toContain("бренд з назви — 1");
+    expect(await bySku("GLB2")).toMatchObject({ brand: "Sadei", specs: "Sadei · арт. GLB2" });
+    expect((await bySku("GLB2")).attrs).toContainEqual(["Бренд", "Sadei"]);
+    expect((await bySku("GLB3")).brand).toBe("Mikado Japan");
+  });
+
+  it("збірна категорія «за назвою товару»: нерозпізнані не імпортуються", async () => {
+    const s = await create([
+      { id: "AU1", nameUa: "Котушка GLADIATOR DINGO 3000 (AU1)", price: 600, stock: 2, cat: "999" },
+      { id: "AU2", nameUa: "Плитоноска тактична кордура Kirasa піксель (AU2)", price: 3000, stock: 2, cat: "999", vendor: "Kirasa" },
+      { id: "AU3", nameUa: "Щось незрозуміле (AU3)", price: 100, stock: 2, cat: "999" },
+    ]);
+    expect(s.categoryMap["999"]).toBe("auto");
+    expect((await sync(s.id)).data.result).toMatchObject({ created: 2, skippedUnmapped: 1 });
+    expect((await bySku("AU1")).category).toBe("fishing");
+    expect((await bySku("AU2")).category).toBe("tactical");
+    // У адмінці «За назвою товару» можна обрати вручну
+    const r = await call(withId(supplierItem.PATCH, { id: s.id }), { method: "PATCH", cookie: admin, body: { categoryMap: { "7": "auto" } } });
+    expect(r.data.supplier.categoryMap["7"]).toBe("auto");
+  });
+
+  it("фото постачальника копіюються в наше сховище (1600 і 800 px), власні фото не чіпаються", async () => {
+    const jpeg = await sharp({ create: { width: 2400, height: 1200, channels: 3, background: "#3a6" } }).jpeg().toBuffer();
+    const s = await create([{ id: "CP1", price: 100, stock: 3, cat: "7", pics: 2 }, { id: "CP2", price: 100, stock: 3, cat: "7", pics: 1 }]);
+    await sync(s.id);
+    await dbQuery("update products set images = $2::jsonb where supplier_sku = $1", ["CP2", JSON.stringify(["/api/uploads/own-photo-1600.webp"])]);
+    // Друге фото CP1 недоступне — лишається з адресою постачальника
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.endsWith("CP1-1.jpeg") ? new Response("no", { status: 404 }) : new Response(jpeg))));
+    const result = await copySupplierPhotos(Date.now() + 30_000);
+    expect(result.photos).toBeGreaterThanOrEqual(1);
+    const cp1 = await bySku("CP1");
+    expect(cp1.images[0]).toMatch(/^\/api\/uploads\/sp-[0-9a-f]{24}-1600\.webp$/);
+    expect(cp1.images[1]).toBe("https://supplier.example/img/CP1-1.jpeg");
+    expect((await bySku("CP2")).images).toEqual(["/api/uploads/own-photo-1600.webp"]);
+
+    // Файли справді є: велика копія 1600 px, мала — 800 px
+    const uploaded = (name: string) => readFileSync(join(process.env.FC_DATA_DIR!, "uploads", name));
+    const file = cp1.images[0].split("/").pop()!;
+    const big = await sharp(uploaded(file)).metadata();
+    expect([big.width, big.format]).toEqual([1600, "webp"]);
+    const small = await sharp(uploaded(file.replace("-1600", "-800"))).metadata();
+    expect(small.width).toBe(800);
+
+    // Повторний запуск нічого не ламає (уже скопійоване не копіюється)
+    const again = await copySupplierPhotos(Date.now() + 30_000);
+    expect((await bySku("CP1")).images[0]).toBe(cp1.images[0]);
+    expect(again.photos).toBe(0);
   });
 
   it("файл недоступний — помилка видна в адмінці, товари не змінюються", async () => {
