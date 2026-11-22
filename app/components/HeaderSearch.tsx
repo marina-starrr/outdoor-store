@@ -132,8 +132,8 @@ export default function HeaderSearch({
           onKeyDown={onKeyDown}
           className={
             variant === "desktop"
-              ? "w-full rounded-full border border-sky-100 bg-[#f1f8fc] py-3 pl-12 pr-5 text-sm outline-none transition focus:border-[#0aa4e8] focus:bg-white focus:ring-4 focus:ring-sky-100"
-              : "w-full rounded-full bg-[#f1f8fc] py-3 pl-12 pr-5 text-sm outline-none focus:ring-4 focus:ring-sky-100"
+              ? "w-full rounded-full border border-sky-100 bg-[#f1f8fc] py-3 pl-12 pr-5 text-sm text-[#082c45] outline-none transition focus:border-[#0aa4e8] focus:bg-white focus:ring-4 focus:ring-sky-100"
+              : "w-full rounded-full bg-[#f1f8fc] py-3 pl-12 pr-5 text-sm text-[#082c45] outline-none focus:ring-4 focus:ring-sky-100"
           }
           placeholder={variant === "desktop" ? "Що шукаєте?" : "Пошук товарів"}
         />

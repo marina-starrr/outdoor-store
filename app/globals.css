@@ -25,7 +25,8 @@
   .nav-link {
     position: relative;
     padding-block: 0.5rem;
-    color: #264e65;
+    /* Шапка графітова — світлий текст */
+    color: rgba(255, 255, 255, 0.88);
     transition: color 180ms ease;
   }
 
@@ -42,7 +43,7 @@
   }
 
   .nav-link:hover {
-    color: #098fd0;
+    color: #ffd51f;
   }
 
   .nav-link:hover::after {
@@ -294,7 +295,7 @@
 
   .footer-title {
     margin-bottom: 1.4rem;
-    color: #067eb7;
+    color: #5cc6ff;
     font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.13em;
@@ -305,7 +306,7 @@
     display: grid;
     /* Відступ між пунктами — переважно padding посилань: більша зона дотику пальцем */
     gap: 0.1rem;
-    color: #527083;
+    color: rgba(255, 255, 255, 0.74);
     font-size: 0.875rem;
   }
 
@@ -325,7 +326,7 @@
   }
 
   .footer-links a:hover {
-    color: #00acff;
+    color: #ffd51f;
   }
 
   /* Подвійний повзунок ціни: два range-інпути один над одним */

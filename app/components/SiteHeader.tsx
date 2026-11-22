@@ -23,6 +23,10 @@ export function BrandLogo({ size = "sm" }: { size?: "sm" | "lg" }) {
   );
 }
 
+/* Шапка й футер — графітові (рішення власниці 22.11); кнопки-іконки — білі контурні кола */
+const HEADER_BUTTON = "border-2 border-white/85 text-white transition hover:border-[#ffd51f] hover:text-[#ffd51f]";
+const HEADER_ACTIVE = "ring-2 ring-[#ffd51f] ring-offset-2 ring-offset-[#33383b]";
+
 function HeaderIconLink({
   href,
   icon,
@@ -43,7 +47,7 @@ function HeaderIconLink({
       href={href}
       aria-label={label}
       title={label.split(",")[0]}
-      className={`relative ${className} h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eef9ff] text-[#067eb7] transition hover:bg-[#dff4ff] ${active ? "ring-2 ring-[#098fd0] ring-offset-2" : ""}`}
+      className={`relative ${className} h-11 w-11 shrink-0 place-items-center rounded-full ${HEADER_BUTTON} ${active ? HEADER_ACTIVE : ""}`}
     >
       <Icon name={icon} className="h-[22px] w-[22px]" />
       {count > 0 && (
@@ -95,17 +99,17 @@ export default function SiteHeader({
         Доставка по всій Україні Новою поштою та Укрпоштою
       </div>
 
-      <header className="sticky top-0 z-50 border-b border-sky-100 bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-2 bg-white px-4 py-4 min-[400px]:gap-2.5 min-[400px]:px-5 sm:gap-4 lg:px-8 xl:gap-5">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#33383b] text-white">
+        <div className="mx-auto flex max-w-[1440px] items-center gap-2 bg-[#33383b] px-4 py-4 min-[400px]:gap-2.5 min-[400px]:px-5 sm:gap-4 lg:px-8 xl:gap-5">
           <Link
             href="/"
             className="group flex shrink-0 items-center gap-2 min-[400px]:gap-2.5"
             aria-label="На головну"
           >
             <BrandLogo />
-            <span className="text-[13px] font-extrabold leading-[1.05] min-[400px]:text-[15px]">
+            <span className="text-[13px] font-extrabold leading-[1.05] text-white min-[400px]:text-[15px]">
               family
-              <span className="block text-[#00acff]">camping</span>
+              <span className="block text-[#33b8ff]">camping</span>
             </span>
           </Link>
 
@@ -122,7 +126,7 @@ export default function SiteHeader({
               return (
                 <Link
                   key={link.href}
-                  className={`nav-link ${active ? "!text-[#098fd0]" : ""}`}
+                  className={`nav-link ${active ? "!text-[#ffd51f]" : ""}`}
                   aria-current={active ? "page" : undefined}
                   href={link.href}
                 >
@@ -143,8 +147,8 @@ export default function SiteHeader({
             className={`relative ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full transition md:ml-0 ${
               user
                 ? "bg-[#ffd51f] text-[15px] font-black text-[#082c45] hover:bg-[#ffe044]"
-                : "bg-[#eef9ff] text-[#067eb7] hover:bg-[#dff4ff]"
-            } ${pathname === "/account" ? "ring-2 ring-[#098fd0] ring-offset-2" : ""}`}
+                : HEADER_BUTTON
+            } ${pathname === "/account" ? HEADER_ACTIVE : ""}`}
           >
             {user ? (
               user.firstName.charAt(0).toUpperCase()
@@ -153,7 +157,7 @@ export default function SiteHeader({
             )}
             {/* На телефоні дзвіночка немає (не вміщується) — нові сповіщення позначаємо крапкою на профілі */}
             {unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#e5484d] sm:hidden" aria-hidden="true" />
+              <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#33383b] bg-[#e5484d] sm:hidden" aria-hidden="true" />
             )}
           </Link>
 
@@ -201,11 +205,11 @@ export default function SiteHeader({
                 ? window.scrollTo({ top: 0, behavior: "smooth" })
                 : openCart()
             }
-            className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eef9ff] text-[#087caf] transition hover:bg-[#dff4ff]"
+            className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-full ${HEADER_BUTTON}`}
             aria-label={`Кошик, товарів: ${count}`}
             aria-haspopup="dialog"
           >
-            <Icon name="cart" className="h-6 w-6 text-[#067eb7]" />
+            <Icon name="cart" className="h-6 w-6" />
             {count > 0 && (
               <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ffd51f] px-1 text-[10px] font-black text-[#082c45]">
                 {count}
@@ -215,7 +219,7 @@ export default function SiteHeader({
           <button
             ref={menuButton}
             onClick={() => setMenuOpen((open) => !open)}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#00acff] text-white xl:hidden"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 xl:hidden"
             aria-label={menuOpen ? "Закрити меню" : "Відкрити меню"}
             aria-expanded={menuOpen}
           >
@@ -224,7 +228,7 @@ export default function SiteHeader({
         </div>
 
         {menuOpen && (
-          <div className="border-t border-sky-100 bg-white px-5 py-5 xl:hidden">
+          <div className="border-t border-white/10 bg-white px-5 py-5 text-[#082c45] xl:hidden">
             <div className="mb-5 md:hidden">
               <HeaderSearch variant="mobile" query={query} onQueryChange={onQueryChange} onFocus={onSearchFocus} onSubmit={onSearchSubmit && ((q) => { setMenuOpen(false); onSearchSubmit(q); })} />
             </div>

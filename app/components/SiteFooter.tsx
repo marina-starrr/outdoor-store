@@ -8,7 +8,7 @@ import { returnsInfoEnabled } from "./shop-config";
 /** Єдиний футер для всіх сторінок сайту */
 export default function SiteFooter() {
   return (
-    <footer id="contacts" className="bg-white text-[#063e62]">
+    <footer id="contacts" className="bg-[#33383b] text-white">
       <div className="mx-auto grid max-w-[1440px] grid-cols-2 gap-x-6 gap-y-10 px-5 py-14 sm:gap-12 sm:py-16 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:px-8 lg:py-20">
         <div className="col-span-2 sm:col-span-1">
           <Link href="/" className="group flex items-center gap-3">
@@ -16,10 +16,10 @@ export default function SiteFooter() {
             <span className="text-lg font-black leading-[1.05]">
               family
               <br />
-              <span className="text-[#00acff]">camping</span>
+              <span className="text-[#33b8ff]">camping</span>
             </span>
           </Link>
-          <p className="mt-6 max-w-sm text-sm leading-6 text-[#527083]">
+          <p className="mt-6 max-w-sm text-sm leading-6 text-white/70">
             Онлайн-магазин спорядження для сімейного відпочинку на природі
             з доставкою по всій Україні.
           </p>
@@ -30,7 +30,7 @@ export default function SiteFooter() {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="grid h-10 w-10 place-items-center rounded-full bg-[#eef9ff] text-[#067eb7] transition hover:bg-[#ffff00] hover:text-[#063e62]"
+                className="grid h-10 w-10 place-items-center rounded-full border-2 border-white/85 text-white transition hover:border-[#ffd51f] hover:bg-[#ffd51f] hover:text-[#33383b]"
                 aria-label={label}
               >
                 <Icon name={icon} className="h-5 w-5" />
@@ -66,7 +66,7 @@ export default function SiteFooter() {
           <div className="footer-links">
             <a
               href={contacts.phoneHref}
-              className="text-lg font-extrabold text-[#063e62]"
+              className="text-lg font-extrabold text-white"
             >
               {contacts.phone}
             </a>
@@ -76,7 +76,7 @@ export default function SiteFooter() {
           </div>
         </div>
       </div>
-      <div className="bg-[#0b2c40]">
+      <div className="border-t border-white/10 bg-[#2a2e31]">
         <div className="mx-auto flex max-w-[1440px] flex-col gap-2 px-5 py-6 text-xs text-white/80 sm:flex-row sm:items-center sm:justify-between lg:px-8">
           <span>
             © 2026 Спорядження для відпочинку · Онлайн-магазин
