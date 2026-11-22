@@ -175,6 +175,20 @@ export default function CartPage() {
     if (d && isDeliveryId(d.method)) setDelivery(d.method);
   }
 
+  /*
+   * Next зберігає стан сторінки між переходами: без цього після першого замовлення
+   * повернення в кошик з новими товарами знову показувало «Дякуємо» за старе.
+   * Кошик спорожнів після замовлення, а потім у ньому знову є товари — нове оформлення
+   */
+  const [cartClearedAfterOrder, setCartClearedAfterOrder] = useState(false);
+  if (order && ready && lines.length === 0 && !cartClearedAfterOrder) setCartClearedAfterOrder(true);
+  if (order && cartClearedAfterOrder && lines.length > 0) {
+    setOrder(null);
+    setCartClearedAfterOrder(false);
+    setAgreed(false);
+    setSubmitError("");
+  }
+
   const totals = cartTotals(lines, delivery, promo);
   // Довідник Нової пошти — лише для населеного пункту з її Ref (не з пошуку для Укрпошти)
   const npCityRef = form.cityRef && !form.cityRef.startsWith("s:") ? form.cityRef : "";

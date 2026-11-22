@@ -108,6 +108,23 @@ test("накладений платіж: без реквізитів, оплат
   await expect(page.getByTestId("payment-email-note")).toHaveCount(0);
 });
 
+test("друге замовлення поспіль без перезавантаження: кошик, а не «Дякуємо» за перше", async ({ page }) => {
+  await startCheckout(page);
+  await page.locator("#field-branch").fill("5");
+  await submit(page);
+  await expect(page.locator("h1")).toHaveText("Дякуємо, Олена!");
+
+  // Як покупець: лише переходи посиланнями (Next зберігає стан сторінок), без page.goto
+  await page.getByRole("link", { name: "Повернутися до каталогу" }).click();
+  await expect(page).toHaveURL("/catalog");
+  await page.getByRole("button", { name: /^Додати .* у кошик$/ }).filter({ visible: true }).first().click();
+  await expectCartCount(page, 1);
+  await page.getByRole("button", { name: /^Кошик, товарів: 1/ }).filter({ visible: true }).click();
+  await page.getByRole("link", { name: /Оформити замовлення/ }).click();
+  await expect(page.locator("h1").filter({ visible: true })).toHaveText("Оформлення замовлення");
+  await expect(page.getByText("Дякуємо, Олена!").filter({ visible: true })).toHaveCount(0);
+});
+
 test("доставка — за тарифами перевізника, без «безкоштовно»", async ({ page }) => {
   await startCheckout(page);
   await expect(page.locator("main").getByText("Доставка — за тарифами перевізника, оплачується при отриманні посилки")).toBeVisible();
