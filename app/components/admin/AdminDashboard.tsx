@@ -119,7 +119,64 @@ function Dashboard() {
           )}
         </Panel>
       </div>
+
+      <MailCheck />
     </div>
+  );
+}
+
+type MailTestResult = { ok: boolean; error?: string; hint?: string; to?: string; from?: string | null };
+
+/** Перевірка пошти: тестовий лист на адресу адміністратора і причина, якщо не дійшов */
+function MailCheck() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<MailTestResult | null>(null);
+  const check = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      setResult(await adminFetch<MailTestResult>("/api/admin/mail-test", { method: "POST" }));
+    } catch (e) {
+      setResult({ ok: false, error: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-extrabold">Листи покупцям</h2>
+          <p className="mt-1 text-sm text-[#527083]">Надішліть тестовий лист собі — так видно, чи доходять листи про замовлення.</p>
+        </div>
+        <button
+          onClick={check}
+          disabled={busy}
+          className="rounded-full bg-[#ffd51f] px-5 py-2.5 text-sm font-extrabold transition hover:bg-[#ffe044] disabled:opacity-60"
+        >
+          {busy ? "Надсилаємо…" : "Надіслати тестовий лист"}
+        </button>
+      </div>
+      {result && (
+        <div
+          role="status"
+          data-testid="mail-check"
+          className={`mt-4 rounded-2xl px-4 py-3 text-sm ${result.ok ? "bg-[#e7f7ee] text-[#1f6b3d]" : "bg-[#fdecec] text-[#8f2428]"}`}
+        >
+          {result.ok ? (
+            <p>
+              <b>Лист надіслано</b> на {result.to}
+              {result.from ? <> з {result.from}</> : null}. Якщо його немає у «Вхідних» за кілька хвилин — перевірте «Спам».
+            </p>
+          ) : (
+            <>
+              <p><b>Лист не надіслано.</b> {result.hint}</p>
+              {result.error && <p className="mt-1 break-words font-mono text-xs opacity-80">{result.error}</p>}
+            </>
+          )}
+        </div>
+      )}
+    </Panel>
   );
 }
 

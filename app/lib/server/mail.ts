@@ -98,34 +98,81 @@ async function appendOutbox(mail: Mail) {
 
 /** Надсилає лист; повертає true, якщо його прийнято до відправлення. Ніколи не кидає помилку */
 export async function sendMail(mail: Mail): Promise<boolean> {
-  const t = transport();
-  if (!t) return false;
+  // Пошта не налаштована — сайт працює без листів (не помилка)
+  if (!transport()) return false;
   try {
-    if (t === "log") {
-      await appendOutbox(mail);
-      return true;
-    }
-    const text = mail.href ? `${mail.text}\n\n${absoluteUrl(mail.href)}` : mail.text;
-    if (t === "smtp") {
-      await (await smtp()).sendMail({ from: sender(), to: mail.to, subject: mail.subject, text, html: html(mail) });
-      return true;
-    }
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: process.env.MAIL_FROM,
-        to: [mail.to],
-        subject: mail.subject,
-        text,
-        html: html(mail),
-      }),
-    });
-    if (!res.ok) console.error(`[mail] Resend ${res.status}: ${await res.text().catch(() => "")}`);
-    return res.ok;
+    await deliver(mail);
+    return true;
   } catch (e) {
     console.error("[mail] не вдалося надіслати лист", e);
     return false;
+  }
+}
+
+/** Надсилає або кидає помилку з причиною (для перевірки пошти в адмінці) */
+async function deliver(mail: Mail): Promise<void> {
+  const t = transport();
+  if (!t) throw new Error("Пошта не налаштована");
+  if (t === "log") {
+    await appendOutbox(mail);
+    return;
+  }
+  const text = mail.href ? `${mail.text}\n\n${absoluteUrl(mail.href)}` : mail.text;
+  if (t === "smtp") {
+    await (await smtp()).sendMail({ from: sender(), to: mail.to, subject: mail.subject, text, html: html(mail) });
+    return;
+  }
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: process.env.MAIL_FROM,
+      to: [mail.to],
+      subject: mail.subject,
+      text,
+      html: html(mail),
+    }),
+  });
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+}
+
+/** Як надсилаються листи — для адмінки (без паролів і ключів) */
+export const mailSetup = () => {
+  const t = transport();
+  return {
+    transport: t,
+    from: t === "smtp" || t === "resend" ? sender() : null,
+    host: t === "smtp" ? process.env.SMTP_HOST || "smtp.gmail.com" : null,
+  };
+};
+
+/**
+ * Тестовий лист для перевірки пошти з адмінки: повертає причину, якщо не вдалося.
+ * Помилка Gmail «535 … Username and Password not accepted» — недійсний пароль додатка
+ */
+export async function sendTestMail(to: string): Promise<{ ok: true } | { ok: false; error: string; hint?: string }> {
+  try {
+    await deliver({
+      to,
+      subject: "Перевірка пошти магазину",
+      text: "Цей лист надіслано з адмін-панелі, щоб перевірити, чи доходять листи покупцям. Якщо ви його бачите — пошта працює.",
+      href: "/admin",
+    });
+    return { ok: true };
+  } catch (e) {
+    // Скинути з'єднання: наступна спроба (напр. після нового пароля) почне з нуля
+    g.__fcSmtp = undefined;
+    const err = e as Error & { code?: string; responseCode?: number; response?: string };
+    const error = [err.code, err.responseCode, err.response ?? err.message].filter(Boolean).join(" · ").slice(0, 400);
+    const hint =
+      err.code === "EAUTH" || err.responseCode === 535
+        ? "Gmail не прийняв логін або пароль: створіть новий пароль додатка в Google-акаунті магазину (Безпека → Паролі додатків), замініть SMTP_PASS у Vercel і зробіть Redeploy. Перевірте й SMTP_USER — повна адреса Gmail."
+        : /ETIMEDOUT|ECONNECTION|ESOCKET/.test(err.code ?? "")
+          ? "Немає з'єднання з поштовим сервером — перевірте SMTP_HOST і SMTP_PORT або спробуйте пізніше."
+          : err.message === "Пошта не налаштована"
+            ? "У Vercel немає SMTP_USER і SMTP_PASS (або RESEND_API_KEY і MAIL_FROM)."
+            : undefined;
+    return { ok: false, error, ...(hint ? { hint } : {}) };
   }
 }
 
