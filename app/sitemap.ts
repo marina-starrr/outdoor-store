@@ -6,6 +6,7 @@ import { SELLER } from "./lib/seller";
 import { returnsInfoEnabled } from "./components/shop-config";
 import { primaryVariant, variantGroups } from "./components/product-variants";
 import { absoluteUrl } from "./lib/site";
+import { PLACEHOLDER_PHOTO } from "./components/photo";
 
 /**
  * /sitemap.xml — усі сторінки, які варто індексувати: головна, каталог,
@@ -44,7 +45,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly" as const,
       priority: 0.7,
       lastModified: p.updatedAt,
-      images: [productGallery(p)[0].full],
+      // Google приймає лише повні адреси фото; заглушку «Фото скоро» не показуємо як фото товару
+      images: [productGallery(p)[0].full].filter((src) => src !== PLACEHOLDER_PHOTO).map((src) => (src.startsWith("/") ? absoluteUrl(src) : src)),
     })),
     ...["/about", "/contacts", "/delivery", ...(returnsInfoEnabled() ? ["/returns"] : []), "/privacy", ...(SELLER ? ["/offer"] : [])].map((path) => ({
       url: absoluteUrl(path),
