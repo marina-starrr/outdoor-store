@@ -46,6 +46,15 @@ test.describe("SEO", () => {
     const ld = await page.locator('script[type="application/ld+json"]').allTextContents();
     const types = ld.flatMap((s) => [JSON.parse(s)].flat().map((x: { "@type": string }) => x["@type"]));
     expect(types).toEqual(expect.arrayContaining(["Product", "BreadcrumbList"]));
+
+    // Зауваження Search Console: категорія лише з довідника Google (не передаємо), доставка — по Україні
+    const product = ld.flatMap((s) => [JSON.parse(s)].flat()).find((x) => x["@type"] === "Product");
+    expect(product.category).toBeUndefined();
+    expect(product.offers.shippingDetails).toMatchObject({
+      "@type": "OfferShippingDetails",
+      shippingDestination: { addressCountry: "UA" },
+      deliveryTime: { handlingTime: { maxValue: 1, unitCode: "DAY" }, transitTime: { minValue: 1, maxValue: 5, unitCode: "DAY" } },
+    });
   });
 
   test("сторінки з фільтрами мають canonical без параметрів", async ({ page }) => {

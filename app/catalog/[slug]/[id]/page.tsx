@@ -12,6 +12,7 @@ import {
   productUrl,
 } from "../../../components/product-details";
 import { primaryVariant, variantGroups } from "../../../components/product-variants";
+import { SHIP_CUTOFF_HOUR } from "../../../components/shop-config";
 import { getPublicCatalog } from "../../../lib/server/catalog";
 import { absoluteUrl, SITE_NAME } from "../../../lib/site";
 
@@ -77,7 +78,7 @@ async function ProductContent({ params }: Pick<PageProps<"/catalog/[slug]/[id]">
     sku: product.id,
     url: absoluteUrl(productUrl(product)),
     brand: { "@type": "Brand", name: product.brand },
-    category: category.name,
+    // category не передаємо: Google чекає англомовну назву зі свого довідника, а «Рибалка» вважає недійсною
     image: productGallery(product).map((g) => g.full),
     description: productDescription(product).join(" "),
     // Google приймає рейтинг лише за наявності відгуків (у нового товару їх ще немає)
@@ -91,6 +92,22 @@ async function ProductContent({ params }: Pick<PageProps<"/catalog/[slug]/[id]">
       price: product.price,
       itemCondition: "https://schema.org/NewCondition",
       availability: product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      // Доставка: по Україні, відправка в будні (до 14:00 — того ж дня), у дорозі 1–5 днів.
+      // Вартість — за тарифами перевізника, тож shippingRate не вказуємо
+      shippingDetails: {
+        "@type": "OfferShippingDetails",
+        shippingDestination: { "@type": "DefinedRegion", addressCountry: "UA" },
+        deliveryTime: {
+          "@type": "ShippingDeliveryTime",
+          businessDays: {
+            "@type": "OpeningHoursSpecification",
+            dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((d) => `https://schema.org/${d}`),
+          },
+          cutoffTime: `${String(SHIP_CUTOFF_HOUR).padStart(2, "0")}:00:00+02:00`,
+          handlingTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 1, unitCode: "DAY" },
+          transitTime: { "@type": "QuantitativeValue", minValue: 1, maxValue: 5, unitCode: "DAY" },
+        },
+      },
     },
   };
   const breadcrumbsLd = {
