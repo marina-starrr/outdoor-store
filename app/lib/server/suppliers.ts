@@ -199,6 +199,10 @@ export { AUTO_CATEGORY, categoryFromName, suggestCategory, type MappedCategory }
 const KNOWN_BRANDS = [
   "Gladiator", "Mikado", "GoodLuck", "River Sport", "Sadei", "Yumoshi", "Keeplit", "YODO", "Adventure Outdoors",
   "Navigators", "Cobra King", "New Hunter", "Kirasa", "LeRoy", "Fishing ROI", "Hytera", "Aspor", "Kibas", "Vulkan",
+  // Atlantmarket: у частини товарів порожній vendor. «Adimanti by Ganzo», «Firebird by Ganzo» — раніше за Ganzo
+  "Naturehike", "Fenix", "Adimanti", "Firebird", "Ganzo", "Civivi", "Roxon", "NexTool", "Nextorch", "Ruike", "Sencut",
+  "SRM", "Weknife", "Work Sharp", "Ruixin", "Brunox", "Dexshell", "Helikon-Tex", "Wacaco", "Flextail", "BRS", "Quest",
+  "Litheli", "LiitoKala", "Olight", "Armytek", "Only Hot",
 ];
 const brandPattern = (b: string) => new RegExp(`(?<![\\p{L}\\d])${b.replace(/\s+/g, "[\\s-]*")}(?![\\p{L}\\d])`, "iu");
 const BRAND_PATTERNS = KNOWN_BRANDS.map((b) => [b, brandPattern(b)] as const);

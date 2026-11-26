@@ -198,6 +198,11 @@ describe("читання файлу постачальника", () => {
     expect(brandFromName("Термосумка Ranger 15L Brown", "Ranger", "Ranger")).toBe("Ranger");
     expect(brandFromName("Котушка 801", "Ranger", "Ranger")).toBe("Ranger");
     expect(brandFromName("Плитоноска Kirasa", "Kirasa", "Ranger")).toBe("Kirasa");
+    // Atlantmarket: порожній vendor — бренд з назви, а не назва постачальника
+    expect(brandFromName("Мультитул Ganzo G104S, (11.4 см) 11 функцій, чорний + чохол", "", "Atlantmarket")).toBe("Ganzo");
+    expect(brandFromName("Ліхтар налобний Fenix HM62-T V2.0 магма", "", "Atlantmarket")).toBe("Fenix");
+    expect(brandFromName("Нiж туристичний Adimanti by Ganzo (Skimen design)", "", "Atlantmarket")).toBe("Adimanti");
+    expect(brandFromName("Ліхтар налобний Fenix HM62-T", "", "Ranger")).toBe("Fenix");
   });
 });
 
