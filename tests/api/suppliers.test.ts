@@ -148,20 +148,25 @@ describe("читання файлу постачальника", () => {
     expect(suggestCategory("Зарядні пристрої > Повербанки Litheli")).toBe("electronics");
     expect(suggestCategory("Меблі > Naturehike меблі > Столи")).toBe("furniture");
     expect(suggestCategory("Одяг > DexShell шкарпетки")).toBe("clothing");
-    expect(suggestCategory("Мультитули > Ganzo мультитули")).toBe("accessories");
-    for (const skip of [
-      "Ножі > Ruike ножі > Класичні ножі Ruike",
-      "Ножі > Civivi аксесуари до ножів",
-      "Перцеві балончики > Терен перцеві балончики",
-      "Масла і мастила Brunox > Мастила для зброї Brunox",
-      "Точильні системи > Ganzo точила і каміння",
-      "Техніка > Садові інструменти",
-      "Ліхтарі > Ел живлення та зарядні пристрої",
-      "Ліхтарі > Fenix аксесуари",
-      "Ліхтарі > Fenix ліхтарі > Велофари Fenix",
-      "Тактичне спорядження > Nextorch аксесуари",
-    ])
-      expect(suggestCategory(skip), skip).toBe("");
+    // Рішення власника: імпортувати все, крім перцевих балончиків
+    const expected: [string, string][] = [
+      ["Мультитули > Ganzo мультитули", "tools"],
+      ["Інструменти > Ganzo сокири і мачете", "tools"],
+      ["Масла і мастила Brunox > Мастила для зброї Brunox", "tools"],
+      ["Техніка > Садові інструменти", "tools"],
+      ["Ножі > Ruike ножі > Класичні ножі Ruike", "knives"],
+      ["Ножі > Civivi аксесуари до ножів", "knives"],
+      ["Точильні системи > Ganzo точила і каміння", "knives"],
+      ["Ножі > Civivi тактичні ручки", "tactical"],
+      ["Ножі > Civivi карабіни", "accessories"],
+      ["Ліхтарі > Ел живлення та зарядні пристрої", "electronics"],
+      ["Ліхтарі > Fenix аксесуари", "lighting"],
+      ["Ліхтарі > Nextorch аксесуари для ліхтарів", "lighting"],
+      ["Ліхтарі > Fenix ліхтарі > Велофари Fenix", "lighting"],
+      ["Тактичне спорядження > Nextorch аксесуари", "tactical"],
+      ["Перцеві балончики > Терен перцеві балончики", ""],
+    ];
+    for (const [name, slug] of expected) expect(suggestCategory(name), name).toBe(slug);
     // Одна категорія без шляху — як раніше
     expect(suggestCategory("Рації")).toBe("electronics");
     expect(suggestCategory("Тактичні аксесуари")).toBe("tactical");

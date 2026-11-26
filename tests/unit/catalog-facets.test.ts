@@ -29,6 +29,16 @@ const make = (category: CategorySlug, name: string, extra: Partial<Product> = {}
 
 describe("тип товару з назви", () => {
   it.each([
+    ["knives", "Ніж складаний туристичний Ganzo G720 (9 см) 440C / G10 чорний", "Складані ножі"],
+    ["knives", "Ніж фіксований мисливський Sencut Toxodon, (11.6 см) 9Cr18MoV / G10 темно-зелений", "Ножі з фіксованим клинком"],
+    ["knives", "Нiж туристичний Adimanti by Ganzo (Skimen design) (8.5 см) S35VN / титан чорний", "Ножі"],
+    ["knives", "Work Sharp Набір точильних дисків Replacement Abrasive Disc Kit E2/E2PLUS", "Точила й аксесуари до них"],
+    ["knives", "Чохол рулон для ножів Civivi CG-25B, чорний", "Чохли й аксесуари"],
+    ["tools", "Мультитул Ganzo G203, (16.5 см) 24 функції + біти та чохол", "Мультитули"],
+    ["tools", "Багатофункціональна складана лопата NexTool Folding Shovel Medium", "Лопати"],
+    ["tools", "Промаслені серветки для очищення і змащення зброї Brunox Gun Care 5шт", "Мастила й догляд"],
+    ["tools", "Акумуляторна кутова шліфмашина безщіткова Litheli, живлення від павербанку", "Акумуляторні інструменти"],
+    ["electronics", "Акумулятор 18650 Fenix (2600 mAh)", "Акумулятори й батарейки"],
     ["fishing", "Котушка GLADIATOR AGIX 1000 5+1 (GL7160)", "Котушки"],
     ["fishing", "Cпінінг GLADIATOR Black Warrior 2.10 (10-30g) (GL8150)", "Спінінги"],
     ["fishing", "Род-под GLADIATOR RP153 (GL8168)", "Підставки й род-поди"],

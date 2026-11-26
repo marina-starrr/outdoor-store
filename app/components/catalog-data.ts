@@ -17,7 +17,9 @@ export type CategorySlug =
   | "clothing"
   | "tactical"
   | "fishing"
-  | "electronics";
+  | "electronics"
+  | "knives"
+  | "tools";
 
 export type CategoryInfo = {
   slug: CategorySlug;
@@ -159,6 +161,8 @@ export const categoryPhotos: Record<CategorySlug, PhotoKey[]> = {
   tactical: ["backpackGear", "forestNight", "rocks", "hikers"],
   fishing: ["lake", "sunset", "view", "meadow"],
   electronics: ["glowTent", "forestNight", "starry", "milkyWay"],
+  knives: ["campfire", "rocks", "forestNight", "backpackGear"],
+  tools: ["campfire", "backpackGear", "rocks", "meadow"],
 };
 
 /* ---------- Категорії ---------- */
@@ -179,6 +183,8 @@ export const categories: CategoryInfo[] = [
   { slug: "tactical", name: "Тактичне спорядження", title: "Тактичне спорядження", subtitle: "Підсумки, розвантаження, головні убори й аксесуари.", image: unsplash(photo.forestNight, 720, 360), popularity: 13 },
   { slug: "fishing", name: "Рибалка", title: "Рибалка", subtitle: "Вудки, підставки та все для риболовлі.", image: unsplash(photo.lake, 720, 360), popularity: 14 },
   { slug: "electronics", name: "Рації та електроніка", title: "Рації та електроніка", subtitle: "Рації, генератори й техніка для відпочинку.", image: unsplash(photo.glowTent, 720, 360), popularity: 15 },
+  { slug: "knives", name: "Ножі та точила", title: "Ножі та точила", subtitle: "Складані й туристичні ножі, точила та аксесуари.", image: unsplash(photo.campfire, 720, 360), popularity: 16 },
+  { slug: "tools", name: "Мультитули та інструменти", title: "Мультитули та інструменти", subtitle: "Мультитули, лопати, сокири й інструменти для табору.", image: unsplash(photo.rocks, 720, 360), popularity: 17 },
 ];
 
 export const categoryBySlug = Object.fromEntries(
