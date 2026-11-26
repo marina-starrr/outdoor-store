@@ -44,6 +44,7 @@ import {
 } from "./catalog-data";
 import { useCatalog } from "./Catalog";
 import { collapseVariants, variantGroups } from "./product-variants";
+import { categoryTexts } from "./category-texts";
 import { discountsEnabled } from "./shop-config";
 import {
   availableFacets,
@@ -416,6 +417,24 @@ export default function CategoryListing({ slug }: { slug: CategorySlug }) {
               />
             </section>
           </div>
+
+          {/* Про категорію: як обрати — для покупців і власний текст сторінки для Google */}
+          {items.length > 0 && categoryTexts[slug] && (
+            <section
+              aria-labelledby="category-about"
+              data-testid="category-about"
+              className="mt-12 rounded-[24px] bg-white p-6 shadow-[0_18px_52px_rgba(79,93,101,.08)] sm:p-8"
+            >
+              <h2 id="category-about" className="text-xl font-extrabold tracking-[-0.02em] sm:text-2xl">
+                {categoryTexts[slug].heading}
+              </h2>
+              <div className="mt-4 max-w-4xl space-y-3 text-[15px] leading-relaxed text-[#3d5d70]">
+                {categoryTexts[slug].paragraphs.map((p) => (
+                  <p key={p.slice(0, 40)}>{p}</p>
+                ))}
+              </div>
+            </section>
+          )}
 
           <RecentlyViewed />
         </div>

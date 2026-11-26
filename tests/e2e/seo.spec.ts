@@ -57,6 +57,13 @@ test.describe("SEO", () => {
     });
   });
 
+  test("категорія має власний текст «як обрати» — уже в HTML (його бачить Google без JavaScript)", async ({ page, request }) => {
+    const html = await (await request.get("/catalog/tents")).text();
+    expect(html).toContain("Як обрати намет для сімейного відпочинку");
+    await page.goto("/catalog/tents");
+    await expect(page.getByTestId("category-about").getByRole("heading", { level: 2 })).toHaveText("Як обрати намет для сімейного відпочинку");
+  });
+
   test("сторінки з фільтрами мають canonical без параметрів", async ({ page }) => {
     await page.goto("/catalog/tents?brand=Tramp&sort=cheap");
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/catalog\/tents$/);
