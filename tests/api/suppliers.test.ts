@@ -142,21 +142,26 @@ describe("читання файлу постачальника", () => {
     expect(suggestCategory("Туристичне спорядження > Naturehike матраци")).toBe("sleeping-bags");
     expect(suggestCategory("Туристичне спорядження > Naturehike трекінгові палиці")).toBe("accessories");
     expect(suggestCategory("Ліхтарі > Fenix ліхтарі > Тактичні ліхтарі Fenix")).toBe("lighting");
-    expect(suggestCategory("Пальники та обладнання > Газові лампи > BRS газові лампи")).toBe("lighting");
-    expect(suggestCategory("Пальники та обладнання > Газові пальники > BRS газові пальники")).toBe("cookware");
+    // Уся гілка «Пальники та обладнання» — у пальники
+    expect(suggestCategory("Пальники та обладнання > Газові лампи > BRS газові лампи")).toBe("burners");
+    expect(suggestCategory("Пальники та обладнання > Газові пальники > BRS газові пальники")).toBe("burners");
+    expect(suggestCategory("Пальники та обладнання > Аксесуари для пальників > BRS аксесуари")).toBe("burners");
+    expect(suggestCategory("Посуд > BRS посуд")).toBe("cookware");
     expect(suggestCategory("Термопродукція > Акумулятори холоду > Quest акумулятори холоду")).toBe("picnic");
     expect(suggestCategory("Зарядні пристрої > Повербанки Litheli")).toBe("electronics");
     expect(suggestCategory("Меблі > Naturehike меблі > Столи")).toBe("furniture");
     expect(suggestCategory("Одяг > DexShell шкарпетки")).toBe("clothing");
     // Рішення власника: імпортувати все, крім перцевих балончиків
     const expected: [string, string][] = [
-      ["Мультитули > Ganzo мультитули", "tools"],
+      ["Мультитули > Ganzo мультитули", "multitools"],
       ["Інструменти > Ganzo сокири і мачете", "tools"],
-      ["Масла і мастила Brunox > Мастила для зброї Brunox", "tools"],
+      ["Масла і мастила Brunox > Мастила для зброї Brunox", "lubricants"],
+      ["Масла і мастила Brunox > Перетворювачі іржі Brunox", "lubricants"],
       ["Техніка > Садові інструменти", "tools"],
       ["Ножі > Ruike ножі > Класичні ножі Ruike", "knives"],
       ["Ножі > Civivi аксесуари до ножів", "knives"],
-      ["Точильні системи > Ganzo точила і каміння", "knives"],
+      ["Точильні системи > Ganzo точила і каміння", "sharpeners"],
+      ["Точильні системи > Work Sharp точильні верстати і точила > Кухонні точила", "sharpeners"],
       ["Ножі > Civivi тактичні ручки", "tactical"],
       ["Ножі > Civivi карабіни", "accessories"],
       ["Ліхтарі > Ел живлення та зарядні пристрої", "electronics"],

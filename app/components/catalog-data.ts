@@ -19,7 +19,11 @@ export type CategorySlug =
   | "fishing"
   | "electronics"
   | "knives"
-  | "tools";
+  | "sharpeners"
+  | "multitools"
+  | "tools"
+  | "lubricants"
+  | "burners";
 
 export type CategoryInfo = {
   slug: CategorySlug;
@@ -162,7 +166,11 @@ export const categoryPhotos: Record<CategorySlug, PhotoKey[]> = {
   fishing: ["lake", "sunset", "view", "meadow"],
   electronics: ["glowTent", "forestNight", "starry", "milkyWay"],
   knives: ["campfire", "rocks", "forestNight", "backpackGear"],
+  sharpeners: ["campfire", "rocks", "kettle", "backpackGear"],
+  multitools: ["backpackGear", "rocks", "campfire", "hikers"],
   tools: ["campfire", "backpackGear", "rocks", "meadow"],
+  lubricants: ["backpackGear", "rocks", "view", "hikers"],
+  burners: ["cookStove", "kettle", "campfire", "mug"],
 };
 
 /* ---------- Категорії ---------- */
@@ -183,8 +191,12 @@ export const categories: CategoryInfo[] = [
   { slug: "tactical", name: "Тактичне спорядження", title: "Тактичне спорядження", subtitle: "Підсумки, розвантаження, головні убори й аксесуари.", image: unsplash(photo.forestNight, 720, 360), popularity: 13 },
   { slug: "fishing", name: "Рибалка", title: "Рибалка", subtitle: "Вудки, підставки та все для риболовлі.", image: unsplash(photo.lake, 720, 360), popularity: 14 },
   { slug: "electronics", name: "Рації та електроніка", title: "Рації та електроніка", subtitle: "Рації, генератори й техніка для відпочинку.", image: unsplash(photo.glowTent, 720, 360), popularity: 15 },
-  { slug: "knives", name: "Ножі та точила", title: "Ножі та точила", subtitle: "Складані й туристичні ножі, точила та аксесуари.", image: unsplash(photo.campfire, 720, 360), popularity: 16 },
-  { slug: "tools", name: "Мультитули та інструменти", title: "Мультитули та інструменти", subtitle: "Мультитули, лопати, сокири й інструменти для табору.", image: unsplash(photo.rocks, 720, 360), popularity: 17 },
+  { slug: "burners", name: "Пальники та обладнання", title: "Пальники та газове обладнання", subtitle: "Газові й мультипаливні пальники, плитки, балони й аксесуари.", image: unsplash(photo.kettle, 720, 360), popularity: 16 },
+  { slug: "knives", name: "Ножі", title: "Ножі", subtitle: "Складані, туристичні й мисливські ножі та аксесуари до них.", image: unsplash(photo.campfire, 720, 360), popularity: 17 },
+  { slug: "sharpeners", name: "Точильні системи", title: "Точильні системи", subtitle: "Ручні й електричні точила, камені та абразиви.", image: unsplash(photo.campfire, 720, 360), popularity: 18 },
+  { slug: "multitools", name: "Мультитули", title: "Мультитули", subtitle: "Плоскогубці, ніж і викрутки — в одному інструменті.", image: unsplash(photo.backpackGear, 720, 360), popularity: 19 },
+  { slug: "tools", name: "Інструменти", title: "Інструменти", subtitle: "Лопати, сокири й інструменти для табору та саду.", image: unsplash(photo.rocks, 720, 360), popularity: 20 },
+  { slug: "lubricants", name: "Масла і мастила", title: "Масла і мастила", subtitle: "Мастила й засоби від іржі для спорядження, зброї та велосипеда.", image: unsplash(photo.view, 720, 360), popularity: 21 },
 ];
 
 export const categoryBySlug = Object.fromEntries(
