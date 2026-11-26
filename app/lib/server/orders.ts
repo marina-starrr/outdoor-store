@@ -196,7 +196,13 @@ export function trackingView(order: StoredOrder) {
 export const trackHref = (number: string) => `/orders/track?number=${encodeURIComponent(number)}`;
 
 /** Лист-підтвердження нового замовлення */
-export function orderPlacedMail(order: StoredOrder, to: string, guest: boolean): Mail {
+export function orderPlacedMail(
+  order: StoredOrder,
+  to: string,
+  guest: boolean,
+  /** Інші замовлення з того самого кошика (товари з інших складів) */
+  related: readonly string[] = [],
+): Mail {
   const items = order.lines.map((l) => `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}`).join("\n");
   const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? "";
   const where = deliveryWhere(order.delivery);
@@ -204,7 +210,13 @@ export function orderPlacedMail(order: StoredOrder, to: string, guest: boolean):
     to,
     subject: `Замовлення ${order.number} прийнято`,
     text:
-      `${order.contact.firstName}, дякуємо за замовлення!\n\n${items}\n\n` +
+      `${order.contact.firstName}, дякуємо за замовлення!\n\n` +
+      (related.length
+        ? `Товари з вашого кошика зберігаються на різних складах, тож ми оформили окремі замовлення й надішлемо окремі посилки. ` +
+          `Це замовлення ${order.number}, ` +
+          (related.length > 1 ? `інші — ${related.join(", ")} (про них — окремі листи).\n\n` : `інше — ${related[0]} (про нього — окремий лист).\n\n`)
+        : "") +
+      `${items}\n\n` +
       `Доставка: ${delivery}${where ? `, ${where}` : ""} — ${shippingLabel(order.shipping, formatPrice).toLowerCase()}\n` +
       (order.promoDiscount ? `Знижка за промокодом: −${formatPrice(order.promoDiscount)}\n` : "") +
       `Разом: ${formatPrice(order.total)}\n` +

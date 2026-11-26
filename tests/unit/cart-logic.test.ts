@@ -10,6 +10,9 @@ import {
   paymentTitle,
   promoCodes,
   resolveLines,
+  dispatchText,
+  shipmentPayment,
+  shipments,
 } from "../../app/components/cart-logic";
 import { seedProducts, withDerived } from "../../app/components/catalog-data";
 
@@ -19,6 +22,41 @@ const catalog = new Map(products.map((p) => [p.id, p]));
 const byId = (id: string) => products.find((p) => p.id === id)!;
 const cheap = products.filter((p) => p.inStock).sort((a, b) => a.price - b.price)[0];
 const expensive = products.filter((p) => p.inStock && p.price >= 3000)[0];
+
+describe("склади: окреме замовлення на кожен", () => {
+  const [a, b, c] = products.filter((p) => p.inStock);
+  const ranger = { ...a, shipFrom: "ranger" };
+  const atlant = { ...b, shipFrom: "atlant", prepayOnly: true, novaPoshtaOnly: true, dispatchDays: 3 };
+  const atlant2 = { ...c, shipFrom: "atlant", prepayOnly: true, novaPoshtaOnly: true, dispatchDays: 3 };
+
+  it("групує за складом у порядку кошика; умови складу — на посилку", () => {
+    const parts = shipments([
+      { id: atlant.id, qty: 1, product: atlant },
+      { id: ranger.id, qty: 2, product: ranger },
+      { id: atlant2.id, qty: 1, product: atlant2 },
+    ]);
+    expect(parts.map((p) => [p.key, p.lines.map((l) => l.id)])).toEqual([
+      ["atlant", [atlant.id, atlant2.id]],
+      ["ranger", [ranger.id]],
+    ]);
+    expect(parts[0]).toMatchObject({ prepayOnly: true, novaPoshtaOnly: true, dispatchDays: 3 });
+    expect(parts[1]).toMatchObject({ prepayOnly: false, novaPoshtaOnly: false, dispatchDays: 0 });
+    // Власні товари (без постачальника) — один склад
+    expect(shipments([{ id: a.id, qty: 1, product: a }, { id: b.id, qty: 1, product: b }])).toHaveLength(1);
+  });
+
+  it("накладений платіж для складу «лише передоплата» стає оплатою на рахунок", () => {
+    expect(shipmentPayment({ prepayOnly: true }, "cod")).toBe("invoice");
+    expect(shipmentPayment({ prepayOnly: false }, "cod")).toBe("cod");
+    expect(shipmentPayment({ prepayOnly: true }, "invoice")).toBe("invoice");
+  });
+
+  it("строк відправки словами", () => {
+    expect(dispatchText(3)).toBe("протягом 3 робочих днів після оплати");
+    expect(dispatchText(1, false)).toBe("протягом 1 робочого дня після підтвердження");
+    expect(dispatchText(21)).toBe("протягом 21 робочого дня після оплати");
+  });
+});
 
 describe("resolveLines", () => {
   it("додає дані товару і відкидає невідомі id", () => {

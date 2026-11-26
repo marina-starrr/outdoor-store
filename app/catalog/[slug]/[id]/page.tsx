@@ -104,7 +104,10 @@ async function ProductContent({ params }: Pick<PageProps<"/catalog/[slug]/[id]">
             dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((d) => `https://schema.org/${d}`),
           },
           cutoffTime: `${String(SHIP_CUTOFF_HOUR).padStart(2, "0")}:00:00+02:00`,
-          handlingTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 1, unitCode: "DAY" },
+          // Склад партнера (напр. Atlantmarket) відправляє за кілька робочих днів після оплати
+          handlingTime: product.dispatchDays
+            ? { "@type": "QuantitativeValue", minValue: 1, maxValue: product.dispatchDays, unitCode: "DAY" }
+            : { "@type": "QuantitativeValue", minValue: 0, maxValue: 1, unitCode: "DAY" },
           transitTime: { "@type": "QuantitativeValue", minValue: 1, maxValue: 5, unitCode: "DAY" },
         },
       },

@@ -9,7 +9,7 @@ import { useCart } from "./Cart";
 import { useLists } from "./Lists";
 import { useNotifications } from "./Notifications";
 import RecentlyViewed, { useTrackView } from "./RecentlyViewed";
-import { RETURN_DAYS, SHIPPING_BY_CARRIER, deliveryOptions, maxQtyFor, paymentOptions } from "./cart-logic";
+import { RETURN_DAYS, SHIPPING_BY_CARRIER, deliveryOptions, dispatchText, maxQtyFor, paymentOptions } from "./cart-logic";
 import { SHIP_CUTOFF_HOUR, returnsInfoEnabled, shipDay } from "./shop-config";
 import { collapseVariants, variantDimTitle, variantGroups, variantOptions, variantValue } from "./product-variants";
 import { ShippingNote } from "./cart-ui";
@@ -195,12 +195,18 @@ export default function ProductPage({ product }: { product: Product }) {
                   <span className={`h-2 w-2 rounded-full ${product.inStock ? "bg-[#1f9d55]" : "bg-[#f5ad00]"}`} />
                   {!product.inStock
                     ? "Очікується надходження"
-                    : `${product.stock <= LOW_STOCK ? `Залишилось лише ${product.stock} шт.` : "Є в наявності"}${shipping ? ` · відправимо ${shipping}` : ""}`}
+                    : `${product.stock <= LOW_STOCK ? `Залишилось лише ${product.stock} шт.` : "Є в наявності"}${shipping && !product.dispatchDays ? ` · відправимо ${shipping}` : ""}`}
                 </p>
               )}
               {product.inStock && !product.onRequest && (
-                <p className="mt-1 text-xs text-[#527083]">
-                  Замовлення, оформлені в будні до {SHIP_CUTOFF_HOUR}:00, відправляємо того ж дня
+                <p data-testid="dispatch-note" className="mt-1 text-xs text-[#527083]">
+                  {product.dispatchDays || product.prepayOnly || product.novaPoshtaOnly
+                    ? [
+                        `Зі складу партнера: відправка ${product.dispatchDays ? dispatchText(product.dispatchDays, !!product.prepayOnly) : `у будні до ${SHIP_CUTOFF_HOUR}:00 — того ж дня`}`,
+                        product.prepayOnly && "лише за передоплатою на рахунок",
+                        product.novaPoshtaOnly && "Новою поштою",
+                      ].filter(Boolean).join(", ")
+                    : `Замовлення, оформлені в будні до ${SHIP_CUTOFF_HOUR}:00, відправляємо того ж дня`}
                 </p>
               )}
 
@@ -312,6 +318,8 @@ export default function ProductPage({ product }: { product: Product }) {
                 <Perk icon="shield" title="Гарантія якості" text={product.attrs.find(([k]) => k === "Гарантія")?.[1] ?? "12 місяців"} />
                 {returnsInfoEnabled() ? (
                   <Perk icon="return" title="Обмін і повернення" text={`${RETURN_DAYS} днів`} />
+                ) : product.dispatchDays ? (
+                  <Perk icon="clock" title={`Відправка за ${product.dispatchDays} ${plural(product.dispatchDays, ["день", "дні", "днів"])}`} text={product.prepayOnly ? "робочих, після оплати" : "робочих"} />
                 ) : (
                   <Perk icon="clock" title="Відправка в день" text={`замовлення до ${SHIP_CUTOFF_HOUR}:00`} />
                 )}
@@ -326,7 +334,7 @@ export default function ProductPage({ product }: { product: Product }) {
               {tab === "description" && <DescriptionTab product={product} paragraphs={description} />}
               {tab === "specs" && <SpecsTab attrs={product.attrs} />}
               {tab === "reviews" && <ReviewsTab product={product} />}
-              {tab === "delivery" && <DeliveryTab />}
+              {tab === "delivery" && <DeliveryTab product={product} />}
             </div>
           </div>
 
@@ -934,14 +942,14 @@ function ReviewForm({
   );
 }
 
-function DeliveryTab() {
-  // Ті самі способи, що в кошику
-  const delivery = deliveryOptions.map((o) => ({
+function DeliveryTab({ product }: { product: Product }) {
+  // Ті самі способи, що в кошику (з урахуванням умов складу постачальника)
+  const delivery = deliveryOptions.filter((o) => !(product.novaPoshtaOnly && o.id === "ukrposhta")).map((o) => ({
     title: o.title,
     text: `${o.text}.`,
     aside: SHIPPING_BY_CARRIER.toLowerCase(),
   }));
-  const payment = paymentOptions.map((o) => ({
+  const payment = paymentOptions.filter((o) => !(product.prepayOnly && o.id === "cod")).map((o) => ({
     title: o.title,
     text: o.minTotal ? `${o.text}, для замовлень від ${formatPrice(o.minTotal)}.` : `${o.text}.`,
   }));
@@ -961,8 +969,9 @@ function DeliveryTab() {
           <>
             <p className="font-extrabold">Коли відправимо</p>
             <p className="mt-2 text-sm leading-relaxed text-[#3d5d70]">
-              Замовлення, оформлені в будні до {SHIP_CUTOFF_HOUR}:00, відправляємо того ж дня, пізніші — наступного
-              робочого дня. У суботу й неділю відправок немає.
+              {product.dispatchDays
+                ? `Цей товар — зі складу партнера: відправляємо ${dispatchText(product.dispatchDays, !!product.prepayOnly)}. У суботу й неділю відправок немає. Якщо в кошику є товари з різних складів, оформимо окреме замовлення на кожен склад.`
+                : `Замовлення, оформлені в будні до ${SHIP_CUTOFF_HOUR}:00, відправляємо того ж дня, пізніші — наступного робочого дня. У суботу й неділю відправок немає.`}
             </p>
           </>
         )}

@@ -23,16 +23,20 @@ import SuggestInput from "./SuggestInput";
 import {
   cartRecommendations,
   cartTotals,
+  dispatchText,
   SHIPPING_BY_CARRIER,
   deliveryOptions,
   isDeliveryId,
   paymentOptions,
+  paymentTitle,
   promoCodes,
   RETURN_DAYS,
+  shipments,
   type DeliveryId,
   type PaymentId,
+  type Shipment,
 } from "./cart-logic";
-import { formatPrice, productsWord } from "./catalog-data";
+import { formatPrice, plural, productsWord } from "./catalog-data";
 import { SHIP_CUTOFF_HOUR, discountsEnabled, returnsInfoEnabled } from "./shop-config";
 
 type Form = {
@@ -74,16 +78,21 @@ const emptyForm: Form = {
 
 type Errors = Partial<Record<keyof Form, string>>;
 
-type PlacedOrder = {
+type OrderSummary = {
   number: string;
   lines: { id: string; name: string; price: number; qty: number }[];
   total: number;
+  payment: PaymentId;
+};
+
+type PlacedOrder = {
+  /** Товари з різних складів — окремі замовлення (найчастіше одне) */
+  orders: OrderSummary[];
   firstName: string;
   lastName: string;
   phone: string;
   email: string;
   delivery: DeliveryId;
-  payment: PaymentId;
   noCall: boolean;
   /** Оформлено без акаунта */
   guest: boolean;
@@ -91,13 +100,12 @@ type PlacedOrder = {
 
 /** Відповідь сервера на оформлення замовлення */
 type OrderResponse = {
-  order?: {
-    number: string;
-    lines: { id: string; name: string; price: number; qty: number }[];
-    total: number;
-  };
+  order?: OrderSummary;
+  /** Усі замовлення (по одному на склад) */
+  orders?: OrderSummary[];
   /** Лише для гостя: за ним замовлення перейде в акаунт після входу чи реєстрації */
   claimToken?: string;
+  claimTokens?: string[];
   error?: string;
   /** Поле, до якого стосується помилка (напр. «city») */
   field?: keyof Form;
@@ -190,11 +198,25 @@ export default function CartPage() {
   }
 
   const totals = cartTotals(lines, delivery, promo);
+  // Склади: на кожен — окреме замовлення; умови складу обмежують доставку й оплату
+  const parts = shipments(lines);
+  const split = parts.length > 1;
+  const novaPoshtaOnly = parts.some((s) => s.novaPoshtaOnly);
+  const codBlocked = parts.length > 0 && parts.every((s) => s.prepayOnly);
+  // Укрпошта недоступна — перемикаємо на відділення Нової пошти (індекс Укрпошти тут не підходить)
+  if (novaPoshtaOnly && delivery === "ukrposhta") {
+    setDelivery("np-branch");
+    setForm((f) => ({ ...f, branch: "", branchRef: "", cityRef: f.cityRef.startsWith("s:") ? "" : f.cityRef }));
+  }
   // Довідник Нової пошти — лише для населеного пункту з її Ref (не з пошуку для Укрпошти)
   const npCityRef = form.cityRef && !form.cityRef.startsWith("s:") ? form.cityRef : "";
   // Спосіб з мінімальною сумою (напр. «частинами») недоступний для меншого замовлення
-  const paymentAllowed = (o: (typeof paymentOptions)[number]) => !o.minTotal || totals.total >= o.minTotal;
-  const effectivePayment = paymentOptions.some((o) => o.id === payment && paymentAllowed(o)) ? payment : paymentOptions[0].id;
+  const paymentAllowed = (o: (typeof paymentOptions)[number]) =>
+    (!o.minTotal || totals.total >= o.minTotal) && !(o.id === "cod" && codBlocked);
+  const effectivePayment =
+    paymentOptions.find((o) => o.id === payment && paymentAllowed(o))?.id ?? paymentOptions.find(paymentAllowed)?.id ?? paymentOptions[0].id;
+  // Посилки, які доведеться оплатити на рахунок, хоч обрано накладений платіж
+  const prepaidParts = effectivePayment === "cod" ? parts.filter((s) => s.prepayOnly) : [];
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -274,20 +296,18 @@ export default function CartPage() {
       } else setSubmitError(data.error ?? "Не вдалося оформити замовлення");
       return;
     }
-    // Гість: запам'ятовуємо токен — після входу чи реєстрації замовлення перейде в акаунт
-    if (data.claimToken) writeIds(ORDER_CLAIMS_STORAGE_KEY, [...readIds(ORDER_CLAIMS_STORAGE_KEY), data.claimToken]);
+    // Гість: запам'ятовуємо токени — після входу чи реєстрації замовлення перейдуть в акаунт
+    const tokens = data.claimTokens ?? (data.claimToken ? [data.claimToken] : []);
+    if (tokens.length) writeIds(ORDER_CLAIMS_STORAGE_KEY, [...readIds(ORDER_CLAIMS_STORAGE_KEY), ...tokens]);
     setOrder({
-      number: data.order.number,
-      lines: data.order.lines,
-      total: data.order.total,
+      orders: (data.orders ?? [data.order]).map((o) => ({ number: o.number, lines: o.lines, total: o.total, payment: o.payment ?? effectivePayment })),
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       phone: form.phone,
       email: form.email.trim() || user?.email || "",
       delivery,
-      payment: effectivePayment,
       noCall: form.noCall,
-      guest: !!data.claimToken,
+      guest: tokens.length > 0,
     });
     clear();
     if (!data.claimToken) refresh(); // оновлює збережену адресу доставки в профілі
@@ -357,11 +377,40 @@ export default function CartPage() {
                     <div className="mt-4">
                       <ShippingNote />
                     </div>
-                    <ul className="mt-2 divide-y divide-[#e3edf3]">
-                      {lines.map((line) => (
-                        <CartItem key={line.id} line={line} variant="wide" />
-                      ))}
-                    </ul>
+                    {split ? (
+                      <>
+                        <p data-testid="split-note" className="mt-3 rounded-2xl bg-[#fffbe6] px-4 py-3 text-sm leading-relaxed text-[#3d5d70]">
+                          <b className="text-[#082c45]">
+                            {parts.length} {plural(parts.length, ["посилка", "посилки", "посилок"])} з різних складів.
+                          </b>{" "}
+                          Оформимо окреме замовлення на кожну — так кожна поїде одразу, як буде готова. Доставку кожної посилки
+                          сплачуєте перевізнику за його тарифами.
+                        </p>
+                        {parts.map((part, i) => (
+                          <div key={part.key} className="mt-5">
+                            <ShipmentHeading index={i} part={part} />
+                            <ul className="mt-1 divide-y divide-[#e3edf3]">
+                              {part.lines.map((line) => (
+                                <CartItem key={line.id} line={line} variant="wide" />
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        {parts[0] && (parts[0].dispatchDays > 0 || parts[0].prepayOnly) && (
+                          <p className="mt-3 text-sm text-[#527083]">
+                            <ShipmentTerms part={parts[0]} />
+                          </p>
+                        )}
+                        <ul className="mt-2 divide-y divide-[#e3edf3]">
+                          {lines.map((line) => (
+                            <CartItem key={line.id} line={line} variant="wide" />
+                          ))}
+                        </ul>
+                      </>
+                    )}
                   </Card>
 
                   {status === "loading" ? (
@@ -397,11 +446,13 @@ export default function CartPage() {
                     <CardTitle step={3}>Доставка</CardTitle>
                     <div className="mt-5 grid gap-3 sm:grid-cols-2">
                       {deliveryOptions.map((o) => {
+                        const disabled = o.id === "ukrposhta" && novaPoshtaOnly;
                         return (
                           <OptionCard
                             key={o.id}
                             name="delivery"
                             checked={delivery === o.id}
+                            disabled={disabled}
                             onChange={() => {
                               // Відділення Нової пошти й індекс Укрпошти — різні поля, старе значення не підходить
                               if ((delivery === "ukrposhta") !== (o.id === "ukrposhta")) setForm((f) => ({ ...f, branch: "", branchRef: "" }));
@@ -410,7 +461,7 @@ export default function CartPage() {
                               if (o.id !== "ukrposhta" && form.cityRef.startsWith("s:")) setForm((f) => ({ ...f, cityRef: "" }));
                             }}
                             title={o.title}
-                            text={o.text}
+                            text={disabled ? "Частину товарів відправляємо лише Новою поштою" : o.text}
                           />
                         );
                       })}
@@ -499,7 +550,10 @@ export default function CartPage() {
                       </div>
                     )}
                     <p className="mt-4 text-xs text-[#8aa5b5]">
-                      Відправляємо в будні: оформлені до {SHIP_CUTOFF_HOUR}:00 — того ж дня. Детальніше про строки й вартість —{" "}
+                      {parts.some((s) => s.dispatchDays > 0)
+                        ? `Зі складу магазину відправляємо в будні: оформлені до ${SHIP_CUTOFF_HOUR}:00 — того ж дня; зі складу партнера — ${dispatchText(Math.max(...parts.map((s) => s.dispatchDays)))}.`
+                        : `Відправляємо в будні: оформлені до ${SHIP_CUTOFF_HOUR}:00 — того ж дня.`}{" "}
+                      Детальніше про строки й вартість —{" "}
                       <Link href="/delivery" target="_blank" className="font-bold text-[#098fd0] hover:underline">
                         Доставка і оплата
                       </Link>
@@ -520,11 +574,28 @@ export default function CartPage() {
                             disabled={disabled}
                             onChange={() => setPayment(o.id)}
                             title={o.title}
-                            text={disabled ? `Доступно від ${formatPrice(o.minTotal ?? 0)}` : o.text}
+                            text={
+                              !disabled
+                                ? o.text
+                                : o.id === "cod" && codBlocked
+                                  ? "Ці товари відправляємо лише після передоплати"
+                                  : `Доступно від ${formatPrice(o.minTotal ?? 0)}`
+                            }
                           />
                         );
                       })}
                     </div>
+                    {prepaidParts.length > 0 && (
+                      <p data-testid="prepay-note" className="mt-3 rounded-2xl bg-[#fffbe6] px-4 py-3 text-sm leading-relaxed text-[#3d5d70]">
+                        <b className="text-[#082c45]">
+                          {prepaidParts.length === 1
+                            ? `Посилка ${parts.indexOf(prepaidParts[0]) + 1} — лише за передоплатою.`
+                            : `Посилки ${prepaidParts.map((p) => parts.indexOf(p) + 1).join(" і ")} — лише за передоплатою.`}
+                        </b>{" "}
+                        Склад партнера не відправляє накладеним платежем: на {prepaidParts.length === 1 ? "неї" : "них"} надішлемо
+                        реквізити після підтвердження, а решту оплатите при отриманні.
+                      </p>
+                    )}
                     <Field id="comment" label="Коментар до замовлення" optional className="mt-5">
                       <textarea id="field-comment" rows={3} value={form.comment} onChange={(e) => set("comment", e.target.value)} className={`${inputCls()} resize-y`} placeholder="Наприклад, зручний час для дзвінка" />
                     </Field>
@@ -547,6 +618,7 @@ export default function CartPage() {
                       {totals.savings > 0 && <Row label="Знижка за акціями" value={`−${formatPrice(totals.savings)}`} accent />}
                       {totals.promoDiscount > 0 && <Row label={`Промокод ${promo}`} value={`−${formatPrice(totals.promoDiscount)}`} accent />}
                       <Row label="Доставка" value={SHIPPING_BY_CARRIER} />
+                      {split && <Row label="Окремих замовлень" value={`${parts.length}`} />}
                     </dl>
 
                     {/* Промокод — лише коли знижки ввімкнено (зараз вимкнено, див. shop-config) */}
@@ -688,10 +760,50 @@ export default function CartPage() {
   );
 }
 
+/* ---------- Посилки з різних складів ---------- */
+
+/** «відправка в день замовлення» / «відправка протягом 3 робочих днів після оплати · лише передоплата» */
+function ShipmentTerms({ part }: { part: Shipment }) {
+  return (
+    <>
+      Відправка{" "}
+      {part.dispatchDays > 0 ? dispatchText(part.dispatchDays, part.prepayOnly) : `у будні до ${SHIP_CUTOFF_HOUR}:00 — того ж дня`}
+      {part.prepayOnly && <> · <b className="text-[#082c45]">лише передоплата</b></>}
+      {part.novaPoshtaOnly && <> · лише Нова пошта</>}
+    </>
+  );
+}
+
+function ShipmentHeading({ index, part }: { index: number; part: Shipment }) {
+  const count = part.lines.reduce((s, l) => s + l.qty, 0);
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-xl bg-[#f3f9fd] px-4 py-2.5">
+      <p className="font-extrabold">
+        Посилка {index + 1} <span className="text-sm font-semibold text-[#527083]">· {count} {productsWord(count)}</span>
+      </p>
+      <p className="text-xs text-[#527083]">
+        <ShipmentTerms part={part} />
+      </p>
+    </div>
+  );
+}
+
 /* ---------- Успішне замовлення ---------- */
 
 function OrderSuccess({ order }: { order: PlacedOrder }) {
   const deliveryTitle = deliveryOptions.find((o) => o.id === order.delivery)?.title;
+  const { orders } = order;
+  const many = orders.length > 1;
+  const invoice = orders.filter((o) => o.payment === "invoice");
+  const cod = orders.filter((o) => o.payment === "cod");
+  // Номер не розривається на телефоні («FC-» / «6855635»)
+  const numbers = (list: OrderSummary[]) =>
+    list.map((o, i) => (
+      <span key={o.number}>
+        {i > 0 && " і "}
+        <span className="whitespace-nowrap">№ {o.number}</span>
+      </span>
+    ));
   return (
     <div className="mx-auto mt-8 max-w-2xl rounded-[28px] bg-white p-8 text-center shadow-[0_18px_52px_rgba(79,93,101,.1)] sm:p-12">
       <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#ffd51f]">
@@ -703,48 +815,67 @@ function OrderSuccess({ order }: { order: PlacedOrder }) {
         Дякуємо, {order.firstName}!
       </h1>
       <p className="mt-3 text-[#3d5d70]">
-        Замовлення <b className="text-[#082c45]">№ {order.number}</b> прийнято.{" "}
+        {many ? (
+          <>
+            Товари зберігаються на різних складах, тож ми оформили {orders.length}{" "}
+            {plural(orders.length, ["окреме замовлення", "окремі замовлення", "окремих замовлень"])}:{" "}
+            <b className="text-[#082c45]">{numbers(orders)}</b>.{" "}
+          </>
+        ) : (
+          <>
+            Замовлення <b className="text-[#082c45]">№ {orders[0].number}</b> прийнято.{" "}
+          </>
+        )}
         {order.noCall
-          ? "Ми повідомимо, щойно відправимо посилку."
+          ? `Ми повідомимо, щойно відправимо ${many ? "посилки" : "посилку"}.`
           : `Менеджер зв’яжеться з вами за номером ${order.phone}, щоб підтвердити замовлення.`}
       </p>
-      {order.payment === "invoice" && (
+      {invoice.length > 0 && (
         <p data-testid="payment-email-note" className="mx-auto mt-4 max-w-md rounded-2xl bg-[#fffbe6] px-5 py-4 text-sm leading-relaxed text-[#3d5d70]">
-          <b className="text-[#082c45]">Як оплатити:</b> щойно менеджер підтвердить замовлення, товар буде заброньовано
+          <b className="text-[#082c45]">Як оплатити{many && <> {numbers(invoice)}</>}:</b> щойно менеджер підтвердить замовлення, товар буде заброньовано
           за вами, а на {order.email ? <b className="text-[#082c45]">{order.email}</b> : "ваш email"} прийде лист із
           реквізитами для оплати. Оплатити потрібно протягом {PAYMENT_DAYS} днів.
         </p>
       )}
-      {order.payment === "cod" && (
+      {cod.length > 0 && (
         <p data-testid="payment-cod-note" className="mx-auto mt-4 max-w-md rounded-2xl bg-[#fffbe6] px-5 py-4 text-sm leading-relaxed text-[#3d5d70]">
-          <b className="text-[#082c45]">Оплата при отриманні:</b> {formatPrice(order.total)} сплатите у відділенні чи
+          <b className="text-[#082c45]">Оплата при отриманні{many && <> ({numbers(cod)})</>}:</b>{" "}
+          {formatPrice(cod.reduce((s, o) => s + o.total, 0))} сплатите у відділенні чи
           кур’єру — готівкою або карткою. Перевізник бере невелику комісію за переказ коштів.
         </p>
       )}
 
-      <ul className="mt-8 divide-y divide-[#e3edf3] rounded-[20px] border border-[#e3edf3] text-left">
-        {order.lines.map((line) => (
-          <li key={line.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
-            <span className="min-w-0 truncate">
-              {line.name} <span className="text-[#8aa5b5]">× {line.qty}</span>
-            </span>
-            <b className="shrink-0">{formatPrice(line.price * line.qty)}</b>
+      {orders.map((o) => (
+        <ul key={o.number} className="mt-8 divide-y divide-[#e3edf3] rounded-[20px] border border-[#e3edf3] text-left">
+          {many && (
+            <li className="flex flex-wrap items-baseline justify-between gap-x-4 bg-[#f6fafd] px-5 py-3 text-sm">
+              <b>Замовлення № {o.number}</b>
+              <span className="text-[#527083]">{paymentTitle(o.payment)}</span>
+            </li>
+          )}
+          {o.lines.map((line) => (
+            <li key={line.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+              <span className="min-w-0 truncate">
+                {line.name} <span className="text-[#8aa5b5]">× {line.qty}</span>
+              </span>
+              <b className="shrink-0">{formatPrice(line.price * line.qty)}</b>
+            </li>
+          ))}
+          <li className="flex items-center justify-between px-5 py-3 text-sm">
+            <span className="text-[#527083]">{deliveryTitle}</span>
           </li>
-        ))}
-        <li className="flex items-center justify-between px-5 py-3 text-sm">
-          <span className="text-[#527083]">{deliveryTitle}</span>
-        </li>
-        <li className="flex items-center justify-between bg-[#f6fafd] px-5 py-4">
-          <span className="font-bold">Разом</span>
-          <span className="text-xl font-black">{formatPrice(order.total)}</span>
-        </li>
-      </ul>
+          <li className="flex items-center justify-between bg-[#f6fafd] px-5 py-4">
+            <span className="font-bold">Разом</span>
+            <span className="text-xl font-black">{formatPrice(o.total)}</span>
+          </li>
+        </ul>
+      ))}
 
       {order.guest && (
         <>
           <p className="mt-6 text-sm text-[#3d5d70]">
             Статус можна перевірити будь-коли на сторінці{" "}
-            <Link href={`/orders/track?number=${encodeURIComponent(order.number)}`} className="font-bold text-[#098fd0] hover:underline">
+            <Link href={`/orders/track?number=${encodeURIComponent(orders[0].number)}`} className="font-bold text-[#098fd0] hover:underline">
               «Де моє замовлення?»
             </Link>{" "}
             — за номером замовлення і телефоном.

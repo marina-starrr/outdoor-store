@@ -70,12 +70,15 @@ export function newOrderText(
   guest: boolean,
   /** id товару → «Ranger, арт. RA6667» (товари постачальників) */
   supplierSkus: ReadonlyMap<string, string> = new Map(),
+  /** Інші замовлення з того самого кошика (товари з інших складів) */
+  related: readonly string[] = [],
 ) {
   const delivery = deliveryOptions.find((o) => o.id === order.delivery.method)?.title ?? order.delivery.method;
   const where = deliveryWhere(order.delivery);
   const c = order.contact;
   return [
     `🛒 Нове замовлення ${order.number} — ${formatPrice(order.total)}`,
+    related.length ? `🔗 Той самий покупець, інший склад: ${related.join(", ")}` : null,
     "",
     ...order.lines.flatMap((l) => [
       `• ${l.name} × ${l.qty} — ${formatPrice(l.price * l.qty)}${l.onRequest ? " ⚠️ під замовлення" : ""}`,

@@ -117,6 +117,56 @@ describe("читання файлу постачальника", () => {
     expect(suggestCategory("Ranger", "Ranger")).toBe("auto");
   });
 
+  it("категорії з деревом: назва — шлях від кореня; фото з пробілом у назві файлу не губиться", () => {
+    const f = parseFeed(`<?xml version="1.0" encoding="utf-8"?><yml_catalog><shop><categories>
+      <category id="10">Намети</category>
+      <category id="11" parentId="10">Naturehike намети</category>
+      <category id="12" parentId="11">Двомісні</category>
+      <category id="13" parentId="13">Сам собі батько</category>
+    </categories><offers>
+      <offer id="NH1" available="true"><price>4250</price><categoryId>12</categoryId>
+        <picture>https://atlantmarket.example/upload/ganzo g203.jpg</picture><name>Намет Naturehike Cloud Up 2</name></offer>
+    </offers></shop></yml_catalog>`);
+    expect(f.categories.find((c) => c.id === "12")).toEqual({ id: "12", name: "Намети > Naturehike намети > Двомісні", inStock: 1 });
+    expect(f.categories.find((c) => c.id === "13")!.name).toBe("Сам собі батько");
+    expect(f.offers[0].pictures).toEqual(["https://atlantmarket.example/upload/ganzo%20g203.jpg"]);
+    // Без кількості у файлі, але в наявності — є
+    expect(f.offers[0].stock).toBeGreaterThan(0);
+  });
+
+  it("підказки для категорій з шляхом (Atlantmarket): потрібне — у наші, ножі й решта — не імпортувати", () => {
+    expect(suggestCategory("Намети > Naturehike намети > Двомісні")).toBe("tents");
+    // Кілки, стійки, підстилки — у «Туристичні аксесуари»
+    expect(suggestCategory("Намети > Naturehike намети > Аксесуари")).toBe("accessories");
+    expect(suggestCategory("Туристичне спорядження > Naturehike спальні мішки > Зимові")).toBe("sleeping-bags");
+    expect(suggestCategory("Туристичне спорядження > Naturehike матраци")).toBe("sleeping-bags");
+    expect(suggestCategory("Туристичне спорядження > Naturehike трекінгові палиці")).toBe("accessories");
+    expect(suggestCategory("Ліхтарі > Fenix ліхтарі > Тактичні ліхтарі Fenix")).toBe("lighting");
+    expect(suggestCategory("Пальники та обладнання > Газові лампи > BRS газові лампи")).toBe("lighting");
+    expect(suggestCategory("Пальники та обладнання > Газові пальники > BRS газові пальники")).toBe("cookware");
+    expect(suggestCategory("Термопродукція > Акумулятори холоду > Quest акумулятори холоду")).toBe("picnic");
+    expect(suggestCategory("Зарядні пристрої > Повербанки Litheli")).toBe("electronics");
+    expect(suggestCategory("Меблі > Naturehike меблі > Столи")).toBe("furniture");
+    expect(suggestCategory("Одяг > DexShell шкарпетки")).toBe("clothing");
+    expect(suggestCategory("Мультитули > Ganzo мультитули")).toBe("accessories");
+    for (const skip of [
+      "Ножі > Ruike ножі > Класичні ножі Ruike",
+      "Ножі > Civivi аксесуари до ножів",
+      "Перцеві балончики > Терен перцеві балончики",
+      "Масла і мастила Brunox > Мастила для зброї Brunox",
+      "Точильні системи > Ganzo точила і каміння",
+      "Техніка > Садові інструменти",
+      "Ліхтарі > Ел живлення та зарядні пристрої",
+      "Ліхтарі > Fenix аксесуари",
+      "Ліхтарі > Fenix ліхтарі > Велофари Fenix",
+      "Тактичне спорядження > Nextorch аксесуари",
+    ])
+      expect(suggestCategory(skip), skip).toBe("");
+    // Одна категорія без шляху — як раніше
+    expect(suggestCategory("Рації")).toBe("electronics");
+    expect(suggestCategory("Тактичні аксесуари")).toBe("tactical");
+  });
+
   it("категорія за назвою товару (для збірних категорій)", () => {
     expect(categoryFromName("Котушка GLADIATOR AGIX 2000 5+1 (GL6781)")).toBe("fishing");
     expect(categoryFromName("Вудка карбонова Mikado Princess без кілець 4м Carbon (GL5835)")).toBe("fishing");
@@ -253,6 +303,26 @@ describe("постачальники в адмін-панелі", () => {
     serveFeed(yml([{ ...offers[0], stock: 4 }, offers[1], offers[2]]));
     await sync(s.id);
     expect((await bySku("KI1"))).toMatchObject({ on_request: false, stock: 4 });
+  });
+
+  it("умови відправки: за замовчуванням як раніше; змінюються в адмінці; Atlantmarket — одразу з договору", async () => {
+    const s = await create([{ id: "TERM1", price: 100, stock: 1, cat: "7" }]);
+    expect(s).toMatchObject({ codAllowed: true, novaPoshtaOnly: false, dispatchDays: 0 });
+    const patch = (body: unknown) => call(withId(supplierItem.PATCH, { id: s.id }), { method: "PATCH", cookie: admin, body });
+    const r = await patch({ codAllowed: false, novaPoshtaOnly: true, dispatchDays: 2 });
+    expect(r.data.supplier).toMatchObject({ codAllowed: false, novaPoshtaOnly: true, dispatchDays: 2 });
+    expect((await patch({ dispatchDays: 99 })).status).toBe(400);
+    expect((await patch({ dispatchDays: 1.5 })).status).toBe(400);
+    // Зміна категорій не чіпає умов
+    expect((await patch({ categoryMap: { "7": "tents" } })).data.supplier).toMatchObject({ codAllowed: false, dispatchDays: 2 });
+
+    const atlantUrl = "https://atlantmarket.com.ua/price1/prom/atlantmarketprom(false).xml";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(yml([{ id: "AT1", price: 100, stock: 1, cat: "7" }]))));
+    const created = await call(suppliers.POST, { cookie: admin, body: { name: "Atlantmarket", feedUrl: atlantUrl } });
+    expect(created.status).toBe(201);
+    expect(created.data.supplier).toMatchObject({ codAllowed: false, novaPoshtaOnly: true, dispatchDays: 3 });
+    // Прибираємо: щогодинні тести нижче оновлюють усіх постачальників з тестового FEED_URL
+    await call(withId(supplierItem.DELETE, { id: created.data.supplier.id }), { method: "DELETE", cookie: admin });
   });
 
   it("товар знову в наявності — сповіщення підписникам", async () => {

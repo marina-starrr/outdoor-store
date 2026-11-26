@@ -93,6 +93,49 @@ export const paymentOptions = allPaymentOptions.filter((o) => o.enabled);
 /** Назва способу оплати (і вимкненого — для історії замовлень) */
 export const paymentTitle = (id: string) => allPaymentOptions.find((o) => o.id === id)?.title ?? id;
 
+/* ---------- Склади: окреме замовлення на кожен ---------- */
+
+export type Shipment = {
+  /** id постачальника ("" — власний склад) */
+  key: string;
+  lines: ResolvedLine[];
+  /** Лише передоплата: накладений платіж для цієї посилки недоступний */
+  prepayOnly: boolean;
+  /** Лише Нова пошта */
+  novaPoshtaOnly: boolean;
+  /** Відправка протягом стількох робочих днів після оплати (0 — у день замовлення) */
+  dispatchDays: number;
+};
+
+/**
+ * Товари з різних складів (постачальників) не можна відправити однією посилкою —
+ * на кожен склад окреме замовлення. Порядок — як у кошику
+ */
+export function shipments(lines: ResolvedLine[]): Shipment[] {
+  const groups = new Map<string, Shipment>();
+  for (const l of lines) {
+    const key = l.product.shipFrom ?? "";
+    const g = groups.get(key) ?? { key, lines: [], prepayOnly: false, novaPoshtaOnly: false, dispatchDays: 0 };
+    g.lines.push(l);
+    g.prepayOnly ||= !!l.product.prepayOnly;
+    g.novaPoshtaOnly ||= !!l.product.novaPoshtaOnly;
+    g.dispatchDays = Math.max(g.dispatchDays, l.product.dispatchDays ?? 0);
+    groups.set(key, g);
+  }
+  return [...groups.values()];
+}
+
+/** Спосіб оплати посилки: накладений платіж для «лише передоплата» замінюється оплатою на рахунок */
+export const shipmentPayment = (s: Pick<Shipment, "prepayOnly">, payment: PaymentId): PaymentId =>
+  s.prepayOnly && payment === "cod" ? "invoice" : payment;
+
+const workingDaysWord = (n: number) =>
+  n % 10 === 1 && n % 100 !== 11 ? "робочого дня" : "робочих днів";
+
+/** «протягом 3 робочих днів після оплати» — для товарів, які відправляються не в день замовлення */
+export const dispatchText = (days: number, prepayOnly = true) =>
+  `протягом ${days} ${workingDaysWord(days)} після ${prepayOnly ? "оплати" : "підтвердження"}`;
+
 /* ---------- Промокоди ---------- */
 
 export const promoCodes: Record<string, { percent: number; label: string }> = {

@@ -52,6 +52,11 @@ export const productFromRow = (r: Row): Product =>
     onRequest: r.on_request || undefined,
     // Товари постачальників продаються за їхньою РРЦ (антидемпінгова політика)
     fixedPrice: r.supplier_id ? true : undefined,
+    // Умови складу постачальника (r.sup — рядок suppliers з loadCatalog)
+    shipFrom: r.supplier_id || undefined,
+    prepayOnly: r.sup?.cod_allowed === false || undefined,
+    novaPoshtaOnly: r.sup?.np_only === true || undefined,
+    dispatchDays: Number(r.sup?.dispatch_days) > 0 ? Number(r.sup.dispatch_days) : undefined,
     updatedAt: isoOpt(r.updated_at),
     popularity: num(r.popularity),
     specs: r.specs,
@@ -135,8 +140,13 @@ export async function ensureCatalog() {
 export async function loadCatalog(q: Queryable = db): Promise<Product[]> {
   await ensureCatalog();
   const rows = await q.query(
-    `select p.*, coalesce(r.rating, 0) as rating, coalesce(r.cnt, 0) as reviews, coalesce(s.sold, 0) as sold
+    // Умови складу постачальника — через to_jsonb, щоб запит працював і до міграції з новими колонками;
+    // великі поля (категорії) прибираємо — підзапит рахується раз на постачальника, а не на товар
+    `select p.*, coalesce(r.rating, 0) as rating, coalesce(r.cnt, 0) as reviews, coalesce(s.sold, 0) as sold, sup.sup
      from products p
+     left join (
+       select x.id, to_jsonb(x) - 'category_map' - 'feed_categories' - 'last_sync_message' as sup from suppliers x
+     ) sup on sup.id = p.supplier_id
      left join (
        select product_id, round(avg(rating)::numeric, 1) as rating, count(*) as cnt
        from reviews where status = 'approved' group by product_id

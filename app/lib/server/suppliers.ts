@@ -1,8 +1,9 @@
 import "server-only";
 import { XMLParser } from "fast-xml-parser";
-import { categoryPhotos, isCategorySlug, withDerived, type CategorySlug, type Product } from "../../components/catalog-data";
+import { categoryPhotos, isCategorySlug, withDerived, type Product } from "../../components/catalog-data";
 import { PLACEHOLDER_PHOTO } from "../../components/photo";
 import { MAX_IMAGES, slugify } from "../admin-product";
+import { AUTO_CATEGORY, PATH_SEPARATOR, categoryFromName, suggestCategory, type MappedCategory } from "../supplier-categories";
 import { invalidateCatalog, productFromRow } from "./catalog";
 import { db, iso, jsonb, sql, tx, type Queryable, type Row } from "./db";
 import { sendMails, type Mail } from "./mail";
@@ -46,9 +47,18 @@ export type Supplier = {
   lastSyncMessage?: string;
   /** Товар не бренду постачальника з залишком 1 — «під замовлення» (правило Ranger) */
   otherBrandsOnRequest: boolean;
+  /** Постачальник відправляє накладеним платежем (Atlantmarket — ні, лише після 100% передоплати) */
+  codAllowed: boolean;
+  /** Відправляє лише Новою поштою */
+  novaPoshtaOnly: boolean;
+  /** За скільки робочих днів відправляє після оплати / підтвердження (0 — у день замовлення до 14:00) */
+  dispatchDays: number;
   /** Скільки товарів від постачальника є на сайті */
   products: number;
 };
+
+/** Найбільший строк відправки, який можна вказати в адмінці */
+export const MAX_DISPATCH_DAYS = 10;
 
 export type SyncResult = {
   created: number;
@@ -128,16 +138,34 @@ export function parseFeed(xml: string): Feed {
       stock: available ? qty : 0,
       categoryId: text(o.categoryId),
       vendor: text(o.vendor).slice(0, 60),
-      pictures: asArray(o.picture).map(text).filter((u) => /^https:\/\/[^\s"'<>]+$/i.test(u)).slice(0, MAX_IMAGES),
+      // Пробіли в назвах файлів (Atlantmarket: «ganzo g203.jpg») — кодуємо, а не відкидаємо фото
+      pictures: asArray(o.picture).map((p) => text(p).replace(/ /g, "%20")).filter((u) => /^https:\/\/[^\s"'<>]+$/i.test(u)).slice(0, MAX_IMAGES),
     }];
   });
 
   const inStock = new Map<string, number>();
   for (const o of offers) if (o.stock > 0) inStock.set(o.categoryId, (inStock.get(o.categoryId) ?? 0) + 1);
-  const categories = asArray((shop.categories as Record<string, unknown> | undefined)?.category).map((c) => {
-    const id = text((c as Record<string, unknown>)["@id"]);
-    return { id, name: text(c).slice(0, 120), inStock: inStock.get(id) ?? 0 };
-  }).filter((c) => c.id);
+  const rawCategories = asArray((shop.categories as Record<string, unknown> | undefined)?.category).map((c) => ({
+    id: text((c as Record<string, unknown>)["@id"]),
+    parentId: text((c as Record<string, unknown>)["@parentId"]),
+    name: text(c),
+  }));
+  const byId = new Map(rawCategories.map((c) => [c.id, c]));
+  /*
+   * Назва з шляхом від кореня: «Намети > Naturehike намети > Двомісні». Без батьків
+   * у постачальників із деревом категорій однакові «Двомісні» чи «Аксесуари» не розрізнити
+   */
+  const pathName = (id: string) => {
+    const parts: string[] = [];
+    const seen = new Set<string>();
+    // seen — від петель у файлі («категорія сама собі батько»)
+    for (let c = byId.get(id); c && !seen.has(c.id) && seen.size < 10; c = byId.get(c.parentId)) {
+      seen.add(c.id);
+      parts.unshift(c.name);
+    }
+    return parts.join(PATH_SEPARATOR).slice(0, 200);
+  };
+  const categories = rawCategories.filter((c) => c.id).map((c) => ({ id: c.id, name: pathName(c.id), inStock: inStock.get(c.id) ?? 0 }));
   if (!offers.length) throw new Error("У файлі немає жодного товару");
   return { categories, offers };
 }
@@ -159,65 +187,9 @@ export async function fetchFeed(url: string): Promise<Feed> {
   return parseFeed(xml);
 }
 
-/* ---------- Відповідність категорій ---------- */
+/* ---------- Відповідність категорій (правила — у supplier-categories.ts) ---------- */
 
-const RULES: [RegExp, CategorySlug][] = [
-  [/військ|тактич|армій/i, "tactical"],
-  [/риба|рибол|вудк|короп/i, "fishing"],
-  [/рац|генерат|кондиц|камер|електрон|павербанк|power/i, "electronics"],
-  // «термосумки» — пікнік, тож це правило раніше за «термоси»
-  [/пікнік|термосум|холодильн/i, "picnic"],
-  [/термос|термокух|термочаш/i, "thermos"],
-  [/термобіл|одяг|шкарпет|взутт/i, "clothing"],
-  // «Гойдалки, тенти, гамаки» — гамаки, тож раніше за «намети»
-  [/гамак|гойдалк/i, "hammocks"],
-  [/намет|тент|парасол/i, "tents"],
-  [/рюкзак|чохл|гермомі/i, "backpacks"],
-  [/спальн|каремат|килим|коврик/i, "sleeping-bags"],
-  [/газ|пальник|посуд|казан/i, "cookware"],
-  [/крісл|стіл|стол|стільц|ліжк|шезлонг|розкладач|меблі/i, "furniture"],
-  [/ліхтар|освітл|лампа/i, "lighting"],
-  [/мангал|гриль|барбек/i, "grills"],
-  [/аксес|туризм/i, "accessories"],
-];
-
-/** «Категорію визначати за назвою кожного товару» — для змішаних категорій постачальника */
-export const AUTO_CATEGORY = "auto";
-export type MappedCategory = CategorySlug | typeof AUTO_CATEGORY | "";
-
-/** Підказка: наша категорія за назвою їхньої ("" — не знаємо) */
-export function suggestCategory(name: string, supplierName?: string): MappedCategory {
-  // Категорія з назвою самого постачальника («Ranger») — збірна, там усе підряд
-  if (supplierName && name.trim().toLowerCase() === supplierName.trim().toLowerCase()) return AUTO_CATEGORY;
-  return RULES.find(([re]) => re.test(name))?.[1] ?? "";
-}
-
-/*
- * Наша категорія за назвою ТОВАРУ (для збірних категорій постачальника).
- * Порядок важливий: «коропова розкладачка» — меблі, а не рибалка;
- * «чохол для вудилища» — рибалка, а не рюкзаки
- */
-const PRODUCT_RULES: [RegExp, CategorySlug][] = [
-  [/power ?bank|павербанк|(?<!\p{L})раці[яї]|генератор|кондиціонер|підводн\p{L}* камер/iu, "electronics"],
-  [/плитоноск|підсумок|кобур|розвантаж|кавер|шолом|бронежилет|балаклав|тактичн|військов|турнікет|(?<!\p{L})ак(?!\p{L})|мульт[иі]кам|піксел/iu, "tactical"],
-  [/термосумк|холодильник|пікнік|акумулятор холоду/iu, "picnic"],
-  [/термос|термокру|термокух|термочаш/iu, "thermos"],
-  [/термобілизн|шкарпет|кофт|футболк|штан|шорт/iu, "clothing"],
-  [/гамак|гойдалк|павільйон/iu, "hammocks"],
-  [/кр[іi]сл|(?<!\p{L})стіл|стіл[еє]ць|стільц|ліжк|розкладачк|шезлонг/iu, "furniture"],
-  [/вудк|вудилищ|котушк|[сc]пінінг|сигналізатор|род-под|буз-бар|підставка телескоп|короп|фідер|приманк|гачк|волосін|блешн|воблер/iu, "fishing"],
-  [/намет|тент|bivvy/iu, "tents"],
-  [/рюкзак|гермомі|чохол/iu, "backpacks"],
-  [/спальн|карема|карима|килимок/iu, "sleeping-bags"],
-  [/пальник|казан|посуд|чайник|сковор|каструл/iu, "cookware"],
-  [/ліхтар|лампа/iu, "lighting"],
-  [/мангал|гриль|барбек/iu, "grills"],
-];
-
-/** Категорія за назвою товару; undefined — не впізнали (товар не імпортується) */
-export function categoryFromName(name: string): CategorySlug | undefined {
-  return PRODUCT_RULES.find(([re]) => re.test(name))?.[1];
-}
+export { AUTO_CATEGORY, categoryFromName, suggestCategory, type MappedCategory };
 
 /*
  * Бренд з назви. Ranger у файлі ставить vendor=Ranger і чужим брендам, які
@@ -252,6 +224,10 @@ const supplierFromRow = (r: Row): Supplier => ({
   lastSyncOk: r.last_sync_ok ?? undefined,
   lastSyncMessage: r.last_sync_message ?? undefined,
   otherBrandsOnRequest: r.other_brands_on_request === true,
+  // До міграції 20261126000000 колонок ще немає — як було: усе дозволено, відправка в день
+  codAllowed: r.cod_allowed !== false,
+  novaPoshtaOnly: r.np_only === true,
+  dispatchDays: Number(r.dispatch_days ?? 0),
   products: Number(r.products ?? 0),
 });
 
@@ -275,12 +251,31 @@ export async function createSupplier(name: string, feedUrl: string): Promise<Sup
     "insert into suppliers (name, feed_url, category_map, feed_categories) values ($1, $2, $3::jsonb, $4::jsonb) returning id",
     [name, feedUrl, jsonb(map), jsonb(feed.categories)],
   );
+  const terms = KNOWN_TERMS.find(([re]) => re.test(feedUrl))?.[1];
+  if (terms) await updateSupplier(row.id, terms);
   return (await getSupplier(row.id))!;
 }
 
+/*
+ * Умови відправки відомих постачальників (з їхніх договорів) — ставляться
+ * при додаванні; власник може змінити їх у адмінці
+ */
+const KNOWN_TERMS: [RegExp, { codAllowed: boolean; novaPoshtaOnly: boolean; dispatchDays: number }][] = [
+  // Договір поставки Atlantmarket: лише 100% передоплата, Нова пошта, відправка за 3 робочі дні після оплати
+  [/^https:\/\/([^/]+\.)?atlantmarket\.com\.ua\//i, { codAllowed: false, novaPoshtaOnly: true, dispatchDays: 3 }],
+];
+
 export async function updateSupplier(
   id: string,
-  patch: { name?: string; feedUrl?: string; categoryMap?: Record<string, string>; otherBrandsOnRequest?: boolean },
+  patch: {
+    name?: string;
+    feedUrl?: string;
+    categoryMap?: Record<string, string>;
+    otherBrandsOnRequest?: boolean;
+    codAllowed?: boolean;
+    novaPoshtaOnly?: boolean;
+    dispatchDays?: number;
+  },
 ) {
   const map = patch.categoryMap
     ? Object.fromEntries(Object.entries(patch.categoryMap).filter(([k, v]) => k.length <= 60 && (v === "" || v === AUTO_CATEGORY || isCategorySlug(v))))
@@ -291,6 +286,17 @@ export async function updateSupplier(
             other_brands_on_request = coalesce($5, other_brands_on_request) where id = $1`,
     [id, patch.name ?? null, patch.feedUrl ?? null, map ? jsonb(map) : null, patch.otherBrandsOnRequest ?? null],
   );
+  // Окремим запитом: до міграції цих колонок немає, і зміна категорій не має від цього ламатися
+  if (patch.codAllowed !== undefined || patch.novaPoshtaOnly !== undefined || patch.dispatchDays !== undefined) {
+    const days = patch.dispatchDays === undefined ? null : Math.max(0, Math.min(MAX_DISPATCH_DAYS, Math.floor(patch.dispatchDays)));
+    await sql(
+      `update suppliers set cod_allowed = coalesce($2, cod_allowed), np_only = coalesce($3, np_only),
+              dispatch_days = coalesce($4, dispatch_days) where id = $1`,
+      [id, patch.codAllowed ?? null, patch.novaPoshtaOnly ?? null, days],
+    );
+    // Умови показуються на сторінках товарів і в кошику
+    invalidateCatalog();
+  }
 }
 
 /** Видаляє постачальника. Його товари лишаються на сайті, але більше не оновлюються */

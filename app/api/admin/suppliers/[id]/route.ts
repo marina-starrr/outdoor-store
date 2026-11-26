@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { cleanText, error, json, requireAdmin } from "../../../../lib/server/auth";
-import { deleteSupplier, getSupplier, updateSupplier } from "../../../../lib/server/suppliers";
+import { MAX_DISPATCH_DAYS, deleteSupplier, getSupplier, updateSupplier } from "../../../../lib/server/suppliers";
 
-/** Зміна назви, посилання або відповідності категорій */
+/** Зміна назви, посилання, відповідності категорій або умов відправки */
 export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/suppliers/[id]">) {
   const auth = await requireAdmin(req);
   if ("response" in auth) return auth.response;
@@ -14,8 +14,19 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/supp
   if (name !== undefined && name.length < 2) return error("Вкажіть назву постачальника");
   if (feedUrl !== undefined && !/^https:\/\/[^\s"'<>]+$/i.test(feedUrl)) return error("Посилання на файл має починатися з https://");
   const categoryMap = body.categoryMap && typeof body.categoryMap === "object" ? (body.categoryMap as Record<string, string>) : undefined;
-  const otherBrandsOnRequest = typeof body.otherBrandsOnRequest === "boolean" ? body.otherBrandsOnRequest : undefined;
-  await updateSupplier(id, { name, feedUrl, categoryMap, otherBrandsOnRequest });
+  const flag = (v: unknown) => (typeof v === "boolean" ? v : undefined);
+  const dispatchDays = body.dispatchDays === undefined ? undefined : Number(body.dispatchDays);
+  if (dispatchDays !== undefined && (!Number.isInteger(dispatchDays) || dispatchDays < 0 || dispatchDays > MAX_DISPATCH_DAYS))
+    return error(`Строк відправки — від 0 до ${MAX_DISPATCH_DAYS} робочих днів`);
+  await updateSupplier(id, {
+    name,
+    feedUrl,
+    categoryMap,
+    otherBrandsOnRequest: flag(body.otherBrandsOnRequest),
+    codAllowed: flag(body.codAllowed),
+    novaPoshtaOnly: flag(body.novaPoshtaOnly),
+    dispatchDays,
+  });
   return json({ supplier: await getSupplier(id) });
 }
 

@@ -85,7 +85,15 @@ function html(mail: Mail) {
 </div></body></html>`;
 }
 
-async function appendOutbox(mail: Mail) {
+/** Записи у файл по черзі: кілька листів одночасно (напр. два замовлення) не мають перезаписати один одного */
+let outboxQueue: Promise<unknown> = Promise.resolve();
+function appendOutbox(mail: Mail) {
+  const next = outboxQueue.then(() => writeOutbox(mail));
+  outboxQueue = next.catch(() => {});
+  return next;
+}
+
+async function writeOutbox(mail: Mail) {
   const file = join(dataDir(), "outbox.json");
   let list: unknown[] = [];
   try {

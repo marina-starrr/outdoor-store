@@ -17,6 +17,9 @@ type Supplier = {
   lastSyncOk?: boolean;
   lastSyncMessage?: string;
   otherBrandsOnRequest: boolean;
+  codAllowed: boolean;
+  novaPoshtaOnly: boolean;
+  dispatchDays: number;
   products: number;
 };
 type SyncResult = { created: number; updated: number; outOfStock: number; noPhoto: number; skippedUnmapped: number; skippedNotInStock: number };
@@ -97,7 +100,8 @@ function SupplierCard({ supplier: s, onChange, onDeleted }: { supplier: Supplier
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const dirty = JSON.stringify(map) !== JSON.stringify(s.categoryMap);
-  const sorted = [...s.feedCategories].sort((a, b) => b.inStock - a.inStock);
+  // За шляхом («Намети > Naturehike намети > …») — підкатегорії однієї гілки поруч
+  const sorted = [...s.feedCategories].sort((a, b) => a.name.localeCompare(b.name, "uk"));
   const willImport = sorted.filter((c) => map[c.id]).reduce((n, c) => n + c.inStock, 0);
 
   const save = async () => {
@@ -137,13 +141,18 @@ function SupplierCard({ supplier: s, onChange, onDeleted }: { supplier: Supplier
     }
   };
 
-  const toggleOnRequest = async (value: boolean) => {
+  const saveTerms = async (body: Partial<Pick<Supplier, "otherBrandsOnRequest" | "codAllowed" | "novaPoshtaOnly" | "dispatchDays">>) => {
     setBusy("save");
     setNotice(null);
     try {
-      const { supplier } = await adminFetch<{ supplier: Supplier }>(`/api/admin/suppliers/${s.id}`, { method: "PATCH", body: { otherBrandsOnRequest: value } });
+      const { supplier } = await adminFetch<{ supplier: Supplier }>(`/api/admin/suppliers/${s.id}`, { method: "PATCH", body });
       onChange(supplier);
-      setNotice({ ok: true, text: "Збережено — застосується під час наступного оновлення («Оновити зараз» або щоденного)" });
+      setNotice({
+        ok: true,
+        text: "otherBrandsOnRequest" in body
+          ? "Збережено — застосується під час наступного оновлення («Оновити зараз» або щоденного)"
+          : "Збережено — вже діє на сайті (сторінки товарів оновляться за кілька хвилин)",
+      });
     } catch (e) {
       setNotice({ ok: false, text: (e as ApiError).message });
     } finally {
@@ -194,7 +203,7 @@ function SupplierCard({ supplier: s, onChange, onDeleted }: { supplier: Supplier
           type="checkbox"
           checked={s.otherBrandsOnRequest}
           disabled={!!busy}
-          onChange={(e) => toggleOnRequest(e.target.checked)}
+          onChange={(e) => saveTerms({ otherBrandsOnRequest: e.target.checked })}
           className="mt-0.5 h-5 w-5 shrink-0 accent-[#098fd0]"
         />
         <span>
@@ -205,6 +214,44 @@ function SupplierCard({ supplier: s, onChange, onDeleted }: { supplier: Supplier
           </span>
         </span>
       </label>
+
+      <fieldset className="mt-3 rounded-2xl bg-[#f7fafc] p-3.5 text-sm">
+        <legend className="sr-only">Умови відправки</legend>
+        <p className="font-bold">Умови відправки зі складу {s.name}</p>
+        <p className="mt-0.5 text-[#527083]">
+          Кожен постачальник — окремий склад: якщо покупець замовить товари з різних складів, сайт оформить окреме замовлення на кожен.
+        </p>
+        <div className="mt-3 grid gap-2.5">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" checked={s.codAllowed} disabled={!!busy} onChange={(e) => saveTerms({ codAllowed: e.target.checked })} className="mt-0.5 h-5 w-5 shrink-0 accent-[#098fd0]" />
+            <span>
+              <b>Можна накладеним платежем</b>
+              <span className="block text-[#527083]">Вимкніть, якщо постачальник відправляє лише після 100% передоплати — покупцю лишиться «Оплата на рахунок».</span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" checked={s.novaPoshtaOnly} disabled={!!busy} onChange={(e) => saveTerms({ novaPoshtaOnly: e.target.checked })} className="mt-0.5 h-5 w-5 shrink-0 accent-[#098fd0]" />
+            <span>
+              <b>Лише Нова пошта</b>
+              <span className="block text-[#527083]">Укрпошта для цих товарів не пропонуватиметься.</span>
+            </span>
+          </label>
+          <label className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <b>Відправка</b>
+            <select
+              value={s.dispatchDays}
+              disabled={!!busy}
+              onChange={(e) => saveTerms({ dispatchDays: Number(e.target.value) })}
+              className={`${inputCls()} w-auto py-2`}
+            >
+              <option value={0}>у день замовлення (до 14:00)</option>
+              {[1, 2, 3, 4, 5, 7, 10].map((d) => (
+                <option key={d} value={d}>за {d} {d === 1 ? "робочий день" : d < 5 ? "робочі дні" : "робочих днів"} після оплати</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </fieldset>
 
       <div className="mt-5 border-t border-[#e3edf3] pt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

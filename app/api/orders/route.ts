@@ -6,6 +6,8 @@ import {
   paymentOptions,
   promoCodes,
   resolveLines,
+  shipmentPayment,
+  shipments,
   type DeliveryId,
   type PaymentId,
 } from "../../components/cart-logic";
@@ -74,8 +76,16 @@ export async function POST(req: NextRequest) {
   const paymentOption = paymentOptions.find((o) => o.id === payment);
   if (!paymentOption) return error("Оберіть спосіб оплати");
 
+  // Кожен склад (постачальник) — окреме замовлення й окрема посилка
+  const parts = shipments(lines);
+  if (method === "ukrposhta" && parts.some((s) => s.novaPoshtaOnly))
+    return error("Частина товарів відправляється лише Новою поштою — оберіть відділення чи кур'єра Нової пошти");
+  if (payment === "cod" && parts.every((s) => s.prepayOnly))
+    return error("Ці товари відправляємо лише після передоплати — оберіть «Оплата на рахунок»");
+
   const promo = cleanText(body.promo, 20).toUpperCase() || undefined;
-  const totals = cartTotals(lines, method, promo && promoCodes[promo] ? promo : undefined);
+  const validPromo = promo && promoCodes[promo] ? promo : undefined;
+  const totals = cartTotals(lines, method, validPromo);
   if (paymentOption.minTotal && totals.total < paymentOption.minTotal)
     return error(`«${paymentOption.title}» доступна від ${paymentOption.minTotal} ₴`);
 
@@ -145,14 +155,15 @@ export async function POST(req: NextRequest) {
   if (!user && (await guestOrdersLimited(clientIp(req))))
     return error("Забагато замовлень за короткий час. Спробуйте пізніше або зателефонуйте нам.", 429);
 
-  const claimToken = user ? undefined : randomBytes(24).toString("base64url");
-  let order: StoredOrder;
+  // Гостю — окремий токен на кожне замовлення (claim_hash унікальний)
+  const claimTokens = user ? [] : parts.map(() => randomBytes(24).toString("base64url"));
+  let orders: StoredOrder[];
   /** Постачальник і його артикул — для сповіщення в Telegram (щоб одразу замовити в постачальника) */
   const supplierSkus = new Map<string, string>();
   try {
     // Товар лише перевіряється — списується (бронюється) він, коли адміністратор
     // підтверджує замовлення (див. order-flow.ts)
-    order = await tx(async (q) => {
+    orders = await tx(async (q) => {
       const onRequest = new Set<string>();
       for (const l of lines) {
         const [p] = await q.query(
@@ -175,24 +186,31 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const created: Omit<StoredOrder, "number"> = {
-        createdAt: new Date().toISOString(),
-        status: "new",
-        lines: lines.map((l) => ({ id: l.id, name: l.product.name, price: l.product.price, qty: l.qty, ...(onRequest.has(l.id) ? { onRequest: true } : {}) })),
-        subtotal: totals.subtotal,
-        promo: totals.promoDiscount ? promo : undefined,
-        promoDiscount: totals.promoDiscount,
-        shipping: totals.shipping,
-        total: totals.total,
-        delivery,
-        payment,
-        contact,
-        comment: cleanText(body.comment, 500) || undefined,
-        noCall: !!body.noCall,
-      };
-      if (!user) return insertOrder(q, created, { claimHash: sha256(claimToken!) });
+      const createdAt = new Date().toISOString();
+      const comment = cleanText(body.comment, 500) || undefined;
+      const saved: StoredOrder[] = [];
+      for (const [i, part] of parts.entries()) {
+        const t = cartTotals(part.lines, method, validPromo);
+        const created: Omit<StoredOrder, "number"> = {
+          createdAt,
+          status: "new",
+          lines: part.lines.map((l) => ({ id: l.id, name: l.product.name, price: l.product.price, qty: l.qty, ...(onRequest.has(l.id) ? { onRequest: true } : {}) })),
+          subtotal: t.subtotal,
+          promo: t.promoDiscount ? promo : undefined,
+          promoDiscount: t.promoDiscount,
+          shipping: t.shipping,
+          total: t.total,
+          delivery,
+          // Склад без накладеного платежу — оплата на рахунок, хоч покупець і обрав накладений для решти
+          payment: shipmentPayment(part, payment),
+          contact,
+          comment,
+          noCall: !!body.noCall,
+        };
+        saved.push(await insertOrder(q, created, user ? { userId: user.id } : { claimHash: sha256(claimTokens[i]) }));
+      }
+      if (!user) return saved;
 
-      const saved = await insertOrder(q, created, { userId: user.id });
       await setCart(user.id, [], q);
       // Останні дані доставки; якщо телефону в профілі ще немає — запам'ятовуємо з замовлення
       await q.query(
@@ -209,10 +227,19 @@ export async function POST(req: NextRequest) {
   // Змінилась кількість продажів у каталозі — оновлюємо сторінки
   invalidateCatalog();
   const mailTo = contact.email || user?.email;
-  await Promise.all([
-    // Адміністратор дізнається про замовлення одразу
-    notifyAdmin(newOrderText(order, !user, supplierSkus)),
-    mailTo ? sendMail(orderPlacedMail(order, mailTo, !user)) : null,
-  ]);
-  return json(claimToken ? { order, claimToken } : { order });
+  const numbers = orders.map((o) => o.number);
+  const related = (o: StoredOrder) => numbers.filter((n) => n !== o.number);
+  await Promise.all(
+    orders.flatMap((o) => [
+      // Адміністратор дізнається про замовлення одразу
+      notifyAdmin(newOrderText(o, !user, supplierSkus, related(o))),
+      mailTo ? sendMail(orderPlacedMail(o, mailTo, !user, related(o))) : null,
+    ]),
+  );
+  // order / claimToken — перше замовлення (як раніше); orders / claimTokens — усі
+  return json({
+    order: orders[0],
+    orders,
+    ...(claimTokens.length ? { claimToken: claimTokens[0], claimTokens } : {}),
+  });
 }
