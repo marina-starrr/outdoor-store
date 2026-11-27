@@ -18,10 +18,10 @@ export const navLinks = [
 
 /** Контакти магазину (онлайн-магазин без фізичної адреси) */
 export const contacts = {
-  phone: "075 912 76 65",
+  phone: "063 895 22 80",
   /** Міжнародний формат — для посилань tel: і мікророзмітки */
-  phoneIntl: "+380759127665",
-  phoneHref: "tel:+380759127665",
+  phoneIntl: "+380638952280",
+  phoneHref: "tel:+380638952280",
   email: "familycamping.ua@gmail.com",
   emailHref: "mailto:familycamping.ua@gmail.com",
   schedule: "Замовлення на сайті приймаємо цілодобово",
