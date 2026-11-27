@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/revi
   if (status !== "approved" && status !== "rejected" && status !== "pending") return error("Невідомий статус");
   const [row] = isUuid(id) ? await sql("update reviews set status = $2 where id = $1 returning *", [id, status]) : [];
   if (!row) return error("Відгук не знайдено", 404);
-  invalidateCatalog();
+  await invalidateCatalog();
   return json({ review: reviewFromRow(row) });
 }
 
@@ -25,6 +25,6 @@ export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/admin/rev
   const { id } = await ctx.params;
   const deleted = isUuid(id) ? await sql("delete from reviews where id = $1 returning id", [id]) : [];
   if (!deleted.length) return error("Відгук не знайдено", 404);
-  invalidateCatalog();
+  await invalidateCatalog();
   return json({ ok: true });
 }

@@ -114,7 +114,7 @@ export async function changeOrderStatus(
     if (e instanceof ReserveError) return { error: e.message };
     throw e;
   }
-  if (stockChanged) invalidateCatalog();
+  if (stockChanged) await invalidateCatalog();
   await sendMails(mails);
   return result;
 }

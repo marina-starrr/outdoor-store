@@ -231,7 +231,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Змінилась кількість продажів у каталозі — оновлюємо сторінки
-  invalidateCatalog();
+  await invalidateCatalog();
   const mailTo = contact.email || user?.email;
   const numbers = orders.map((o) => o.number);
   const related = (o: StoredOrder) => numbers.filter((n) => n !== o.number);

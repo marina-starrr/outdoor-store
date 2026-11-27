@@ -56,7 +56,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/products/[i
   );
   const review = reviewFromRow(row);
   // Якщо змінили вже схвалений відгук — він знову на модерації, рейтинг товару зміниться
-  invalidateCatalog();
+  await invalidateCatalog();
   await notifyAdmin(newReviewText(review));
   return json({ mine: { rating: review.rating, text: review.text, status: review.status } });
 }

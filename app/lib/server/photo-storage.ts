@@ -1,5 +1,5 @@
 import "server-only";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dataDir, isTestDatabase } from "./db";
 
@@ -22,7 +22,7 @@ export const CERT_BUCKET = "certificates";
 export const MAX_FILE_BYTES = 2_500_000;
 
 export type PhotoType = "webp" | "jpg";
-const FILE_MIME: Record<string, string> = { webp: "image/webp", jpg: "image/jpeg", png: "image/png", pdf: "application/pdf" };
+const FILE_MIME: Record<string, string> = { webp: "image/webp", jpg: "image/jpeg", png: "image/png", pdf: "application/pdf", gz: "application/gzip" };
 const extOf = (name: string) => name.slice(name.lastIndexOf(".") + 1);
 
 type BucketConfig = { id: string; sizeLimit: number; mimes: string[] };
@@ -53,9 +53,49 @@ export function detectPhotoType(bytes: Uint8Array): PhotoType | null {
 
 const PHOTO_NAME = /^[a-z0-9-]{8,80}\.(webp|jpg)$/;
 const CERT_NAME = /^cert-[a-z0-9-]{8,80}\.(pdf|jpg|png)$/;
+const CATALOG_NAME = /^catalog-v\d{1,15}-[a-f0-9]{12}\.json\.gz$/;
 
-/** Назва файлу, яку приймає сховище і /api/uploads: фото або сертифікат (cert-…) */
-export const isStoredName = (name: string) => PHOTO_NAME.test(name) || CERT_NAME.test(name);
+/** Назва файлу, яку приймає сховище і /api/uploads: фото, сертифікат (cert-…) або знімок каталогу */
+export const isStoredName = (name: string) => PHOTO_NAME.test(name) || CERT_NAME.test(name) || CATALOG_NAME.test(name);
+
+/** Знімки каталогу (стиснутий JSON) — окремий публічний кошик */
+export const CATALOG_BUCKET = "catalog";
+const CATALOG_STORE: BucketConfig = { id: CATALOG_BUCKET, sizeLimit: 20_000_000, mimes: ["application/gzip"] };
+
+/** Зберігає знімок каталогу; повертає адресу */
+export function saveCatalogFile(name: string, bytes: Uint8Array): Promise<string> {
+  if (!CATALOG_NAME.test(name)) throw new Error(`Недопустима назва файлу: ${name}`);
+  return saveFile(CATALOG_STORE, name, bytes);
+}
+
+/** Читає знімок каталогу за адресою (на сайті — через CDN Supabase, у тестах — з теки) */
+export async function readCatalogFile(url: string): Promise<Uint8Array> {
+  const name = url.split("/").pop() ?? "";
+  if (!CATALOG_NAME.test(name)) throw new Error(`Недопустима адреса знімка: ${url}`);
+  if (mode() === "local") {
+    const file = await readLocalPhoto(name);
+    if (!file) throw new Error(`Знімка немає: ${name}`);
+    return new Uint8Array(file.bytes);
+  }
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`Знімок каталогу: ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+/** Видаляє старий знімок (без помилки, якщо його вже немає) */
+export async function deleteCatalogFile(url: string): Promise<void> {
+  const name = url.split("/").pop() ?? "";
+  if (!CATALOG_NAME.test(name)) return;
+  if (mode() === "local") {
+    await rm(join(localDir(), name), { force: true });
+    return;
+  }
+  if (mode() !== "supabase") return;
+  await fetch(`${supabaseUrl()}/storage/v1/object/${CATALOG_BUCKET}/${name}`, {
+    method: "DELETE",
+    headers: { apikey: supabaseKey(), Authorization: `Bearer ${supabaseKey()}` },
+  });
+}
 
 const localDir = () => join(dataDir(), "uploads");
 

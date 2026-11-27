@@ -21,6 +21,6 @@ export async function POST(req: NextRequest) {
       [name, `https://${encodeURIComponent(name)}.example/feed.xml`, body.codAllowed !== false, body.novaPoshtaOnly === true, Number(body.dispatchDays ?? 0)],
     );
   await sql("update products set supplier_id = $1, supplier_sku = id where id = any($2::text[])", [row.id, products]);
-  invalidateCatalog();
+  await invalidateCatalog();
   return json({ id: row.id });
 }

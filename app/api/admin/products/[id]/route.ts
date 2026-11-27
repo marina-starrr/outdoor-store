@@ -23,7 +23,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext<"/api/admin/pro
   });
   if (result === "missing") return error("Товар не знайдено", 404);
   if (result === "ordered") return error("Цей товар є в замовленнях — його не можна видалити, але можна приховати з сайту", 409);
-  invalidateCatalog();
+  await invalidateCatalog();
   return json({ ok: true });
 }
 
@@ -85,7 +85,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/prod
 
   if ("notFound" in result) return error("Товар не знайдено", 404);
   if ("errors" in result) return json({ error: "Перевірте поля форми", errors: result.errors }, 400);
-  invalidateCatalog();
+  await invalidateCatalog();
   await sendMails(mails);
   // Товар з рейтингом і продажами — як у списку адмін-панелі
   const [product] = await loadProducts([id], { descriptions: true });

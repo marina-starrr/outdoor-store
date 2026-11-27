@@ -119,6 +119,6 @@ export async function copySupplierPhotos(deadline: number): Promise<PhotoCopyRes
   // Скільки товарів ще чекають (без тих, де фото не скопіювалось у цьому запуску)
   result.left = pending.filter((r) => (r.images ?? []).some((src) => isForeign(src) && !failedUrls.has(src))).length - result.products;
   if (result.left < 0) result.left = 0;
-  if (result.products) invalidateCatalog();
+  if (result.products) await invalidateCatalog();
   return result;
 }

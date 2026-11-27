@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag, revalidatePath, revalidateTag } from "next/cache";
 import { seedProducts, selectHits, withDerived, type Product } from "../../components/catalog-data";
 import { isListed } from "../certificates";
+import { bumpCatalogVersion, loadCatalogViaSnapshot } from "./catalog-snapshot";
 import { db, isoOpt, jsonb, num, opt, seedsCatalog, sql, type Queryable, type Row } from "./db";
 import { resetProductUrls } from "./product-urls";
 import { approvedReviews, type PublicReview } from "./reviews";
@@ -246,7 +247,8 @@ export async function getCatalog(): Promise<Product[]> {
   "use cache";
   cacheTag(CATALOG_TAG);
   cacheLife(CATALOG_LIFE);
-  return loadCatalog();
+  // Зі знімка у сховищі (~250 КБ через CDN), а не з бази (~2 МБ) — див. catalog-snapshot.ts
+  return loadCatalogViaSnapshot();
 }
 
 /**
@@ -283,8 +285,12 @@ export async function setCertificateExempt(q: Queryable, id: string, exempt: boo
   return (await q.query("update products set certificate_exempt = $2, updated_at = now() where id = $1 returning id", [id, exempt])).length > 0;
 }
 
-/** Скидає кеш сторінок з каталогом (ціни, залишки, нові товари) і список адрес для proxy */
-export function invalidateCatalog() {
+/**
+ * Скидає кеш сторінок з каталогом (ціни, залишки, нові товари) і список адрес для proxy.
+ * Спершу — нова версія знімка каталогу, щоб перебудовані сторінки не взяли старий знімок
+ */
+export async function invalidateCatalog() {
+  await bumpCatalogVersion();
   resetProductUrls();
   try {
     revalidateTag(CATALOG_TAG, { expire: 0 });

@@ -49,6 +49,6 @@ export async function POST(req: NextRequest) {
   });
   if ("conflict" in result) return json({ error: "Товар з таким кодом уже існує", errors: { id: "Код зайнятий" } }, 409);
 
-  invalidateCatalog();
+  await invalidateCatalog();
   return json({ product: result.product }, 201);
 }

@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (isMissingColumn(e)) return error(MIGRATION_HINT, 409);
     throw e;
   }
-  invalidateCatalog();
+  await invalidateCatalog();
   return json({ url, products: await productsByIds(ids) });
 }
 
@@ -81,6 +81,6 @@ export async function PATCH(req: NextRequest) {
     if (isMissingColumn(e)) return error(MIGRATION_HINT, 409);
     throw e;
   }
-  invalidateCatalog();
+  await invalidateCatalog();
   return json({ products: await productsByIds([id]) });
 }

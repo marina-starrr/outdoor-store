@@ -299,7 +299,7 @@ export async function updateSupplier(
       [id, patch.codAllowed ?? null, patch.novaPoshtaOnly ?? null, days],
     );
     // Умови показуються на сторінках товарів і в кошику
-    invalidateCatalog();
+    await invalidateCatalog();
   }
 }
 
@@ -482,7 +482,7 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
     );
   });
 
-  invalidateCatalog();
+  await invalidateCatalog();
   await sendMails(mails);
   return result;
 }

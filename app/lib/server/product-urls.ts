@@ -1,5 +1,5 @@
 import "server-only";
-import { isListed } from "../certificates";
+import { CERTIFICATE_CATEGORIES, isListed } from "../certificates";
 import { seedsCatalog, sql } from "./db";
 
 /*
@@ -20,16 +20,19 @@ export function productUrls(): Promise<Set<string> | null> {
   const c = g.__fcProductUrls;
   if (c && Date.now() - c.at < URLS_TTL) return c.urls;
   const urls = (async () => {
-    // Сертифікат — через to_jsonb, щоб запит працював і до міграції з цими колонками
+    // Назва й сертифікат — лише для категорій, де потрібен документ (менше трафіку бази)
     const rows = await sql(
-      `select category, id, name, to_jsonb(p)->>'certificate' as certificate,
-              (to_jsonb(p)->>'certificate_exempt')::boolean as certificate_exempt
+      `select category, id,
+              case when category = any($1::text[]) then name end as name,
+              case when category = any($1::text[]) then certificate end as certificate,
+              certificate_exempt
        from products p where not hidden`,
+      [CERTIFICATE_CATEGORIES],
     );
     const any = rows.length > 0;
     // Ніж без сертифіката — так само 404, як прихований товар
     const listed = rows.filter((r) =>
-      isListed({ category: r.category, name: r.name, certificate: r.certificate ?? undefined, certificateExempt: r.certificate_exempt === true }),
+      isListed({ category: r.category, name: r.name ?? "", certificate: r.certificate ?? undefined, certificateExempt: r.certificate_exempt === true }),
     );
     return any || !seedsCatalog() ? new Set(listed.map((r) => `${r.category}/${r.id}`)) : null;
   })();
