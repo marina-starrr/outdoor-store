@@ -4,23 +4,29 @@ import { join } from "node:path";
 import { dataDir, isTestDatabase } from "./db";
 
 /*
- * Сховище фото товарів, завантажених в адмін-панелі.
+ * Сховище фото товарів і сертифікатів на ножі, завантажених в адмін-панелі.
  *
- * - На сайті — Supabase Storage, публічний кошик product-photos (1 ГБ безкоштовно).
+ * - На сайті — Supabase Storage, публічні кошики product-photos і certificates (1 ГБ безкоштовно на все).
  *   Потрібні змінні у Vercel (їх додає інтеграція Vercel ↔ Supabase):
  *     SUPABASE_URL                                    — https://<проєкт>.supabase.co
  *     SUPABASE_SECRET_KEY або SUPABASE_SERVICE_ROLE_KEY — серверний ключ (не публікувати)
- *   Кошик створюється сам під час першого завантаження.
+ *   Кошики створюються самі під час першого завантаження.
  * - Розробка й тести — тека uploads у теці даних, файли віддає /api/uploads/<назва>.
  *   Тести (FC_DATA_DIR) завжди пишуть лише сюди — ніколи у справжнє сховище.
  */
 
 export const BUCKET = "product-photos";
+/** Сертифікати (PDF чи скан) — окремий кошик: кошик фото PDF не приймає */
+export const CERT_BUCKET = "certificates";
 /** Обмеження одного файлу (зменшене фото 1600 px зазвичай важить 150–500 КБ) */
 export const MAX_FILE_BYTES = 2_500_000;
 
 export type PhotoType = "webp" | "jpg";
-const MIME: Record<PhotoType, string> = { webp: "image/webp", jpg: "image/jpeg" };
+const FILE_MIME: Record<string, string> = { webp: "image/webp", jpg: "image/jpeg", png: "image/png", pdf: "application/pdf" };
+const extOf = (name: string) => name.slice(name.lastIndexOf(".") + 1);
+
+type BucketConfig = { id: string; sizeLimit: number; mimes: string[] };
+const PHOTO_BUCKET: BucketConfig = { id: BUCKET, sizeLimit: MAX_FILE_BYTES, mimes: [FILE_MIME.webp, FILE_MIME.jpg] };
 
 const supabaseUrl = () => (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "");
 const supabaseKey = () => process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -34,7 +40,7 @@ function mode(): Mode {
   return process.env.VERCEL ? null : "local";
 }
 
-/** Чи можна завантажувати фото (інакше адмінка пропонує посилання) */
+/** Чи можна завантажувати файли (інакше адмінка пропонує посилання) */
 export const uploadsEnabled = () => mode() !== null;
 
 /** Тип файлу за вмістом (а не за назвою чи заголовком браузера) */
@@ -45,29 +51,42 @@ export function detectPhotoType(bytes: Uint8Array): PhotoType | null {
   return null;
 }
 
-/** Назва файлу, яку приймає сховище і /api/uploads */
-export const isStoredName = (name: string) => /^[a-z0-9-]{8,80}\.(webp|jpg)$/.test(name);
+const PHOTO_NAME = /^[a-z0-9-]{8,80}\.(webp|jpg)$/;
+const CERT_NAME = /^cert-[a-z0-9-]{8,80}\.(pdf|jpg|png)$/;
+
+/** Назва файлу, яку приймає сховище і /api/uploads: фото або сертифікат (cert-…) */
+export const isStoredName = (name: string) => PHOTO_NAME.test(name) || CERT_NAME.test(name);
 
 const localDir = () => join(dataDir(), "uploads");
 
-/** Зберігає файл і повертає його публічну адресу */
-export async function savePhoto(name: string, bytes: Uint8Array, type: PhotoType): Promise<string> {
-  if (!isStoredName(name)) throw new Error(`Недопустима назва файлу: ${name}`);
+/** Зберігає фото і повертає його публічну адресу */
+export function savePhoto(name: string, bytes: Uint8Array, type: PhotoType): Promise<string> {
+  if (!PHOTO_NAME.test(name) || extOf(name) !== type) throw new Error(`Недопустима назва файлу: ${name}`);
+  return saveFile(PHOTO_BUCKET, name, bytes);
+}
+
+/** Зберігає сертифікат (PDF, JPG чи PNG) і повертає його публічну адресу */
+export function saveCertificateFile(name: string, bytes: Uint8Array, sizeLimit: number): Promise<string> {
+  if (!CERT_NAME.test(name)) throw new Error(`Недопустима назва файлу: ${name}`);
+  return saveFile({ id: CERT_BUCKET, sizeLimit, mimes: [FILE_MIME.pdf, FILE_MIME.jpg, FILE_MIME.png] }, name, bytes);
+}
+
+async function saveFile(bucket: BucketConfig, name: string, bytes: Uint8Array): Promise<string> {
   const m = mode();
   if (m === "local") {
     await mkdir(localDir(), { recursive: true });
     await writeFile(join(localDir(), name), bytes);
     return `/api/uploads/${name}`;
   }
-  if (m !== "supabase") throw new Error("Сховище фото не налаштоване");
+  if (m !== "supabase") throw new Error("Сховище файлів не налаштоване");
 
   const upload = () =>
-    fetch(`${supabaseUrl()}/storage/v1/object/${BUCKET}/${name}`, {
+    fetch(`${supabaseUrl()}/storage/v1/object/${bucket.id}/${name}`, {
       method: "POST",
       headers: {
         apikey: supabaseKey(),
         Authorization: `Bearer ${supabaseKey()}`,
-        "Content-Type": MIME[type],
+        "Content-Type": FILE_MIME[extOf(name)],
         // Назва файлу унікальна й не змінюється — браузер і CDN кешують його на рік
         "Cache-Control": "max-age=31536000, immutable",
         "x-upsert": "false",
@@ -79,24 +98,24 @@ export async function savePhoto(name: string, bytes: Uint8Array, type: PhotoType
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     if (!/bucket not found/i.test(text)) throw new Error(`Supabase Storage ${res.status}: ${text.slice(0, 200)}`);
-    await createBucket();
+    await createBucket(bucket);
     res = await upload();
     if (!res.ok) throw new Error(`Supabase Storage ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
   }
-  return `${supabaseUrl()}/storage/v1/object/public/${BUCKET}/${name}`;
+  return `${supabaseUrl()}/storage/v1/object/public/${bucket.id}/${name}`;
 }
 
-/** Публічний кошик лише для фото (webp/jpeg, до 2,5 МБ) */
-async function createBucket() {
+/** Публічний кошик лише для потрібних типів файлів і розміру */
+async function createBucket(bucket: BucketConfig) {
   const res = await fetch(`${supabaseUrl()}/storage/v1/bucket`, {
     method: "POST",
     headers: { apikey: supabaseKey(), Authorization: `Bearer ${supabaseKey()}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      id: BUCKET,
-      name: BUCKET,
+      id: bucket.id,
+      name: bucket.id,
       public: true,
-      file_size_limit: MAX_FILE_BYTES,
-      allowed_mime_types: Object.values(MIME),
+      file_size_limit: bucket.sizeLimit,
+      allowed_mime_types: bucket.mimes,
     }),
   });
   // 409 / «already exists» — кошик створив паралельний запит
@@ -111,7 +130,7 @@ export async function readLocalPhoto(name: string): Promise<{ bytes: Buffer; typ
   if (mode() !== "local" || !isStoredName(name)) return null;
   try {
     const bytes = await readFile(join(localDir(), name));
-    return { bytes, type: MIME[name.endsWith(".webp") ? "webp" : "jpg"] };
+    return { bytes, type: FILE_MIME[extOf(name)] };
   } catch {
     return null;
   }

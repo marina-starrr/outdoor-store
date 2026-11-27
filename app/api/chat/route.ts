@@ -11,7 +11,7 @@ import {
   knownProductIds,
   rateLimiter,
 } from "../../lib/server/auth";
-import { loadCatalog } from "../../lib/server/catalog";
+import { loadProducts } from "../../lib/server/catalog";
 import {
   CHAT_MESSAGE_MAX,
   addMessage,
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const text = String(body.text ?? "").trim().slice(0, CHAT_MESSAGE_MAX);
   if (!text) return error("Напишіть повідомлення");
   const productId = cleanText(body.productId, 60);
-  const product = productId && (await knownProductIds()).has(productId) ? productId : undefined;
+  const product = productId && (await knownProductIds(productId)).has(productId) ? productId : undefined;
   if (await limited(clientIp(req))) return error("Забагато повідомлень. Зачекайте кілька хвилин.", 429);
 
   const user = await getUser(req);
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
   );
   const message = await tx((q) => addMessage(q, chat.id, "customer", text, product));
   if (!last || Date.now() - new Date(last.created_at).getTime() > TELEGRAM_PAUSE_MS) {
-    const productName = product ? (await loadCatalog()).find((p) => p.id === product)?.name : undefined;
+    const productName = product ? (await loadProducts([product]))[0]?.name : undefined;
     await notifyAdmin(chatMessageText(chat, text, productName));
   }
 

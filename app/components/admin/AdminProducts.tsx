@@ -11,39 +11,61 @@ import { productUrl } from "../product-details";
 import { matchesSearch } from "../search";
 import AdminShell, { LoadError } from "./AdminShell";
 import ProductEditor from "./ProductEditor";
+import { CertificatesPanel } from "./certificates";
+import { missingCertificate } from "../../lib/certificates";
 import { adminFetch, type ApiError, useAdminData } from "./api";
 
-type StockFilter = "all" | "low" | "out" | "hidden";
+type StockFilter = "all" | "low" | "out" | "hidden" | "nocert";
 
 const stockFilters: { id: StockFilter; label: string }[] = [
   { id: "all", label: "Усі" },
   { id: "low", label: "Закінчуються" },
   { id: "out", label: "Немає в наявності" },
   { id: "hidden", label: "Приховані" },
+  { id: "nocert", label: "Без сертифіката" },
 ];
 
 const categoryOptions = [{ id: "all", label: "Усі категорії" }, ...categories.map((c) => ({ id: c.slug as string, label: c.name }))];
 
 export default function AdminProducts() {
   const [editing, setEditing] = useState<string | "new" | null>(null);
+  const [certificates, setCertificates] = useState(false);
   return (
     <AdminShell
       title="Товари"
       actions={
+        <>
+        <button
+          onClick={() => setCertificates(true)}
+          className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-extrabold text-[#067eb7] shadow-[0_8px_20px_rgba(79,93,101,.1)] transition hover:bg-[#eef6fb]"
+        >
+          <Icon name="shield" className="h-4 w-4" /> Сертифікати ножів
+        </button>
         <button
           onClick={() => setEditing("new")}
           className="inline-flex items-center gap-2 rounded-full bg-[#ffd51f] px-5 py-2.5 text-sm font-extrabold shadow-[0_8px_20px_rgba(255,213,31,.35)] transition hover:bg-[#ffe044]"
         >
           <span className="text-lg leading-none">+</span> Додати товар
         </button>
+        </>
       }
     >
-      <Products editing={editing} setEditing={setEditing} />
+      <Products editing={editing} setEditing={setEditing} certificates={certificates} setCertificates={setCertificates} />
     </AdminShell>
   );
 }
 
-function Products({ editing, setEditing }: { editing: string | "new" | null; setEditing: (v: string | "new" | null) => void }) {
+function Products({
+  editing,
+  setEditing,
+  certificates,
+  setCertificates,
+}: {
+  editing: string | "new" | null;
+  setEditing: (v: string | "new" | null) => void;
+  certificates: boolean;
+  setCertificates: (v: boolean) => void;
+}) {
   const { data, error, reload, setData } = useAdminData<{ products: Product[] }>("/api/admin/products");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
@@ -70,7 +92,8 @@ function Products({ editing, setEditing }: { editing: string | "new" | null; set
           (stock === "all" ||
             (stock === "low" && !p.hidden && p.stock > 0 && p.stock <= LOW_STOCK) ||
             (stock === "out" && !p.hidden && p.stock === 0) ||
-            (stock === "hidden" && p.hidden)) &&
+            (stock === "hidden" && p.hidden) ||
+            (stock === "nocert" && !p.hidden && missingCertificate(p))) &&
           (!query.trim() || matchesSearch(p, query) || p.id.includes(query.trim().toLowerCase())),
       ),
     [products, category, stock, query],
@@ -78,6 +101,10 @@ function Products({ editing, setEditing }: { editing: string | "new" | null; set
 
   const replace = (product: Product) =>
     setData((d) => d && { products: d.products.some((p) => p.id === product.id) ? d.products.map((p) => (p.id === product.id ? product : p)) : [...d.products, product] });
+  const replaceMany = (updated: Product[]) => {
+    const byId = new Map(updated.map((p) => [p.id, p]));
+    setData((d) => d && { products: d.products.map((p) => byId.get(p.id) ?? p) });
+  };
 
   const quickUpdate = async (p: Product, patch: Partial<Pick<Product, "stock" | "price" | "hidden">>) => {
     setNotice("");
@@ -155,6 +182,7 @@ function Products({ editing, setEditing }: { editing: string | "new" | null; set
             setNotice("");
             if (created) setQuery("");
           }}
+          onUpdated={replaceMany}
           onDeleted={(id) => {
             setData((d) => d && { products: d.products.filter((p) => p.id !== id) });
             setEditing(null);
@@ -162,6 +190,7 @@ function Products({ editing, setEditing }: { editing: string | "new" | null; set
           }}
         />
       )}
+      {certificates && data && <CertificatesPanel products={products} onUpdated={replaceMany} onClose={() => setCertificates(false)} />}
     </div>
   );
 }
@@ -184,6 +213,9 @@ function ProductRow({
         <p className="truncate text-xs text-[#527083]">
           {categoryBySlug[p.category].name} · {p.brand} · <span className="font-mono">{p.id}</span>
           {p.hidden && <span className="ml-2 rounded-full bg-[#e3edf3] px-2 py-0.5 font-bold text-[#527083]">Прихований</span>}
+          {!p.hidden && missingCertificate(p) && (
+            <span className="ml-2 rounded-full bg-[#fff1d6] px-2 py-0.5 font-bold text-[#9a5b00]" title="Ніж без сертифіката не показується на сайті">Без сертифіката</span>
+          )}
         </p>
       </div>
       <div className="col-span-2 flex items-center gap-2 lg:col-span-1">
@@ -211,7 +243,7 @@ function ProductRow({
         >
           {p.hidden ? "Показати" : "Приховати"}
         </button>
-        {!p.hidden && (
+        {!p.hidden && !missingCertificate(p) && (
           <Link href={productUrl(p)} target="_blank" aria-label={`Відкрити ${p.name} на сайті`} className="grid h-8 w-8 place-items-center rounded-full text-[#8aa5b5] transition hover:bg-[#eef6fb] hover:text-[#098fd0]">
             <Icon name="arrow" className="h-4 w-4 -rotate-45" />
           </Link>

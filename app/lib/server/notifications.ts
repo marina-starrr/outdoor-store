@@ -1,6 +1,7 @@
 import "server-only";
 import { formatPrice, type Product } from "../../components/catalog-data";
 import { productUrl } from "../../components/product-details";
+import { isListed } from "../certificates";
 import { PAYMENT_DAYS, customerStatus, paymentDue, type CancelReason, type OrderStatusId } from "../order-status";
 import { paymentDetails, paymentDetailsText } from "../payment";
 import { db, notificationFromRow, userFromRow, type NotificationKind, type Queryable, type StoredNotification, type StoredOrder, type StoredUser } from "./db";
@@ -50,10 +51,10 @@ export const snapshot = (p: Pick<Product, "inStock" | "price" | "stock">): Produ
  * Події товару після зміни:
  * - з'явився в наявності → усім, хто підписався (підписка знімається);
  * - подешевшав → усім, у кого він в обраному.
- * Прихований товар нікому не показуємо.
+ * Прихований товар (і ніж без сертифіката) нікому не показуємо.
  */
 export async function productEvents(q: Queryable, product: Product, before: ProductSnapshot, mails: Mail[]) {
-  if (product.hidden) return;
+  if (!isListed(product)) return;
   const href = productUrl(product);
 
   if (!before.inStock && product.stock > 0) {

@@ -5,14 +5,15 @@ import {
   findUserByEmail,
   hashPassword,
   isSameOrigin,
-  knownProductIds,
   loginLimiter,
   normalizeEmail,
+  productIdsOf,
   publicUser,
   sanitizeCart,
   sanitizeIds,
   verifyPassword,
 } from "../../../lib/server/auth";
+import { listedProductIds } from "../../../lib/server/catalog";
 import { tx } from "../../../lib/server/db";
 import { getCart, getFavorites, setCart, setFavorites } from "../../../lib/server/lists";
 
@@ -41,12 +42,12 @@ export async function POST(req: NextRequest) {
   await limiter.reset();
 
   // Кошик гостя додається до кошика акаунта
-  const known = await knownProductIds();
-  const guestCart = sanitizeCart(body.cart, known);
-  const guestFavorites = sanitizeIds(body.favorites, known);
   const { cart, favorites } = await tx(async (q) => {
-    const cart = sanitizeCart([...(await getCart(user.id, q)), ...guestCart], known);
-    const favorites = sanitizeIds([...(await getFavorites(user.id, q)), ...guestFavorites], known);
+    const [savedCart, savedFavorites] = [await getCart(user.id, q), await getFavorites(user.id, q)];
+    // Перевіряються лише товари з обох кошиків і списків обраного — не весь каталог
+    const known = await listedProductIds(productIdsOf(savedCart, body.cart, savedFavorites, body.favorites), q);
+    const cart = sanitizeCart([...savedCart, ...sanitizeCart(body.cart, known)], known);
+    const favorites = sanitizeIds([...savedFavorites, ...sanitizeIds(body.favorites, known)], known);
     await setCart(user.id, cart, q);
     await setFavorites(user.id, favorites, q);
     return { cart, favorites };

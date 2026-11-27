@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { withDerived, type Product } from "../../../../components/catalog-data";
 import { applyProductInput, validateProduct } from "../../../../lib/admin-product";
 import { error, json, requireAdmin } from "../../../../lib/server/auth";
-import { ensureCatalog, invalidateCatalog, loadCatalog, lockProduct, updateProduct } from "../../../../lib/server/catalog";
+import { ensureCatalog, invalidateCatalog, loadProducts, lockProduct, updateProduct } from "../../../../lib/server/catalog";
 import { tx } from "../../../../lib/server/db";
 import { sendMails, type Mail } from "../../../../lib/server/mail";
 import { productEvents, snapshot } from "../../../../lib/server/notifications";
@@ -88,6 +88,6 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/admin/prod
   invalidateCatalog();
   await sendMails(mails);
   // Товар з рейтингом і продажами — як у списку адмін-панелі
-  const product = (await loadCatalog()).find((p) => p.id === id);
+  const [product] = await loadProducts([id], { descriptions: true });
   return json({ product });
 }

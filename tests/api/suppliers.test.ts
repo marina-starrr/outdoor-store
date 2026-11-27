@@ -239,7 +239,7 @@ describe("постачальники в адмін-панелі", () => {
     expect((await bySku("RA7001")).images).toEqual(["/photo-soon.svg"]);
     expect(r.data.supplier.lastSyncOk).toBe(true);
 
-    const chair = (await loadCatalog()).find((p) => p.name.startsWith("Крісло складане Ranger Tourist"))!;
+    const chair = (await loadCatalog(undefined, { descriptions: true })).find((p) => p.name.startsWith("Крісло складане Ranger Tourist"))!;
     // Код в адресі — з назви (до 40 символів)
     expect(chair.id).toMatch(/^krislo-skladane-ranger-tourist/);
     expect(chair.id.length).toBeLessThanOrEqual(40);
@@ -424,7 +424,8 @@ describe("постачальники в адмін-панелі", () => {
     const again = await copySupplierPhotos(Date.now() + 30_000);
     expect((await bySku("CP1")).images[0]).toBe(cp1.images[0]);
     expect(again.photos).toBe(0);
-  });
+    // Копіює й фото товарів з попередніх тестів (по черзі, щоб не брати зайвої пам'яті) — під навантаженням понад 15 с
+  }, 60_000);
 
   it("файл недоступний — помилка видна в адмінці, товари не змінюються", async () => {
     const s = await create([{ id: "ERR1", price: 100, stock: 1, cat: "7" }]);

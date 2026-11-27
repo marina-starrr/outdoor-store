@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { LOW_STOCK } from "../../../components/catalog-data";
+import { isListed, missingCertificate } from "../../../lib/certificates";
 import { json, requireAdmin } from "../../../lib/server/auth";
 import { loadCatalog } from "../../../lib/server/catalog";
 import { chatsWaiting } from "../../../lib/server/chat";
@@ -38,10 +39,12 @@ export async function GET(req: NextRequest) {
     revenue: { total: num(revenue.total), last30: num(revenue.last30), count30: num(revenue.count30) },
     products: {
       total: products.length,
-      visible: products.filter((p) => !p.hidden).length,
-      outOfStock: products.filter((p) => !p.hidden && p.stock === 0).length,
+      visible: products.filter(isListed).length,
+      outOfStock: products.filter((p) => isListed(p) && p.stock === 0).length,
+      // Ножі, які не показуються, бо немає сертифіката
+      noCertificate: products.filter((p) => !p.hidden && missingCertificate(p)).length,
       lowStock: products
-        .filter((p) => !p.hidden && p.stock > 0 && p.stock <= LOW_STOCK)
+        .filter((p) => isListed(p) && p.stock > 0 && p.stock <= LOW_STOCK)
         .sort((a, b) => a.stock - b.stock)
         .map((p) => ({ id: p.id, name: p.name, stock: p.stock, category: p.category })),
     },

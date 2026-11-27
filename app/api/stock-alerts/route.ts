@@ -12,7 +12,7 @@ async function change(req: NextRequest, subscribe: boolean) {
   if (!user) return error("Увійдіть, щоб отримати сповіщення про наявність", 401);
   const body = await req.json().catch(() => ({}));
   const id = typeof body.productId === "string" ? body.productId : "";
-  if (subscribe && !(await knownProductIds()).has(id)) return error("Товар не знайдено", 404);
+  if (subscribe && !(await knownProductIds(id)).has(id)) return error("Товар не знайдено", 404);
 
   const stockAlerts = await tx(async (q) => {
     await q.query("select 1 from users where id = $1 for update", [user.id]);

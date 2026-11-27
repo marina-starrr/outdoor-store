@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest) {
   if (!user) return error("Потрібно увійти", 401);
 
   const body = await req.json().catch(() => ({}));
-  const favorites = sanitizeIds(body.ids, await knownProductIds());
+  const favorites = sanitizeIds(body.ids, await knownProductIds(body.ids));
   await tx((q) => setFavorites(user.id, favorites, q));
   return json({ favorites });
 }

@@ -19,6 +19,8 @@ export const facetList: FacetInfo[] = [
 ];
 
 export const OTHER_TYPE = "Інше";
+/** Тип «аксесуари» в «Ножах» — чохли, кліпси, темляки */
+export const KNIFE_ACCESSORIES = "Чохли й аксесуари";
 
 type Rule = [label: string, test: RegExp];
 
@@ -124,7 +126,8 @@ const typeRules: Partial<Record<CategorySlug, Rule[]>> = {
     ["Зарядні пристрої", /зарядн\p{L}* пристр|зарядк/u],
   ],
   knives: [
-    ["Чохли й аксесуари", /^чохол|^піхв|темляк|^кліпс|^аксесуар|^органайзер|затискач|бусин|^гвинт/],
+    // Аксесуарам не потрібен сертифікат «не є холодною зброєю» (lib/certificates.ts)
+    [KNIFE_ACCESSORIES, /^чохол|^піхв|темляк|^кліпс|^аксесуар|^органайзер|затискач|бусин|^гвинт/],
     ["Ножі з фіксованим клинком", /фіксован/],
     ["Складані ножі", /складан|кишеньков|флі?пер/],
     // «Нiж» трапляється з латинською i
@@ -198,7 +201,8 @@ export const stripCodes = (name: string) =>
 
 const lower = (s: string) => s.toLocaleLowerCase("uk");
 
-function typeOf(p: Product): string | undefined {
+/** Тип товару за назвою (undefined — у категорії немає фільтра «Тип») */
+export function typeOf(p: Pick<Product, "category" | "name">): string | undefined {
   const rules = typeRules[p.category];
   if (!rules) return undefined;
   const name = lower(p.name).trim();
@@ -208,7 +212,7 @@ function typeOf(p: Product): string | undefined {
 function colorsOf(p: Product): string[] {
   const name = lower(p.name);
   // У назві кольору немає — пробуємо рядок «Колір: …» з опису
-  const fromDescription = lower(p.description ?? "").match(/колір\s*:\s*([^\n;.,]{1,40})/)?.[1] ?? "";
+  const fromDescription = lower(p.description ?? p.colorHint ?? "").match(/колір\s*:\s*([^\n;.,]{1,40})/)?.[1] ?? "";
   for (const text of [name, fromDescription]) {
     const found = colorRules.filter(([, re]) => re.test(text)).map(([label]) => label);
     if (found.length) return found;

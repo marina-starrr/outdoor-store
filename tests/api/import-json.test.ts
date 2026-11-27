@@ -117,7 +117,7 @@ describe("yarn db:import — перенесення з db.json", () => {
     expect(await dbQuery("select text from message_replies")).toEqual([{ text: "Радимо…" }]);
     expect(await dbQuery("select status from reviews")).toEqual([{ status: "approved" }]);
     expect((await dbQuery("select title, read from notifications order by seq")).map((n) => [n.title, n.read])).toEqual([["Перше", true], ["Друге", false]]);
-    const p = (await loadCatalog()).find((x) => x.id === tent.id)!;
+    const p = (await loadCatalog(undefined, { descriptions: true })).find((x) => x.id === tent.id)!;
     expect(p).toMatchObject({ price: 1234, stock: 7, description: "Змінено в адмінці", rating: 5, reviews: 1 });
     // Сесії не переносяться
     expect(await dbQuery("select * from sessions where user_id = $1 and token_hash = 'abc'", [USER_ID])).toEqual([]);

@@ -13,7 +13,7 @@ import {
 } from "../../../components/product-details";
 import { primaryVariant, variantGroups } from "../../../components/product-variants";
 import { SHIP_CUTOFF_HOUR } from "../../../components/shop-config";
-import { getPublicCatalog } from "../../../lib/server/catalog";
+import { getProductDescription, getPublicCatalog } from "../../../lib/server/catalog";
 import { absoluteUrl, SITE_NAME } from "../../../lib/site";
 
 /** Сторінка-заглушка для порожнього каталогу: Next вимагає хоча б один варіант, а такого товару немає (404) */
@@ -27,7 +27,9 @@ export async function generateStaticParams() {
 
 async function getProduct(params: PageProps<"/catalog/[slug]/[id]">["params"]) {
   const { slug, id } = await params;
-  return findProduct(await getPublicCatalog(), slug, id);
+  const product = findProduct(await getPublicCatalog(), slug, id);
+  // У каталозі описів немає (вони великі) — опис лише цього товару
+  return product && { ...product, description: await getProductDescription(product.id) };
 }
 
 export async function generateMetadata({ params }: PageProps<"/catalog/[slug]/[id]">): Promise<Metadata> {

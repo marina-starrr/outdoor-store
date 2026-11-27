@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (password.length > 200) return error("Занадто довгий пароль");
 
   const passwordHash = await hashPassword(password);
-  const known = await knownProductIds();
+  const known = await knownProductIds(body.cart, body.favorites);
   const cart = sanitizeCart(body.cart, known);
   const favorites = sanitizeIds(body.favorites, known);
 

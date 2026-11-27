@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest) {
   if (!user) return error("Потрібно увійти", 401);
 
   const body = await req.json().catch(() => ({}));
-  const cart = sanitizeCart(body.lines, await knownProductIds());
+  const cart = sanitizeCart(body.lines, await knownProductIds(body.lines));
   await tx((q) => setCart(user.id, cart, q));
   return json({ cart });
 }

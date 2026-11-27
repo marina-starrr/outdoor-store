@@ -20,6 +20,11 @@ import { savePhoto, uploadsEnabled } from "./photo-storage";
 
 const FETCH_TIMEOUT = 15_000;
 const MAX_SOURCE_BYTES = 15_000_000;
+/** Більше — пропускаємо (лишається фото постачальника): 8000×8000 і далі вже ризик для пам'яті функції */
+const MAX_INPUT_PIXELS = 8000 * 8000;
+
+// Кеш libvips між фото не потрібен — він лише тримає пам'ять
+sharp.cache(false);
 
 export type PhotoCopyResult = { products: number; photos: number; failed: number; left: number };
 
@@ -34,11 +39,18 @@ async function copyOne(url: string): Promise<string> {
   if (!res.ok) throw new Error(`${res.status}`);
   const source = Buffer.from(await res.arrayBuffer());
   if (source.length > MAX_SOURCE_BYTES) throw new Error("завелике");
-  const image = sharp(source, { failOn: "error" }).rotate();
-  const [full, small] = await Promise.all([
-    image.clone().resize({ width: UPLOAD_FULL, height: UPLOAD_FULL, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer(),
-    image.clone().resize({ width: UPLOAD_SMALL, height: UPLOAD_SMALL, fit: "inside", withoutEnlargement: true }).webp({ quality: 78 }).toBuffer(),
-  ]);
+  /*
+   * Пам'ять: Atlantmarket дає фото 6720×6720. Дві паралельні обробки з оригіналу
+   * брали ~670 МБ на фото, і функція Vercel падала (щогодини 500, фото не копіювались).
+   * Тепер по черзі: спершу 1600 px (JPEG зменшується вже під час розпакування),
+   * мала копія — з готової великої: ~380 МБ
+   */
+  const full = await sharp(source, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
+    .rotate()
+    .resize({ width: UPLOAD_FULL, height: UPLOAD_FULL, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 80 })
+    .toBuffer();
+  const small = await sharp(full).resize({ width: UPLOAD_SMALL, height: UPLOAD_SMALL, fit: "inside", withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
   const base = fileBase(url);
   // Спершу мала копія: сайт бере її за адресою великої (…-800 поруч з …-1600)
   await saveOrKeep(`${base}-${UPLOAD_SMALL}.webp`, small);
@@ -65,8 +77,13 @@ export async function copySupplierPhotos(deadline: number): Promise<PhotoCopyRes
   const result: PhotoCopyResult = { products: 0, photos: 0, failed: 0, left: 0 };
   if (!uploadsEnabled()) return result;
 
+  // Лише товари, де ще є фото за адресою постачальника (не всі ~2000 щогодини)
   const rows = await sql<{ id: string; images: string[] | null; image: string | null }>(
-    `select id, images, image from products where supplier_id is not null order by popularity desc`,
+    `select id, images, image from products
+     where supplier_id is not null
+       and exists (select 1 from jsonb_array_elements_text(images) s
+                   where s ~* '^https?://' and s !~ '-${UPLOAD_FULL}\\.(webp|jpg)(\\?.*)?$')
+     order by popularity desc`,
   );
   const pending = rows.filter((r) => (r.images ?? []).some(isForeign));
   const failedUrls = new Set<string>();

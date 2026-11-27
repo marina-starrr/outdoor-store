@@ -313,6 +313,25 @@ export default function ProductPage({ product }: { product: Product }) {
                 Є питання? Запитати про цей товар
               </ChatButton>
 
+              {product.certificate && (
+                <a
+                  href={product.certificate}
+                  target="_blank"
+                  rel="noopener"
+                  data-testid="product-certificate"
+                  className="mt-4 flex items-center gap-3 rounded-[18px] border border-[#cfe9d9] bg-[#f1faf4] px-4 py-3 transition hover:border-[#1f9d55]"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-[#1f9d55]">
+                    <Icon name="shield" className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 text-sm leading-snug">
+                    <b className="block font-bold text-[#082c45]">Не є холодною зброєю</b>
+                    <span className="text-[#527083]">Висновок експертного дослідження — </span>
+                    <span className="whitespace-nowrap font-bold text-[#098fd0] underline-offset-2 hover:underline">переглянути документ</span>
+                  </span>
+                </a>
+              )}
+
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Perk icon="truck" title="Швидка доставка" text="по всій Україні" />
                 <Perk icon="shield" title="Гарантія якості" text={product.attrs.find(([k]) => k === "Гарантія")?.[1] ?? "12 місяців"} />

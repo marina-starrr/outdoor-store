@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { NextRequest } from "next/server";
+import { isListed } from "../../lib/certificates";
 import {
   cartTotals,
   deliveryOptions,
@@ -25,7 +26,7 @@ import {
   sanitizeCart,
   sha256,
 } from "../../lib/server/auth";
-import { invalidateCatalog, loadCatalog } from "../../lib/server/catalog";
+import { invalidateCatalog, loadProducts } from "../../lib/server/catalog";
 import { tx, type StoredOrder } from "../../lib/server/db";
 import { setCart } from "../../lib/server/lists";
 import { sendMail } from "../../lib/server/mail";
@@ -63,9 +64,10 @@ export async function POST(req: NextRequest) {
     return error("Підтвердьте згоду з умовами доставки й оплати та політикою конфіденційності");
 
   // Ціни та суми рахуються лише на сервері — дані з браузера не довіряємо
-  const catalog = await loadCatalog();
-  const byId = new Map(catalog.map((p) => [p.id, p]));
-  const lines = resolveLines(sanitizeCart(body.lines, await knownProductIds()), byId);
+  // Лише товари з кошика, а не весь каталог
+  const cartLines = sanitizeCart(body.lines, await knownProductIds(body.lines));
+  const byId = new Map((await loadProducts(cartLines.map((l) => l.id))).map((p) => [p.id, p]));
+  const lines = resolveLines(cartLines, byId);
   if (!lines.length) return error("Кошик порожній");
   if (lines.some((l) => !l.product.inStock))
     return error("Деяких товарів немає в наявності — приберіть їх з кошика");
@@ -167,12 +169,16 @@ export async function POST(req: NextRequest) {
       const onRequest = new Set<string>();
       for (const l of lines) {
         const [p] = await q.query(
-          `select p.stock, p.hidden, p.on_request, p.supplier_sku, s.name as supplier
+          // Сертифікат — через to_jsonb: запит працює і до міграції з цими колонками
+          `select p.stock, p.hidden, p.on_request, p.supplier_sku, s.name as supplier, p.category, p.name,
+                  to_jsonb(p)->>'certificate' as certificate, (to_jsonb(p)->>'certificate_exempt')::boolean as certificate_exempt
            from products p left join suppliers s on s.id = p.supplier_id where p.id = $1`,
           [l.id],
         );
         if (p?.supplier_sku) supplierSkus.set(l.id, `${p.supplier ?? "постачальник"}, арт. ${p.supplier_sku}`);
-        const stock = p && !p.hidden ? Number(p.stock) : 0;
+        // Прихований або ніж без сертифіката — купити не можна
+        const listed = p && isListed({ hidden: p.hidden, category: p.category, name: p.name, certificate: p.certificate ?? undefined, certificateExempt: p.certificate_exempt === true });
+        const stock = listed ? Number(p.stock) : 0;
         // «Під замовлення» — кількість уточнить адміністратор у постачальника перед підтвердженням
         if (p?.on_request && stock > 0) {
           onRequest.add(l.id);

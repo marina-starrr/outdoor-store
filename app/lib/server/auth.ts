@@ -9,7 +9,7 @@ import {
 import { promisify } from "node:util";
 import { NextResponse, type NextRequest } from "next/server";
 import { MAX_QTY, type CartLine } from "../../components/cart-logic";
-import { loadCatalog } from "./catalog";
+import { listedProductIds } from "./catalog";
 import { sql, userFromRow, type StoredUser } from "./db";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
@@ -97,10 +97,18 @@ export function isSameOrigin(req: NextRequest) {
 /** Обмеження частоти — лічильники в базі, див. rate-limit.ts */
 export { clientIp, loginLimiter, rateLimiter } from "./rate-limit";
 
-/** id товарів, які зараз показуються на сайті (не приховані) */
-export async function knownProductIds(): Promise<ReadonlySet<string>> {
-  return new Set((await loadCatalog()).filter((p) => !p.hidden).map((p) => p.id));
+/**
+ * Які з товарів, що прислав браузер, зараз показуються на сайті (не приховані;
+ * ножі — із сертифікатом). Приймає id або рядки кошика ({ id }). Читає з бази
+ * лише ці товари — не весь каталог (кожен запит повного каталогу — мегабайти трафіку)
+ */
+export async function knownProductIds(...lists: unknown[]): Promise<ReadonlySet<string>> {
+  return listedProductIds(productIdsOf(...lists));
 }
+
+/** id з кількох списків: рядки або рядки кошика ({ id }) */
+export const productIdsOf = (...lists: unknown[]): unknown[] =>
+  lists.flatMap((list) => (Array.isArray(list) ? list : [list]).map((x) => (typeof x === "string" ? x : (x as { id?: unknown } | null)?.id)));
 
 /** Очищує кошик з клієнта: лише існуючі товари, коректна кількість, без дублікатів */
 export function sanitizeCart(input: unknown, knownIds: ReadonlySet<string>): CartLine[] {

@@ -19,6 +19,8 @@ import { PLACEHOLDER_PHOTO, resizeImage } from "../photo";
 import { adminFetch, type ApiError } from "./api";
 import { uploadProductPhoto } from "./photo-upload";
 import { discountsEnabled } from "../shop-config";
+import { CERTIFICATE_CATEGORIES, isKnifeAccessory, needsCertificate } from "../../lib/certificates";
+import { CERTIFICATE_ACCEPT, patchCertificate, uploadCertificate } from "./certificates";
 
 type Form = {
   id: string;
@@ -68,11 +70,14 @@ export default function ProductEditor({
   product,
   onClose,
   onSaved,
+  onUpdated,
   onDeleted,
 }: {
   product?: Product;
   onClose: () => void;
   onSaved: (p: Product, created: boolean) => void;
+  /** Зміни, що зберігаються одразу, без кнопки «Зберегти» (сертифікат) */
+  onUpdated?: (updated: Product[]) => void;
   onDeleted?: (id: string) => void;
 }) {
   const creating = !product;
@@ -230,6 +235,18 @@ export default function ProductEditor({
               <Toggle checked={form.onRequest} onChange={(v) => set("onRequest", v)}>Під замовлення</Toggle>
             </div>
           </Section>
+
+          {CERTIFICATE_CATEGORIES.includes(form.category) && (
+            <Section title="Сертифікат «не є холодною зброєю»">
+              <div className="sm:col-span-2">
+                {product && product.category === form.category ? (
+                  <CertificateManager product={product} onUpdated={(list) => onUpdated?.(list)} />
+                ) : (
+                  <p className="text-sm text-[#527083]">Спершу збережіть товар у цій категорії — потім завантажте документ. Без нього ніж не показується на сайті.</p>
+                )}
+              </div>
+            </Section>
+          )}
 
           <Section title="Фото">
             <div className="sm:col-span-2">
@@ -435,6 +452,83 @@ function PhotoManager({
         </p>
       )}
       {(uploadError || error) && <p role="alert" className="mt-2 text-sm font-semibold text-[#e5484d]">{uploadError || error}</p>}
+    </div>
+  );
+}
+
+/** Сертифікат ножа: зберігається одразу, без кнопки «Зберегти зміни» */
+function CertificateManager({ product, onUpdated }: { product: Product; onUpdated: (updated: Product[]) => void }) {
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const run = async (action: () => Promise<Product[]>) => {
+    setPending(true);
+    setMessage("");
+    try {
+      onUpdated(await action());
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setPending(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const accessory = isKnifeAccessory(product);
+  const required = needsCertificate(product);
+  const btn = "rounded-full px-4 py-2.5 text-sm font-extrabold transition disabled:opacity-50";
+
+  return (
+    <div data-testid="certificate-manager">
+      {accessory ? (
+        <p className="text-sm text-[#527083]">Це аксесуар (чохол, кліпса…) — документ не потрібен, товар показується на сайті.</p>
+      ) : product.certificate ? (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-[#e7f7ee] px-2.5 py-1 text-xs font-extrabold text-[#1f9d55]">Є документ</span>
+          <a href={product.certificate} target="_blank" rel="noopener" className="font-bold text-[#098fd0] hover:underline">Переглянути</a>
+        </p>
+      ) : required ? (
+        <p className="rounded-xl bg-[#fff1d6] px-3 py-2 text-sm font-semibold text-[#9a5b00]">Документа немає — ніж не показується покупцям.</p>
+      ) : (
+        <p className="text-sm text-[#527083]">Позначено, що документ не потрібен — товар показується на сайті.</p>
+      )}
+
+      {!accessory && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label className={`${btn} cursor-pointer bg-[#eef6fb] text-[#067eb7] hover:bg-[#dff4ff] focus-within:ring-4 focus-within:ring-sky-200 ${pending ? "pointer-events-none opacity-50" : ""}`}>
+            {pending ? "Зберігаємо…" : product.certificate ? "Замінити файл" : "Завантажити PDF або фото"}
+            <input
+              ref={inputRef}
+              type="file"
+              accept={CERTIFICATE_ACCEPT}
+              disabled={pending}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) run(() => uploadCertificate(file, [product.id]));
+              }}
+              className="sr-only"
+              aria-label="Файл сертифіката"
+            />
+          </label>
+          {product.certificate && (
+            <button type="button" disabled={pending} onClick={() => run(() => patchCertificate({ id: product.id, certificate: null }))} className={`${btn} text-[#c53035] hover:bg-[#fdecec]`}>
+              Прибрати документ
+            </button>
+          )}
+          {!product.certificate && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => patchCertificate({ id: product.id, exempt: !product.certificateExempt }))}
+              className={`${btn} text-[#527083] hover:bg-[#eef6fb]`}
+            >
+              {product.certificateExempt ? "Документ потрібен" : "Документ не потрібен (не ніж)"}
+            </button>
+          )}
+        </div>
+      )}
+      {message && <p role="alert" className="mt-2 text-sm font-semibold text-[#e5484d]">{message}</p>}
     </div>
   );
 }

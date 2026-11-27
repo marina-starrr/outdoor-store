@@ -14,7 +14,7 @@ const limited = rateLimiter("review", 10, 60 * 60_000);
  */
 export async function GET(req: NextRequest, ctx: RouteContext<"/api/products/[id]/reviews">) {
   const { id } = await ctx.params;
-  if (!(await knownProductIds()).has(id)) return error("Товар не знайдено", 404);
+  if (!(await knownProductIds(id)).has(id)) return error("Товар не знайдено", 404);
   const user = await getUser(req);
   const [reviews, own, bought] = await Promise.all([
     approvedReviews(id),
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/products/[id
 export async function POST(req: NextRequest, ctx: RouteContext<"/api/products/[id]/reviews">) {
   if (!isSameOrigin(req)) return error("Forbidden", 403);
   const { id } = await ctx.params;
-  if (!(await knownProductIds()).has(id)) return error("Товар не знайдено", 404);
+  if (!(await knownProductIds(id)).has(id)) return error("Товар не знайдено", 404);
   const user = await getUser(req);
   if (!user) return error("Увійдіть, щоб залишити відгук", 401);
 

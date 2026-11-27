@@ -9,7 +9,8 @@ import { tx } from "../../../lib/server/db";
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req);
   if ("response" in auth) return auth.response;
-  return json({ products: await loadCatalog() });
+  // З описами — їх редагують у картці товару
+  return json({ products: await loadCatalog(undefined, { descriptions: true }) });
 }
 
 /** Новий товар */

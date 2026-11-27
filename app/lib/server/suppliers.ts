@@ -4,7 +4,7 @@ import { categoryPhotos, isCategorySlug, withDerived, type Product } from "../..
 import { PLACEHOLDER_PHOTO } from "../../components/photo";
 import { MAX_IMAGES, slugify } from "../admin-product";
 import { AUTO_CATEGORY, PATH_SEPARATOR, categoryFromName, suggestCategory, type MappedCategory } from "../supplier-categories";
-import { invalidateCatalog, productFromRow } from "./catalog";
+import { LIST_COLUMNS, invalidateCatalog, productFromRow } from "./catalog";
 import { db, iso, jsonb, sql, tx, type Queryable, type Row } from "./db";
 import { sendMails, type Mail } from "./mail";
 import { productEvents, snapshot } from "./notifications";
@@ -343,7 +343,8 @@ export async function syncSupplier(id: string, feedOverride?: Feed): Promise<Syn
    */
   await tx(async (q) => {
     // Рядки постачальника блокуються до кінця транзакції (паралельне замовлення чекає)
-    const current = (await q.query("select * from products where supplier_id = $1 for update", [id])).map((r) => ({
+    // Без описів (LIST_COLUMNS): щогодини ~1800 рядків — описи дали б мегабайти трафіку бази щоразу
+    const current = (await q.query(`select ${LIST_COLUMNS} from products p where p.supplier_id = $1 for update`, [id])).map((r) => ({
       sku: r.supplier_sku as string,
       product: productFromRow(r),
     }));
