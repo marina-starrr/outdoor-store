@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import PageSkeleton from "../../../components/PageSkeleton";
 import JsonLd from "../../../components/JsonLd";
 import ProductPage from "../../../components/ProductPage";
+import { CatalogSeed } from "../../../components/Catalog";
+import { productSeed } from "../../../lib/catalog-seeds";
 import { bySales, categoryBySlug } from "../../../components/catalog-data";
 import {
   findProduct,
@@ -139,7 +141,9 @@ async function ProductContent({ params }: Pick<PageProps<"/catalog/[slug]/[id]">
   return (
     <>
       <JsonLd data={[productLd, breadcrumbsLd]} />
-      <ProductPage product={product} />
+      <CatalogSeed products={productSeed(await getPublicCatalog(), product)}>
+        <ProductPage product={product} />
+      </CatalogSeed>
     </>
   );
 }

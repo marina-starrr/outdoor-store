@@ -2,6 +2,7 @@ import "server-only";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dataDir, isTestDatabase } from "./db";
+import { isHosted } from "./hosting";
 
 /*
  * Сховище фото товарів і сертифікатів на ножі, завантажених в адмін-панелі.
@@ -36,8 +37,8 @@ type Mode = "supabase" | "local" | null;
 function mode(): Mode {
   if (isTestDatabase()) return "local";
   if (supabaseUrl() && supabaseKey()) return "supabase";
-  // На Vercel диск не зберігається — без Supabase завантаження вимкнене
-  return process.env.VERCEL ? null : "local";
+  // На хостингу диск не зберігається — без Supabase завантаження вимкнене
+  return isHosted() ? null : "local";
 }
 
 /** Чи можна завантажувати файли (інакше адмінка пропонує посилання) */

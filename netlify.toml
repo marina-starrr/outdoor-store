@@ -1,0 +1,21 @@
+# Хостинг Netlify (з листопада 2026: Vercel Hobby вимкнув сайт за перевищення трафіку).
+# Next.js працює через адаптер OpenNext (@netlify/plugin-nextjs) — Netlify підключає його сам.
+#
+# Безкоштовний тариф — 300 кредитів на місяць: кожен деплой — 15 кредитів, 1 ГБ трафіку — 20.
+# Тож пушити в main рідко й пакетами змін (кожен push — деплой).
+#
+# Змінні оточення (Site configuration → Environment variables) — ті самі, що були у Vercel:
+#   POSTGRES_URL, SUPABASE_URL, SUPABASE_SECRET_KEY (або SUPABASE_SERVICE_ROLE_KEY),
+#   CRON_SECRET, ADMIN_EMAILS, NEXT_PUBLIC_SITE_URL=https://www.familycamping.pp.ua,
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, а також змінні пошти (SMTP_*) і Нової пошти, якщо були.
+#
+# Запити за розкладом (постачальники, скасування неоплачених, довідник міст) робить
+# pg_cron у Supabase: supabase/manual/cron-netlify.sql.
+
+[build]
+  command = "yarn build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"

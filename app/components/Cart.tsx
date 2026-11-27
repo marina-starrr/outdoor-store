@@ -121,7 +121,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     timer.current = window.setTimeout(() => setToast(null), action ? 4500 : 2400);
   }, []);
 
-  const { byId } = useCatalog();
+  const { byId, complete: catalogComplete } = useCatalog();
   /** Скільки можна покласти в кошик (не більше залишку на складі) */
   const limitFor = useCallback((id: string) => {
     const p = byId.get(id);
@@ -207,7 +207,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     () => ({
       lines,
       count: lines.reduce((s, l) => s + l.qty, 0),
-      ready,
+      // Готово, коли прочитано кошик і відомі всі його товари (каталог довантажується окремо)
+      ready: ready && (catalogComplete || rawLines.every((l) => byId.has(l.id))),
       add,
       setQty,
       remove,
@@ -217,7 +218,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       closeCart,
       notify,
     }),
-    [lines, ready, add, setQty, remove, clear, isOpen, openCart, closeCart, notify],
+    [lines, ready, catalogComplete, rawLines, byId, add, setQty, remove, clear, isOpen, openCart, closeCart, notify],
   );
 
   return (

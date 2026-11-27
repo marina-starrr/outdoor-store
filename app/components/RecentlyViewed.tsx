@@ -49,11 +49,14 @@ function subscribe(onChange: () => void) {
 export function useRecentlyViewed() {
   // Знімок — рядок, тож порівняння стабільне; на сервері історії немає
   const raw = useSyncExternalStore(subscribe, read, () => null);
-  const { byId } = useCatalog();
-  const items = useMemo(
-    () => parseRecent(raw).flatMap((id) => byId.get(id) ?? []),
-    [raw, byId],
-  );
+  const { byId, complete } = useCatalog();
+  const items = useMemo(() => {
+    const ids = parseRecent(raw);
+    // Поки вантажиться увесь каталог, а якихось товарів ще не видно — чекаємо,
+    // щоб блок не з'являвся з одним товаром і не доповнювався за мить
+    if (!complete && ids.some((id) => !byId.has(id))) return [];
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  }, [raw, byId, complete]);
   return { items, clear: () => write([]) };
 }
 

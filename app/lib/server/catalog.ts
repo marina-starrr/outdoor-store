@@ -2,7 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag, revalidatePath, revalidateTag } from "next/cache";
 import { seedProducts, selectHits, withDerived, type Product } from "../../components/catalog-data";
 import { isListed } from "../certificates";
-import { bumpCatalogVersion, loadCatalogViaSnapshot } from "./catalog-snapshot";
+import { bumpCatalogVersion, catalogVersion, loadCatalogViaSnapshot } from "./catalog-snapshot";
 import { db, isoOpt, jsonb, num, opt, seedsCatalog, sql, type Queryable, type Row } from "./db";
 import { resetProductUrls } from "./product-urls";
 import { approvedReviews, type PublicReview } from "./reviews";
@@ -249,6 +249,26 @@ export async function getCatalog(): Promise<Product[]> {
   cacheLife(CATALOG_LIFE);
   // Зі знімка у сховищі (~250 КБ через CDN), а не з бази (~2 МБ) — див. catalog-snapshot.ts
   return loadCatalogViaSnapshot();
+}
+
+/** Версія каталогу для адреси /api/catalog/<версія> (кешується разом з каталогом) */
+export async function getCatalogVersion(): Promise<number> {
+  "use cache";
+  cacheTag(CATALOG_TAG);
+  cacheLife(CATALOG_LIFE);
+  return catalogVersion();
+}
+
+/**
+ * Каталог для браузера за версією. Версія — частина ключа кешу: сервер, у якого
+ * в пам'яті ще старий каталог, на нову версію однаково прочитає свіжий (зі знімка)
+ */
+export async function getCatalogAtVersion(version: number): Promise<Product[]> {
+  "use cache";
+  cacheTag(CATALOG_TAG);
+  cacheLife(CATALOG_LIFE);
+  void version;
+  return (await loadCatalogViaSnapshot()).filter(isListed);
 }
 
 /**

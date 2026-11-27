@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import HitsPage from "../components/HitsPage";
-import { getHitTestimonials } from "../lib/server/catalog";
+import { CatalogSeed } from "../components/Catalog";
+import { hitsSeed } from "../lib/catalog-seeds";
+import { getHitTestimonials, getPublicCatalog } from "../lib/server/catalog";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/hits" },
@@ -10,5 +12,11 @@ export const metadata: Metadata = {
 };
 
 export default async function Hits() {
-  return <HitsPage testimonials={await getHitTestimonials()} />;
+  const testimonials = await getHitTestimonials();
+  const seed = hitsSeed(await getPublicCatalog(), testimonials.map((t) => t.productId));
+  return (
+    <CatalogSeed products={seed}>
+      <HitsPage testimonials={testimonials} />
+    </CatalogSeed>
+  );
 }

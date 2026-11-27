@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import CatalogOverview from "../components/CatalogOverview";
+import { CatalogSeed } from "../components/Catalog";
+import { overviewSeed } from "../lib/catalog-seeds";
+import { getPublicCatalog } from "../lib/server/catalog";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/catalog" },
@@ -8,6 +11,10 @@ export const metadata: Metadata = {
     "Намети, рюкзаки, спальники, туристичний посуд, кемпінгові меблі, ліхтарі та мангали з доставкою по Україні.",
 };
 
-export default function CatalogPage() {
-  return <CatalogOverview />;
+export default async function CatalogPage() {
+  return (
+    <CatalogSeed products={overviewSeed(await getPublicCatalog())}>
+      <CatalogOverview />
+    </CatalogSeed>
+  );
 }

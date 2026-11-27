@@ -54,7 +54,7 @@ export function ListsProvider({ children }: { children: ReactNode }) {
   const { status, event } = useAuth();
   const { notify } = useCart();
   const router = useRouter();
-  const { byId } = useCatalog();
+  const { byId, complete: catalogComplete } = useCatalog();
   const syncedRef = useRef("");
   const handledEventRef = useRef(0);
 
@@ -167,7 +167,8 @@ export function ListsProvider({ children }: { children: ReactNode }) {
     const favSet = new Set(favoriteIds);
     const cmpSet = new Set(compareIds);
     return {
-      ready,
+      // Готово, коли прочитано списки і відомі всі їхні товари (каталог довантажується окремо)
+      ready: ready && (catalogComplete || [...favoriteIds, ...compareIds].every((id) => byId.has(id))),
       favorites: favoriteIds.map((id) => byId.get(id)!).filter(Boolean),
       isFavorite: (id) => favSet.has(id),
       toggleFavorite,
@@ -177,7 +178,7 @@ export function ListsProvider({ children }: { children: ReactNode }) {
       toggleCompare,
       clearCompare,
     };
-  }, [ready, favoriteIds, compareIds, toggleFavorite, clearFavorites, toggleCompare, clearCompare, byId]);
+  }, [ready, catalogComplete, favoriteIds, compareIds, toggleFavorite, clearFavorites, toggleCompare, clearCompare, byId]);
 
   return <ListsContext.Provider value={value}>{children}</ListsContext.Provider>;
 }

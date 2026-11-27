@@ -80,6 +80,16 @@ async function publishSnapshot(state: State, products: Product[]) {
   if (state.url && state.url !== url) await deleteCatalogFile(state.url).catch(() => {});
 }
 
+/** Поточна версія каталогу (0 — до міграції). За нею браузер бере свіжий /api/catalog/<версія> */
+export async function catalogVersion(): Promise<number> {
+  try {
+    return (await readState())?.version ?? 0;
+  } catch (e) {
+    console.error("[знімок каталогу] не вдалося прочитати версію", e);
+    return 0;
+  }
+}
+
 /** Каталог змінився — наступне читання збере новий знімок */
 export async function bumpCatalogVersion() {
   try {

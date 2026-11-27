@@ -9,11 +9,11 @@ import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import RecentlyViewed from "./RecentlyViewed";
 import { useCatalog } from "./Catalog";
+import { SHOWCASE_SIZE } from "../lib/catalog-seeds";
 import { categoryBySlug, discountPercent, formatPrice, selectShowcase } from "./catalog-data";
 import { categories } from "./data";
 
 /** Скільки товарів у вітрині «Хіти продажу» на головній */
-const SHOWCASE_SIZE = 4;
 import { productUrl } from "./product-details";
 import { CardActions } from "./catalog-ui";
 import { CARD_SIZES, responsiveImage } from "./photo";

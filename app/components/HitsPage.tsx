@@ -23,6 +23,7 @@ import {
 } from "./catalog-data";
 import { productUrl } from "./product-details";
 import { useCatalog } from "./Catalog";
+import { HITS_BUNDLE, HITS_PAGE_MIN } from "../lib/catalog-seeds";
 import { collapseVariants, variantGroups } from "./product-variants";
 import { discountsEnabled } from "./shop-config";
 import { resizeImage, responsiveImage } from "./photo";
@@ -50,17 +51,7 @@ const sorters: Record<SortId, (a: Product, b: Product) => number> = {
   discount: (a, b) => discountPercent(b) - discountPercent(a),
 };
 
-/** Скільки товарів щонайменше показує сторінка «Хіти», поки справжніх хітів мало */
-const HITS_PAGE_MIN = 12;
-
-/** Готовий набір із хітів для першої сімейної ночівлі */
-const bundle: { id: string; qty: number }[] = [
-  { id: "ch3", qty: 1 },
-  { id: "sb-alpine", qty: 2 },
-  { id: "ck-set", qty: 1 },
-  { id: "fu-chair", qty: 2 },
-  { id: "li-head", qty: 1 },
-];
+const bundle = HITS_BUNDLE;
 
 /** Усі розрахунки сторінки — з актуального каталогу (ціни, наявність, продажі й відгуки з бази) */
 export function computeHits(products: Product[], byId: ReadonlyMap<string, Product>) {

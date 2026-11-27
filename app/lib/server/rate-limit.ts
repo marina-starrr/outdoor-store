@@ -1,6 +1,7 @@
 import "server-only";
 import type { NextRequest } from "next/server";
 import { isTestDatabase, sql } from "./db";
+import { isHosted } from "./hosting";
 
 /*
  * Обмеження частоти запитів. Лічильники — у базі (таблиця rate_limits):
@@ -9,12 +10,16 @@ import { isTestDatabase, sql } from "./db";
  */
 
 /**
- * IP клієнта. На Vercel — із заголовків, які ставить сама платформа
- * (клієнт не може їх підробити); локально — з x-forwarded-for
+ * IP клієнта. На хостингу (Vercel, Netlify) — із заголовків, які ставить сама
+ * платформа (клієнт не може їх підробити); локально — з x-forwarded-for
  */
 export function clientIp(req: NextRequest) {
   const h = req.headers;
-  const trusted = process.env.VERCEL ? (h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip")) : null;
+  const trusted = process.env.VERCEL
+    ? (h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip"))
+    : isHosted()
+      ? h.get("x-nf-client-connection-ip") // Netlify
+      : null;
   return (trusted ?? h.get("x-forwarded-for"))?.split(",")[0].trim() || "local";
 }
 

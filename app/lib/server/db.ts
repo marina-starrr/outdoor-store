@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DeliveryId, PaymentId } from "../../components/cart-logic";
+import { isHosted } from "./hosting";
 
 /*
  * База даних — PostgreSQL.
@@ -152,7 +153,7 @@ const embeddedMode = () => !!process.env.FC_DATA_DIR || !remoteUrl();
 export const seedsCatalog = () => embeddedMode() && process.env.FC_NO_SEED !== "1";
 
 /** Працює окрема тимчасова тестова база (не Supabase і не локальна .data) */
-export const isTestDatabase = () => !!process.env.FC_DATA_DIR && !process.env.VERCEL;
+export const isTestDatabase = () => !!process.env.FC_DATA_DIR && !isHosted();
 
 /*
  * Next завантажує цей модуль кілька разів в одному процесі (окремо для різних
@@ -164,8 +165,8 @@ const backends = (g.__fcDb ??= new Map());
 function backend(): Promise<Backend> {
   const embedded = embeddedMode();
   if (!embedded) return cached(`pg:${remoteUrl()}`, () => postgres(remoteUrl()));
-  if (process.env.VERCEL)
-    throw new Error("Не задано POSTGRES_URL — підключіть Supabase до проєкту у Vercel (Storage → Supabase)");
+  if (isHosted())
+    throw new Error("Не задано POSTGRES_URL — додайте рядок підключення Supabase у змінні оточення хостингу");
   // Під час `next build` збірка працює в кількох процесах — кожен отримує власну базу в пам'яті.
   // FC_DB_MEMORY — модульні тести: база в пам'яті, без запису на диск (швидко)
   const memory = process.env.NEXT_PHASE === "phase-production-build" || process.env.FC_DB_MEMORY === "1";

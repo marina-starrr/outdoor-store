@@ -1,17 +1,16 @@
-# Щогодинне оновлення цін і залишків постачальників (Ranger тощо).
+# Оновлення цін і залишків постачальників — ЛИШЕ ручний запуск
+# (Actions → «Оновлення постачальників» → Run workflow).
 #
-# Vercel Hobby дозволяє cron лише раз на добу, тож щогодини маршрут
-# /api/cron/suppliers викликає GitHub Actions. Щоденний cron Vercel лишається.
+# Щогодинний розклад — pg_cron у Supabase (supabase/manual/cron-netlify.sql).
+# Тут розкладу немає: на Netlify кожен виклик витрачає кредити безкоштовного тарифу.
 #
 # Секрети репозиторію (Settings → Secrets and variables → Actions):
-#   CRON_SECRET  — те саме значення, що й CRON_SECRET у Vercel
+#   CRON_SECRET  — те саме значення, що й CRON_SECRET на сайті
 #   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID — повідомлення, якщо оновлення не вдалося
 
 name: Оновлення постачальників
 
 on:
-  schedule:
-    - cron: "17 * * * *" # щогодини о :17
   workflow_dispatch: {}
 
 permissions:
@@ -22,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SITE_URL: https://outdoor-store-ten.vercel.app
+  SITE_URL: https://www.familycamping.pp.ua
 
 jobs:
   sync:
@@ -35,11 +34,16 @@ jobs:
         run: |
           # Без секрету — пропуск (не червоний запуск і не сповіщення щогодини)
           if [ -z "$CRON_SECRET" ]; then echo "::warning::Немає секрету CRON_SECRET — оновлення пропущено"; exit 0; fi
-          code=$(curl -sS -o result.json -w '%{http_code}' --max-time 90 \
-            -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/suppliers")
-          echo "HTTP $code"
-          cat result.json; echo
-          [ "$code" = "200" ] || { echo "::error::Оновлення повернуло $code"; exit 1; }
+          # Netlify обриває запит за ~10 с — кожен постачальник окремим викликом
+          failed=0
+          for supplier in Ranger Atlantmarket; do
+            code=$(curl -sS -o result.json -w '%{http_code}' --max-time 60 \
+              -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/suppliers?supplier=$supplier")
+            echo "$supplier: HTTP $code"
+            cat result.json; echo
+            [ "$code" = "200" ] || { echo "::error::$supplier: оновлення повернуло $code"; failed=1; }
+          done
+          exit $failed
 
       - name: Повідомити в Telegram про помилку
         if: failure()

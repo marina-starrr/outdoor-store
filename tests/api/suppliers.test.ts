@@ -445,14 +445,38 @@ describe("постачальники в адмін-панелі", () => {
     expect(await bySku("DEL1")).toMatchObject({ supplier_id: null, stock: 1 });
   });
 
-  it("щоденний cron оновлює всіх постачальників (лише з секретом)", async () => {
+  it("щоденний cron лише скасовує неоплачені (постачальники — щогодини окремо; лише з секретом)", async () => {
     process.env.CRON_SECRET = "test-cron-secret";
-    serveFeed(yml([{ id: "CRON1", price: 100, stock: 1, cat: "7" }]));
     expect((await call(cron.GET, { method: "GET" })).status).toBe(401);
     const res = await cron.GET(new (await import("next/server")).NextRequest("http://localhost/api/cron/orders", { headers: { authorization: "Bearer test-cron-secret" } }));
     const data = await res.json();
     expect(res.status).toBe(200);
-    expect(data.suppliers.Ranger).toBeDefined();
+    expect(Array.isArray(data.cancelled)).toBe(true);
+    expect(data.suppliers).toBeUndefined();
+    delete process.env.CRON_SECRET;
+  });
+
+  it("щогодинний маршрут частинами (Netlify — до 10 с): окремий постачальник і окрема порція фото", async () => {
+    process.env.CRON_SECRET = "test-cron-secret";
+    const s = await create([{ id: "PART1", price: 100, stock: 3, cat: "7" }]);
+    await sync(s.id);
+    const get = (query: string) =>
+      suppliersCron.GET(new NextRequest(`http://localhost/api/cron/suppliers${query}`, { headers: { authorization: "Bearer test-cron-secret" } }));
+
+    serveFeed(yml([{ id: "PART1", price: 130, stock: 2, cat: "7" }]));
+    const one = await get("?supplier=ranger");
+    expect(one.status).toBe(200);
+    const data = await one.json();
+    expect(Object.keys(data.suppliers)).toEqual(["Ranger"]);
+    expect(data.photos).toBeUndefined();
+    expect(Number((await bySku("PART1")).price)).toBe(130);
+    expect((await get("?supplier=Nemaie")).status).toBe(404);
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("no", { status: 404 })));
+    const photos = await get("?photos=1&budget=2000");
+    expect(photos.status).toBe(200);
+    expect((await photos.json()).photos).toMatchObject({ photos: 0 });
+    vi.unstubAllGlobals();
     delete process.env.CRON_SECRET;
   });
 

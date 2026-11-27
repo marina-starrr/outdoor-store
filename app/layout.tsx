@@ -9,7 +9,7 @@ import ChatWidget from "./components/ChatWidget";
 import { ListsProvider } from "./components/Lists";
 import { NotificationsProvider } from "./components/Notifications";
 import SiteAnalytics from "./components/SiteAnalytics";
-import { getPublicCatalog } from "./lib/server/catalog";
+import { getCatalogVersion } from "./lib/server/catalog";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "./lib/site";
 import "./globals.css";
 
@@ -38,12 +38,13 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  // Каталог з бази (кешується; оновлюється після змін в адмін-панелі)
-  const products = await getPublicCatalog();
+  // Каталогу в layout немає: кожна сторінка передає лише свої товари (CatalogSeed),
+  // увесь каталог браузер довантажує з /api/catalog/<версія> (див. Catalog.tsx)
+  const catalogVersion = await getCatalogVersion();
   return (
     <html lang="uk" className={`${manrope.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <CatalogProvider products={products}>
+        <CatalogProvider version={catalogVersion}>
           <AuthProvider>
             <NotificationsProvider>
               <CartProvider>

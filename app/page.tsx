@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import JsonLd from "./components/JsonLd";
 import Storefront from "./components/Storefront";
+import { CatalogSeed } from "./components/Catalog";
+import { homeSeed } from "./lib/catalog-seeds";
+import { getPublicCatalog } from "./lib/server/catalog";
 import { contacts, socialLinks } from "./components/data";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL, absoluteUrl } from "./lib/site";
 
@@ -11,7 +14,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-export default function Home() {
+export default async function Home() {
+  const seed = homeSeed(await getPublicCatalog());
   return (
     <>
       <JsonLd
@@ -46,7 +50,9 @@ export default function Home() {
           },
         ]}
       />
-      <Storefront />
+      <CatalogSeed products={seed}>
+        <Storefront />
+      </CatalogSeed>
     </>
   );
 }

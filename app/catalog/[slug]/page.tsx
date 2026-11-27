@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import PageSkeleton from "../../components/PageSkeleton";
 import CategoryListing from "../../components/CategoryListing";
+import { CatalogSeed } from "../../components/Catalog";
+import { categorySeed } from "../../lib/catalog-seeds";
+import { getPublicCatalog } from "../../lib/server/catalog";
 import JsonLd from "../../components/JsonLd";
 import { categories, categoryBySlug, isCategorySlug } from "../../components/catalog-data";
 import { absoluteUrl } from "../../lib/site";
@@ -51,7 +54,9 @@ async function CategoryContent({ params }: Pick<PageProps<"/catalog/[slug]">, "p
           ].map((c, i) => ({ "@type": "ListItem", position: i + 1, name: c.name, item: absoluteUrl(c.path) })),
         }}
       />
-      <CategoryListing slug={category.slug} />
+      <CatalogSeed products={categorySeed(await getPublicCatalog(), category.slug)}>
+        <CategoryListing slug={category.slug} />
+      </CatalogSeed>
     </>
   );
 }
