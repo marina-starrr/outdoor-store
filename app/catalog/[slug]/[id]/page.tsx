@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import PageSkeleton from "../../../components/PageSkeleton";
 import JsonLd from "../../../components/JsonLd";
 import ProductPage from "../../../components/ProductPage";
-import { categoryBySlug } from "../../../components/catalog-data";
+import { bySales, categoryBySlug } from "../../../components/catalog-data";
 import {
   findProduct,
   productDescription,
@@ -19,8 +19,18 @@ import { absoluteUrl, SITE_NAME } from "../../../lib/site";
 /** Сторінка-заглушка для порожнього каталогу: Next вимагає хоча б один варіант, а такого товару немає (404) */
 const NO_PRODUCTS_PARAM = { slug: "tents", id: "__catalog-empty" };
 
+/**
+ * Під час збірки — лише найпопулярніші товари. Решта рендеряться при першому
+ * відвідуванні й потрапляють у кеш (partialPrefetching), як нові товари з адмінки.
+ * Усі 2200 сторінок збиралися довше за 45-хвилинний ліміт Vercel — деплой падав
+ */
+const PRERENDER_PRODUCTS = 200;
+
 export async function generateStaticParams() {
-  const params = (await getPublicCatalog()).map((p) => ({ slug: p.category, id: p.id }));
+  const params = [...(await getPublicCatalog())]
+    .sort(bySales)
+    .slice(0, PRERENDER_PRODUCTS)
+    .map((p) => ({ slug: p.category, id: p.id }));
   // Порожній магазин (усі товари видалені) теж має збиратися
   return params.length ? params : [NO_PRODUCTS_PARAM];
 }
