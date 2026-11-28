@@ -19,3 +19,7 @@
 [build.environment]
   NODE_VERSION = "22"
   NEXT_TELEMETRY_DISABLED = "1"
+  # Перевірка секретів падала на публічних значеннях: SMTP_USER — це пошта магазину
+  # з контактів, SUPABASE_URL — адреса сховища фото. Справжні ключі (SMTP_PASS,
+  # SUPABASE_SECRET_KEY, POSTGRES_URL, CRON_SECRET, TELEGRAM_BOT_TOKEN) перевіряються далі.
+  SECRETS_SCAN_OMIT_KEYS = "SMTP_USER,SUPABASE_URL"
