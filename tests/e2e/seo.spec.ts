@@ -117,7 +117,7 @@ test.describe("SEO", () => {
 
   test("головна: власний заголовок і мікророзмітка магазину з пошуком", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/Family Camping — туристичне спорядження/);
+    await expect(page).toHaveTitle(/Family Camping — магазин туристичного спорядження/);
     const ld = (await page.locator('script[type="application/ld+json"]').allTextContents()).join(" ");
     expect(ld).toContain('"OnlineStore"');
     expect(ld).toContain('"SearchAction"');

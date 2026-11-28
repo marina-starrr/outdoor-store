@@ -22,7 +22,7 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — спорядження для відпочинку`,
+    default: `${SITE_NAME} — магазин туристичного спорядження`,
     template: `%s — ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,

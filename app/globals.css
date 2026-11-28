@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Рекламний значок «Powered by Netlify» і його вікно: на безкоштовному тарифі Netlify
+   сам вставляє скрипт /.netlify/scripts/hud, а вимкнути його в налаштуваннях не дає */
+#nl-badge-frame,
+#nl-hud-frame {
+  display: none !important;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

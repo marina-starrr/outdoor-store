@@ -9,7 +9,8 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_URL, absoluteUrl } from "./lib/site";
 
 export const metadata: Metadata = {
   // Шаблон «%s — Family Camping» з layout на головну не діє — задаємо повністю
-  title: { absolute: `${SITE_NAME} — туристичне спорядження для сімейного відпочинку` },
+  // Google показує ~60 знаків: «магазин» і «спорядження» мають уміститись
+  title: { absolute: `${SITE_NAME} — магазин туристичного спорядження` },
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
 };
